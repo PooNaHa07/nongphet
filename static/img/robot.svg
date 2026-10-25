@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <!-- Background Glow -->
+    <radialGradient id="robotGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Head & Body Gradient -->
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#e2e8f0"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+
+    <!-- Cyan Glow Visor -->
+    <linearGradient id="visorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="50%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Eyes Gradient -->
+    <linearGradient id="eyeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+
+    <!-- Ear / Antenna Accent -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+
+    <!-- Shadow Filter -->
+    <filter id="softShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#0284c7" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <circle cx="120" cy="120" r="110" fill="url(#robotGlow)"/>
+
+  <!-- Antenna -->
+  <rect x="116" y="24" width="8" height="22" rx="4" fill="#94a3b8"/>
+  <circle cx="120" cy="20" r="10" fill="url(#accentGrad)" filter="url(#softShadow)"/>
+  <circle cx="120" cy="20" r="4" fill="#67e8f9"/>
+
+  <!-- Ears / Headphones -->
+  <rect x="36" y="80" width="16" height="42" rx="8" fill="url(#accentGrad)" filter="url(#softShadow)"/>
+  <rect x="188" y="80" width="16" height="42" rx="8" fill="url(#accentGrad)" filter="url(#softShadow)"/>
+  <circle cx="44" cy="101" r="5" fill="#bae6fd"/>
+  <circle cx="196" cy="101" r="5" fill="#bae6fd"/>
+
+  <!-- Head Base -->
+  <rect x="48" y="44" width="144" height="114" rx="38" fill="url(#bodyGrad)" filter="url(#softShadow)"/>
+  <!-- Head Highlight -->
+  <rect x="54" y="48" width="132" height="40" rx="24" fill="#ffffff" fill-opacity="0.6"/>
+
+  <!-- Visor Screen -->
+  <rect x="62" y="66" width="116" height="68" rx="24" fill="url(#visorGrad)" stroke="#38bdf8" stroke-width="2"/>
+
+  <!-- Glowing Robot Eyes (Cute Oval Eyes) -->
+  <ellipse cx="94" cy="98" rx="14" ry="17" fill="url(#eyeGrad)" filter="url(#softShadow)"/>
+  <circle cx="98" cy="93" r="5" fill="#ffffff"/>
+
+  <ellipse cx="146" cy="98" rx="14" ry="17" fill="url(#eyeGrad)" filter="url(#softShadow)"/>
+  <circle cx="150" cy="93" r="5" fill="#ffffff"/>
+
+  <!-- Happy Smile in Visor -->
+  <path d="M 112 114 Q 120 122 128 114" stroke="#67e8f9" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+  <!-- Cheerful Blush -->
+  <ellipse cx="78" cy="112" rx="6" ry="3" fill="#f43f5e" fill-opacity="0.7"/>
+  <ellipse cx="162" cy="112" rx="6" ry="3" fill="#f43f5e" fill-opacity="0.7"/>
+
+  <!-- Neck -->
+  <rect x="104" y="156" width="32" height="14" rx="5" fill="#64748b"/>
+
+  <!-- Body -->
+  <path d="M 66 170 Q 120 162 174 170 L 184 218 Q 120 228 56 218 Z" fill="url(#bodyGrad)" filter="url(#softShadow)"/>
+  <rect x="92" y="178" width="56" height="34" rx="12" fill="url(#visorGrad)" stroke="#38bdf8" stroke-width="1.5"/>
+
+  <!-- Phetchaburi Gem Icon on Chest -->
+  <polygon points="120,184 134,195 120,206 106,195" fill="#38bdf8"/>
+  <circle cx="120" cy="195" r="3" fill="#ffffff"/>
+</svg>

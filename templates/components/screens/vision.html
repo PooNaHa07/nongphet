@@ -1,0 +1,81 @@
+<!-- ================= SCREEN 5: VISION (รู้จักสถานที่ AI Vision) ================= -->
+<div id="screen-vision" class="screen-view bg-slate-900 justify-between text-slate-100 overflow-y-auto custom-scrollbar">
+    <!-- Top Vision Header -->
+    <div class="bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 px-6 py-4 flex items-center justify-between text-white shadow-lg sticky top-0 z-20">
+        <div class="flex items-center gap-3.5">
+            <button onclick="navigateTo('screen-main-menu')" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
+                <i class="fa-solid fa-chevron-left text-sm"></i>
+            </button>
+            <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-camera text-lg"></i>
+                <h2 class="font-black text-base md:text-lg tracking-wide">รู้จักสถานที่ท่องเที่ยวด้วย AI Vision Pro</h2>
+            </div>
+        </div>
+        <span class="text-xs bg-purple-900/60 border border-purple-400/30 px-3.5 py-1 rounded-full text-purple-200 font-bold">Multimodal Vision</span>
+    </div>
+
+    <!-- 2-Column Desktop Layout -->
+    <div class="p-4 md:p-6 lg:p-8 flex-1">
+        <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            
+            <!-- Left: Interactive Photo Display -->
+            <div class="space-y-4">
+                <div class="relative w-full h-64 md:h-80 bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 group">
+                    <img id="visionImagePreview" src="https://images.unsplash.com/photo-1598218967926-0e1014cc9f7c?q=80&w=800&auto=format&fit=crop" alt="เขาวัง" class="w-full h-full object-cover">
+                    
+                    <button onclick="prevVisionSample()" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-purple-900/80 hover:bg-purple-800 text-white flex items-center justify-center shadow-lg backdrop-blur-md border border-white/20 transition">
+                        <i class="fa-solid fa-chevron-left text-sm"></i>
+                    </button>
+                    <button onclick="nextVisionSample()" class="absolute right-3.5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-purple-900/80 hover:bg-purple-800 text-white flex items-center justify-center shadow-lg backdrop-blur-md border border-white/20 transition">
+                        <i class="fa-solid fa-chevron-right text-sm"></i>
+                    </button>
+
+                    <button onclick="openVisionGoogleMaps()" class="absolute bottom-3.5 right-3.5 bg-black/75 hover:bg-black/90 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl backdrop-blur-md flex items-center gap-2 border border-white/20 transition">
+                        <i class="fa-solid fa-location-arrow text-emerald-400"></i> แผนที่ GPS
+                    </button>
+                </div>
+
+                <p class="text-xs text-slate-400 text-center">
+                    กดลูกศร ซ้าย-ขวา เพื่อเปลี่ยนสถานที่ หรืออัปโหลดรูปภาพสถานที่ของคุณเอง
+                </p>
+            </div>
+
+            <!-- Right: Place Info & AI Analysis Panel -->
+            <div class="space-y-4">
+                <div class="bg-slate-800 p-6 rounded-3xl shadow-xl border border-slate-700 space-y-4">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-700 pb-3">
+                        <div>
+                            <span class="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">สถานที่ที่ตรวจพบ</span>
+                            <h3 id="visionPlaceName" class="font-black text-xl text-white">พระนครคีรี (เขาวัง)</h3>
+                        </div>
+                        <span id="visionAccuracyBadge" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-black px-3.5 py-1 rounded-full shadow-sm">
+                            ความแม่นยำ 96%
+                        </span>
+                    </div>
+
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 mb-1.5">ข้อมูลประวัติศาสตร์และคำอธิบายโดย AI:</h4>
+                        <div id="visionPlaceDesc" class="text-sm text-slate-200 leading-relaxed max-h-48 overflow-y-auto custom-scrollbar p-3.5 rounded-2xl bg-slate-900/60 border border-slate-700/60">
+                            พระราชวังฤดูร้อนบนยอดเขาสมัย ร.4 โดดเด่นด้วยสถาปัตยกรรมผสมผสานไทย-นีโอคลาสสิก-จีน ชมวิวเมืองเพชรได้แบบ 360 องศาครับ
+                        </div>
+                    </div>
+
+                    <!-- Upload & Analyze Buttons -->
+                    <input type="file" id="visionFileInput" accept="image/*" capture="environment" class="hidden" onchange="handleUserPhotoUpload(this)">
+                    
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="document.getElementById('visionFileInput').click()" class="flex-1 py-3 px-4 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-2 border border-slate-600 active:scale-95">
+                            <i class="fa-solid fa-camera text-sm"></i>
+                            <span>ถ่ายภาพ / อัปโหลด</span>
+                        </button>
+                        <button id="btnRunVision" onclick="runVisionAnalysis()" class="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95">
+                            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                            <span>วิเคราะห์ด้วย AI</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>

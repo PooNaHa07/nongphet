@@ -1,0 +1,158 @@
+<!-- ==============================================================================
+     SCREEN 1: 10.1" KIOSK HERO (หน้าจอหลัก 4 ช่องใหญ่แบบเต็มหน้าจอ 1:1)
+     ตรงตามแบบร่างพิมพ์เขียวตัวเครื่องจริงของ น้องเพชร AI Smart Guide
+     ============================================================================== -->
+<div id="screen-welcome" class="screen-view active p-2.5 sm:p-4 md:p-6 text-white overflow-y-auto custom-scrollbar relative justify-between h-full w-full bg-gradient-to-b from-[#020b22] via-[#04163d] to-[#02091c] select-none">
+    
+    <!-- Ambient Background Lighting & Cyber Glow -->
+    <div class="ambient-glow top-0 right-0 opacity-40"></div>
+    <div class="ambient-glow bottom-0 left-0 opacity-40"></div>
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.14)_0%,transparent_70%)] pointer-events-none"></div>
+
+    <!-- Ambient Cyan Neon Cyber Waves (คลื่นไฟนีออนตรงตามภาพโปสเตอร์ 10.1" 1:1) -->
+    <div class="kiosk-neon-waves absolute bottom-0 left-0 right-0 h-32 sm:h-40 md:h-48 pointer-events-none overflow-hidden opacity-90 z-0">
+        <svg viewBox="0 0 1200 160" preserveAspectRatio="none" class="w-full h-full">
+            <path d="M0,40 C150,110 350,-20 500,80 C650,180 900,20 1200,60 L1200,160 L0,160 Z" fill="url(#kioskWaveGrad1)" opacity="0.35"></path>
+            <path d="M0,70 C200,140 450,40 700,110 C950,180 1100,70 1200,100 L1200,160 L0,160 Z" fill="url(#kioskWaveGrad2)" opacity="0.55"></path>
+            <path d="M0,110 C300,50 600,130 900,60 C1050,20 1150,70 1200,50" fill="none" stroke="#00f0ff" stroke-width="3.5" filter="drop-shadow(0 0 12px #00f0ff)"></path>
+            <path d="M0,135 C250,90 550,150 850,95 C1050,60 1150,95 1200,80" fill="none" stroke="#38bdf8" stroke-width="2.5" filter="drop-shadow(0 0 10px #38bdf8)" opacity="0.85"></path>
+            <defs>
+                <linearGradient id="kioskWaveGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#0284c7" stop-opacity="0.3"></stop>
+                    <stop offset="50%" stop-color="#06b6d4" stop-opacity="0.55"></stop>
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.25"></stop>
+                </linearGradient>
+                <linearGradient id="kioskWaveGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#0f172a" stop-opacity="0.75"></stop>
+                    <stop offset="50%" stop-color="#0369a1" stop-opacity="0.5"></stop>
+                    <stop offset="100%" stop-color="#0284c7" stop-opacity="0.65"></stop>
+                </linearGradient>
+            </defs>
+        </svg>
+    </div>
+
+    <!-- 1. Top Header Section (สวัสดีครับ/ค่ะ ยินดีต้อนรับ) -->
+    <header class="w-full text-center relative z-10 pt-1 shrink-0">
+        <div class="flex items-center justify-between w-full max-w-5xl mx-auto px-2 mb-1">
+            <span class="text-[10px] sm:text-xs font-mono-code text-cyan-300 font-bold bg-cyan-950/80 border border-cyan-500/40 px-2.5 sm:px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-md">
+                <i class="fa-solid fa-tablet-screen-button text-cyan-400"></i> จอสัมผัส 10.1 นิ้ว // KIOSK MODE
+            </span>
+            <div class="flex items-center gap-1.5 sm:gap-2">
+                <button onclick="toggleKioskFullscreen()" class="px-2.5 sm:px-3 py-1 rounded-full bg-slate-900/80 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition active:scale-95 flex items-center gap-1 shadow-lg" title="สลับเต็มหน้าจอคีออส">
+                    <i class="fa-solid fa-expand"></i> <span class="hidden sm:inline">เต็มจอ</span>
+                </button>
+                <button onclick="openContactModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-900/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-xs flex items-center justify-center transition active:scale-95 shadow-lg" title="ข้อมูลติดต่อสถานศึกษา">
+                    <i class="fa-solid fa-circle-info"></i>
+                </button>
+            </div>
+        </div>
+
+        <h1 class="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-wide drop-shadow-[0_4px_20px_rgba(255,255,255,0.45)] mt-0.5">
+            สวัสดีครับ/ค่ะ
+        </h1>
+        <p class="text-sm sm:text-xl md:text-2xl font-extrabold text-cyan-300 tracking-wider mt-0.5 drop-shadow-[0_2px_12px_rgba(6,182,212,0.6)]">
+            ยินดีต้อนรับ
+        </p>
+        <p class="text-[11px] sm:text-xs md:text-sm text-slate-300 font-medium">วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC)</p>
+    </header>
+
+    <!-- 2. The 4 Big Hero Action Cards (2x2 Grid แบบเต็มหน้าจอ 1:1) -->
+    <div class="flex-1 w-full max-w-5xl mx-auto grid grid-cols-2 gap-2.5 sm:gap-4 md:gap-6 my-1.5 sm:my-3 relative z-10 items-stretch">
+        
+        <!-- Card 1: ข้อมูลหลักสูตร -->
+        <button onclick="navigateTo('screen-courses')" class="group p-3 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900/90 via-[#07193d]/90 to-slate-950/95 hover:from-blue-900/90 hover:to-slate-900/95 border-2 border-cyan-500/40 hover:border-cyan-300 flex flex-col items-center justify-center gap-1.5 sm:gap-3 md:gap-4 transition-all duration-300 shadow-[0_8px_25px_rgba(2,132,199,0.3)] hover:shadow-[0_16px_45px_rgba(6,182,212,0.5)] hover:scale-[1.02] active:scale-95 cursor-pointer">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl sm:rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 text-white flex items-center justify-center text-2xl sm:text-3xl md:text-4xl shadow-xl shadow-cyan-500/40 group-hover:scale-110 transition duration-300 ring-2 ring-white/20 shrink-0">
+                <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div class="text-center space-y-0.5 sm:space-y-1">
+                <span class="block font-black text-sm sm:text-lg md:text-2xl text-white group-hover:text-cyan-200 transition drop-shadow leading-tight">
+                    ข้อมูลหลักสูตร
+                </span>
+                <span class="block text-[10px] sm:text-xs md:text-sm text-cyan-300 font-medium">
+                    9 สาขาวิชา ปวช. / ปวส.
+                </span>
+            </div>
+            <span class="text-[9px] sm:text-xs text-slate-400 font-medium group-hover:text-cyan-300 transition hidden xs:flex items-center gap-1">
+                แตะเพื่อเปิดดู <i class="fa-solid fa-chevron-right text-[9px] group-hover:translate-x-1 transition"></i>
+            </span>
+        </button>
+
+        <!-- Card 2: แนะนำวิทยาลัย -->
+        <button onclick="navigateTo('screen-places')" class="group p-3 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900/90 via-[#07193d]/90 to-slate-950/95 hover:from-blue-900/90 hover:to-slate-900/95 border-2 border-cyan-500/40 hover:border-cyan-300 flex flex-col items-center justify-center gap-1.5 sm:gap-3 md:gap-4 transition-all duration-300 shadow-[0_8px_25px_rgba(2,132,199,0.3)] hover:shadow-[0_16px_45px_rgba(6,182,212,0.5)] hover:scale-[1.02] active:scale-95 cursor-pointer">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl sm:rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 text-white flex items-center justify-center text-2xl sm:text-3xl md:text-4xl shadow-2xl shadow-cyan-500/40 group-hover:scale-110 transition duration-300 ring-2 ring-white/20 shrink-0">
+                <i class="fa-solid fa-building-columns"></i>
+            </div>
+            <div class="text-center space-y-0.5 sm:space-y-1">
+                <span class="block font-black text-sm sm:text-lg md:text-2xl text-white group-hover:text-cyan-200 transition drop-shadow leading-tight">
+                    แนะนำวิทยาลัย
+                </span>
+                <span class="block text-[10px] sm:text-xs md:text-sm text-cyan-300 font-medium">
+                    อาชีวะ & ที่เที่ยวเมืองเพชร
+                </span>
+            </div>
+            <span class="text-[9px] sm:text-xs text-slate-400 font-medium group-hover:text-cyan-300 transition hidden xs:flex items-center gap-1">
+                แตะเพื่อเปิดดู <i class="fa-solid fa-chevron-right text-[9px] group-hover:translate-x-1 transition"></i>
+            </span>
+        </button>
+
+        <!-- Card 3: ถาม-ตอบ -->
+        <button onclick="navigateTo('screen-chat')" class="group p-3 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900/90 via-[#07193d]/90 to-slate-950/95 hover:from-blue-900/90 hover:to-slate-900/95 border-2 border-cyan-500/40 hover:border-cyan-300 flex flex-col items-center justify-center gap-1.5 sm:gap-3 md:gap-4 transition-all duration-300 shadow-[0_8px_25px_rgba(2,132,199,0.3)] hover:shadow-[0_16px_45px_rgba(6,182,212,0.5)] hover:scale-[1.02] active:scale-95 cursor-pointer">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl sm:rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 text-white flex items-center justify-center text-2xl sm:text-3xl md:text-4xl shadow-2xl shadow-cyan-500/40 group-hover:scale-110 transition duration-300 ring-2 ring-white/20 shrink-0">
+                <i class="fa-solid fa-comment-dots"></i>
+            </div>
+            <div class="text-center space-y-0.5 sm:space-y-1">
+                <span class="block font-black text-sm sm:text-lg md:text-2xl text-white group-hover:text-cyan-200 transition drop-shadow leading-tight">
+                    ถาม-ตอบ
+                </span>
+                <span class="block text-[10px] sm:text-xs md:text-sm text-cyan-300 font-medium">
+                    คุยเสียง & ปรึกษาน้องเพชร AI
+                </span>
+            </div>
+            <span class="text-[9px] sm:text-xs text-slate-400 font-medium group-hover:text-cyan-300 transition hidden xs:flex items-center gap-1">
+                แตะเพื่อเริ่มคุย <i class="fa-solid fa-chevron-right text-[9px] group-hover:translate-x-1 transition"></i>
+            </span>
+        </button>
+
+        <!-- Card 4: ติดต่อเรา -->
+        <button onclick="openContactModal()" class="group p-3 sm:p-5 md:p-6 lg:p-7 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900/90 via-[#07193d]/90 to-slate-950/95 hover:from-blue-900/90 hover:to-slate-900/95 border-2 border-cyan-500/40 hover:border-cyan-300 flex flex-col items-center justify-center gap-1.5 sm:gap-3 md:gap-4 transition-all duration-300 shadow-[0_8px_25px_rgba(2,132,199,0.3)] hover:shadow-[0_16px_45px_rgba(6,182,212,0.5)] hover:scale-[1.02] active:scale-95 cursor-pointer">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-2xl sm:rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 text-white flex items-center justify-center text-2xl sm:text-3xl md:text-4xl shadow-2xl shadow-cyan-500/40 group-hover:scale-110 transition duration-300 ring-2 ring-white/20 shrink-0">
+                <i class="fa-solid fa-phone-volume"></i>
+            </div>
+            <div class="text-center space-y-0.5 sm:space-y-1">
+                <span class="block font-black text-sm sm:text-lg md:text-2xl text-white group-hover:text-cyan-200 transition drop-shadow leading-tight">
+                    ติดต่อเรา
+                </span>
+                <span class="block text-[10px] sm:text-xs md:text-sm text-cyan-300 font-medium">
+                    แผนผัง, โทรศัพท์ & QR สมัคร
+                </span>
+            </div>
+            <span class="text-[9px] sm:text-xs text-slate-400 font-medium group-hover:text-cyan-300 transition hidden xs:flex items-center gap-1">
+                แตะเพื่อดูข้อมูล <i class="fa-solid fa-chevron-right text-[9px] group-hover:translate-x-1 transition"></i>
+            </span>
+        </button>
+
+    </div>
+
+    <!-- 3. Bottom Action Dock & Chips -->
+    <footer class="w-full relative z-10 pb-2 sm:pb-3 shrink-0 flex flex-col items-center gap-2">
+        <div class="flex items-center justify-center gap-2.5 sm:gap-3 flex-wrap">
+            <button onclick="navigateTo('screen-live')" class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-rose-600/40 border border-white/25 transition active:scale-95 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+                <span>🔴 คุยสด LIVE ผ่านกล้อง</span>
+            </button>
+            <button onclick="navigateTo('screen-sign-language')" class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white font-black text-xs sm:text-sm shadow-xl shadow-cyan-600/40 border border-white/25 transition active:scale-95 flex items-center gap-2">
+                <i class="fa-solid fa-hands-asl-interpreting text-cyan-200"></i>
+                <span>🤟 ตรวจจับภาษามือ TSL</span>
+            </button>
+            <a href="/admin" target="_blank" class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-cyan-300 font-black text-xs sm:text-sm shadow-xl border border-cyan-500/40 transition active:scale-95 flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>📊 Mission Control</span>
+            </a>
+            <button onclick="openExploreModal()" class="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-xs sm:text-sm border border-slate-700 transition active:scale-95 flex items-center gap-1.5" title="สำรวจเนื้อหาท่องเที่ยวและไฮไลต์เพิ่มเติม">
+                <i class="fa-solid fa-compass"></i>
+                <span>สำรวจเพิ่มเติม</span>
+            </button>
+        </div>
+    </footer>
+
+</div>

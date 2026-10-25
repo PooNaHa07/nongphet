@@ -1,0 +1,107 @@
+<!-- ================= SCREEN 6: CHAT (ถามน้องเพชร AI เสมือนจริง) ================= -->
+<div id="screen-chat" class="screen-view bg-slate-900 justify-between text-slate-100 h-full">
+    <!-- Top Chat Header -->
+    <div class="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 px-6 py-4 flex items-center justify-between border-b border-slate-800 z-10">
+        <div class="flex items-center gap-3.5">
+            <button onclick="navigateTo('screen-main-menu')" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
+                <i class="fa-solid fa-chevron-left text-sm"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xl shadow-lg ring-2 ring-white/25">
+                    🤖
+                </div>
+                <div>
+                    <h2 class="font-black text-base leading-tight text-white">ถามน้องเพชร AI Smart Guide</h2>
+                    <p class="text-[10px] text-emerald-400 flex items-center gap-1.5 font-bold">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ค้นหาและตอบสด Real-time
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <!-- Real-time Voice Hands-free Toggle Button -->
+            <button id="realtimeVoiceHeaderBtn" onclick="toggleRealtimeVoiceMode()" title="เปิดโหมดสนทนาเสียงต่อเนื่องแบบ Real-time (Hands-free)" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-600/30 text-slate-300 hover:text-emerald-300 text-xs font-bold border border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5 shadow">
+                <i id="realtimeVoiceHeaderIcon" class="fa-solid fa-microphone-lines text-slate-400"></i>
+                <span id="realtimeVoiceHeaderLabel">คุยสด Real-time</span>
+            </button>
+            <button onclick="toggleVoiceGender()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-headset text-blue-400"></i>
+                <span id="chatVoiceGenderLabel">หญิง</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Real-time Voice Live Status Banner -->
+    <div id="realtimeVoiceBanner" class="hidden px-4 md:px-6 py-2.5 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border-b border-emerald-500/40 flex items-center justify-between transition-all duration-300">
+        <div class="flex items-center gap-2.5 text-xs">
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <span id="realtimeVoiceStatusText" class="font-bold text-emerald-300">🎙️ โหมดคุยสดเปิดอยู่: กำลังฟังเสียงคุณ... (พูดได้เลยไม่ต้องกดปุ่ม)</span>
+            <div id="voiceWaveBars" class="flex items-center gap-1 h-3 ml-1">
+                <span class="w-1 bg-emerald-400 rounded-full animate-bounce h-2"></span>
+                <span class="w-1 bg-emerald-400 rounded-full animate-bounce h-3" style="animation-delay: 0.15s"></span>
+                <span class="w-1 bg-emerald-400 rounded-full animate-bounce h-1.5" style="animation-delay: 0.3s"></span>
+                <span class="w-1 bg-emerald-400 rounded-full animate-bounce h-2.5" style="animation-delay: 0.2s"></span>
+            </div>
+        </div>
+        <button onclick="toggleRealtimeVoiceMode(false)" class="text-[11px] font-bold text-rose-300 hover:text-white bg-rose-950/70 hover:bg-rose-900 px-2.5 py-1 rounded-lg border border-rose-700/50 transition flex items-center gap-1">
+            <i class="fa-solid fa-phone-slash text-[10px]"></i> หยุดคุยสด
+        </button>
+    </div>
+
+    <!-- Smart Quick Action Chips -->
+    <div class="bg-slate-950/80 px-5 py-2 flex gap-2 overflow-x-auto no-scrollbar border-b border-slate-800">
+        <button onclick="sendQuickMessage('ช่วยวางแผนเที่ยวเพชรบุรีแบบ 1 วัน จัดเต็มให้หน่อยครับ')" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-full border border-slate-700 whitespace-nowrap active:scale-95 transition">
+            🗺️ ทริปเที่ยว 1 วัน
+        </button>
+        <button onclick="sendQuickMessage('วันนี้ที่เพชรบุรีสภาพอากาศเป็นอย่างไร และสถานที่ท่องเที่ยวเปิดปิดกี่โมง')" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-full border border-slate-700 whitespace-nowrap active:scale-95 transition">
+            🌤️ สภาพอากาศวันนี้
+        </button>
+        <button onclick="sendQuickMessage('แนะนำร้านขนมหม้อแกงและข้าวแช่เมืองเพชรสูตรดั้งเดิม')" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-full border border-slate-700 whitespace-nowrap active:scale-95 transition">
+            🍧 ร้านขนมหวานเจ้าดัง
+        </button>
+        <button onclick="sendQuickMessage('วิทยาลัยอาชีวศึกษาเพชรบุรี มีสาขาอะไรบ้างที่น่าสนใจ')" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-full border border-slate-700 whitespace-nowrap active:scale-95 transition">
+            🎓 แนะนำสาขาวิชา
+        </button>
+    </div>
+
+    <!-- Chat Timeline Box -->
+    <div id="chatBox" class="p-4 md:p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar text-sm">
+        <div class="flex items-end gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-xl shrink-0 shadow-lg ring-2 ring-white/20">
+                🤖
+            </div>
+            <div class="chat-bubble-ai p-4 shadow-lg max-w-[85%] md:max-w-[75%] leading-relaxed text-sm">
+                สวัสดีครับ ผม <strong>น้องเพชร AI Smart Guide</strong> 🤖✨<br>
+                ยินดีต้อนรับสู่จังหวัดเพชรบุรี และวิทยาลัยอาชีวศึกษาเพชรบุรีครับ! สอบถามข้อมูลสถานที่ท่องเที่ยว เส้นทาง ร้านอาหารเด็ด หรือแนะแนวหลักสูตรการศึกษาต่อได้เลยครับ
+            </div>
+        </div>
+    </div>
+
+    <!-- Typing / Speaking Indicator -->
+    <div id="typingIndicator" class="hidden px-6 py-2 flex items-center gap-2.5 text-xs">
+        <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs">🤖</div>
+        <div class="bg-slate-800 px-4 py-2 rounded-full shadow flex items-center gap-2 border border-slate-700">
+            <span class="text-xs font-bold text-blue-400">น้องเพชรกำลังคิดคำตอบ...</span>
+            <div class="w-1.5 h-1.5 bg-blue-400 rounded-full typing-dot"></div>
+            <div class="w-1.5 h-1.5 bg-blue-400 rounded-full typing-dot"></div>
+            <div class="w-1.5 h-1.5 bg-blue-400 rounded-full typing-dot"></div>
+        </div>
+    </div>
+
+    <!-- Bottom Input Area -->
+    <div class="p-2.5 sm:p-4 md:p-5 bg-slate-950/95 border-t border-slate-800 shrink-0">
+        <div class="max-w-4xl mx-auto flex items-center gap-2 sm:gap-2.5">
+            <button id="micBtn" onclick="toggleSpeechRecognition()" title="สั่งการด้วยเสียง" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-400 flex items-center justify-center transition shrink-0 border border-slate-700 text-base sm:text-lg shadow">
+                <i class="fa-solid fa-microphone"></i>
+            </button>
+            <input type="text" id="chatInput" placeholder="พิมพ์คำถาม หรือกดไมค์เพื่อพูดคุย..." class="flex-1 bg-slate-800 text-white placeholder-slate-400 px-3.5 sm:px-5 py-2.5 sm:py-3.5 rounded-full text-xs md:text-sm border border-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner">
+            <button onclick="sendChatMessage()" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-lg transition shrink-0 active:scale-95 text-base sm:text-lg">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+</div>

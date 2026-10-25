@@ -1,0 +1,19 @@
+Model: Support Vector Machine (Linear SVM)
+Total Dataset Size: 1500 samples (Train: 1200, Test: 300)
+Overall Accuracy : 0.9967
+Weighted Precision: 0.9967
+Weighted Recall   : 0.9967
+Weighted F1-Score : 0.9967
+
+Detailed Classification Report:
+              precision    recall  f1-score   support
+
+   admission     1.0000    1.0000    1.0000        60
+        food     1.0000    1.0000    1.0000        60
+ general_faq     0.9836    1.0000    0.9917        60
+    greeting     1.0000    0.9833    0.9916        60
+      travel     1.0000    1.0000    1.0000        60
+
+    accuracy                         0.9967       300
+   macro avg     0.9967    0.9967    0.9967       300
+weighted avg     0.9967    0.9967    0.9967       300

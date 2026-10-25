@@ -1,0 +1,86 @@
+<!-- ================= SCREEN 2: MAIN MENU (เมนูหลักแบบตารางด่วน) ================= -->
+<div id="screen-main-menu" class="screen-view tropical-wallpaper p-4 md:p-8 text-white overflow-y-auto custom-scrollbar">
+    <div class="max-w-4xl mx-auto w-full space-y-6 my-auto">
+        <!-- Header -->
+        <div class="bg-slate-950/80 backdrop-blur-md px-5 py-4 rounded-2xl flex items-center justify-between border border-white/10 shadow-lg">
+            <button onclick="navigateTo('screen-welcome')" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">
+                <i class="fa-solid fa-chevron-left text-sm"></i>
+            </button>
+            <h2 class="font-black text-lg tracking-wide text-white">ศูนย์รวมเมนูหลัก (Quick Hub)</h2>
+            <div class="w-9"></div>
+        </div>
+
+        <!-- Live Camera Hero Banner -->
+        <div>
+            <button onclick="navigateTo('screen-live')" class="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-rose-600 via-pink-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-[0_8px_25px_rgba(225,29,72,0.4)] border border-white/30 flex items-center justify-between group active:scale-95 transition">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-rose-200 text-xl shadow-inner">
+                        <i class="fa-solid fa-video"></i>
+                    </div>
+                    <div class="text-left">
+                        <span class="block font-black text-sm text-white flex items-center gap-2">
+                            🔴 น้องเพชร LIVE CAMERA & VOICE
+                            <span class="bg-rose-400/30 text-rose-100 text-[10px] px-2 py-0.5 rounded-full font-bold border border-rose-300/40">ใหม่ล่าสุด</span>
+                        </span>
+                        <span class="text-xs text-rose-100/90 font-medium">สนทนาแบบเรียลไทม์ มองเห็นภาพผ่านกล้อง Webcam ด้วย Gemini 3.8 Live</span>
+                    </div>
+                </div>
+                <i class="fa-solid fa-bolt text-amber-300 text-base group-hover:scale-125 transition"></i>
+            </button>
+        </div>
+
+        <!-- Sign Language Universal Design Hero Banner -->
+        <div>
+            <button onclick="navigateTo('screen-sign-language')" class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-700 hover:from-cyan-500 hover:to-indigo-600 text-white font-extrabold text-sm shadow-[0_8px_25px_rgba(6,182,212,0.35)] border border-white/30 flex items-center justify-between group active:scale-95 transition">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-cyan-200 text-xl shadow-inner">
+                        <i class="fa-solid fa-hands-asl-interpreting"></i>
+                    </div>
+                    <div class="text-left">
+                        <span class="block font-black text-sm text-white flex items-center gap-2">
+                            🤟 โหมดภาษามือ AI (Sign Language TSL)
+                            <span class="bg-cyan-400/30 text-cyan-100 text-[10px] px-2 py-0.5 rounded-full font-bold border border-cyan-300/40">คนพิการ & UD</span>
+                        </span>
+                        <span class="text-xs text-cyan-100/90 font-medium">ตรวจจับข้อมือ 21 จุด แปลภาษามือไทยอัตโนมัติเพื่อผู้มีความบกพร่องทางการได้ยิน</span>
+                    </div>
+                </div>
+                <i class="fa-solid fa-hand-holding-heart text-cyan-300 text-base group-hover:scale-125 transition"></i>
+            </button>
+        </div>
+
+        <!-- 4 3D Square Buttons (Grid 2x2 on Mobile, 4 columns on Desktop) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 1. เที่ยวเมืองเพชร -->
+            <button onclick="navigateTo('screen-places')" class="btn-3d-green aspect-square rounded-3xl p-4 flex flex-col items-center justify-center gap-3 text-white border border-white/30 transition-all group">
+                <div class="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition">
+                    <i class="fa-solid fa-place-of-worship"></i>
+                </div>
+                <span class="font-black text-sm md:text-base text-center leading-tight drop-shadow">เที่ยวเมืองเพชร</span>
+            </button>
+
+            <!-- 2. แนะแนวเรียนต่อ -->
+            <button onclick="navigateTo('screen-courses')" class="btn-3d-blue aspect-square rounded-3xl p-4 flex flex-col items-center justify-center gap-3 text-white border border-white/30 transition-all group">
+                <div class="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                </div>
+                <span class="font-black text-sm md:text-base text-center leading-tight drop-shadow">แนะแนวเรียนต่อ</span>
+            </button>
+
+            <!-- 3. ถามน้องเพชร -->
+            <button onclick="navigateTo('screen-chat')" class="btn-3d-orange aspect-square rounded-3xl p-4 flex flex-col items-center justify-center gap-3 text-white border border-white/30 transition-all group">
+                <div class="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition">
+                    <i class="fa-solid fa-comment-dots"></i>
+                </div>
+                <span class="font-black text-sm md:text-base text-center leading-tight drop-shadow">ถามน้องเพชร AI</span>
+            </button>
+
+            <!-- 4. รู้จักสถานที่ PHOTO AI -->
+            <button onclick="navigateTo('screen-vision')" class="btn-3d-purple aspect-square rounded-3xl p-4 flex flex-col items-center justify-center gap-2 text-white border border-white/30 transition-all group">
+                <div class="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition">
+                    <i class="fa-solid fa-camera"></i>
+                </div>
+                <span class="font-black text-sm md:text-base text-center leading-tight drop-shadow">รู้จักสถานที่<br><span class="text-[10px] bg-white text-purple-800 px-2 py-0.5 rounded-full font-black mt-1 inline-block shadow">PHOTO AI</span></span>
+            </button>
+        </div>
+    </div>
+</div>

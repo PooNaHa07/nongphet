@@ -1,0 +1,135 @@
+<!-- ================= SCREEN 3: PLACES (เที่ยวเมืองเพชรบุรี) ================= -->
+<div id="screen-places" class="screen-view bg-slate-900 justify-between text-slate-100 overflow-y-auto custom-scrollbar">
+    <!-- Top Places Header -->
+    <div class="bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 px-3.5 sm:px-6 py-3 sm:py-4 flex items-center justify-between text-white shadow-lg sticky top-0 z-20">
+        <div class="flex items-center gap-2.5 sm:gap-3.5">
+            <button onclick="navigateTo('screen-main-menu')" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition shrink-0">
+                <i class="fa-solid fa-chevron-left text-xs sm:text-sm"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-place-of-worship text-base sm:text-lg shrink-0"></i>
+                <h2 class="font-black text-sm sm:text-base md:text-lg tracking-wide truncate max-w-[190px] xs:max-w-[260px] sm:max-w-none">ที่เที่ยวไฮไลท์ เมืองเพชร</h2>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="openTripPlannerModal()" class="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs flex items-center gap-1.5 transition shadow" title="AI จัดทริปอัจฉริยะ">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span class="hidden xs:inline">AI วางแผนทริป</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Places Grid (4 Columns on Desktop) -->
+    <div class="p-4 md:p-6 lg:p-8 flex-1">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            
+            <!-- Place 1: พระนครคีรี (เขาวัง) -->
+            <div class="bg-slate-800 rounded-3xl overflow-hidden shadow-xl border border-slate-700 hover:border-emerald-500 transition-all flex flex-col group">
+                <div class="h-48 w-full bg-slate-700 relative overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1598218967926-0e1014cc9f7c?q=80&w=600&auto=format&fit=crop" alt="พระนครคีรี" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
+                    <span class="absolute top-2.5 right-2.5 bg-black/75 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">🏰 รัชกาลที่ 4</span>
+                </div>
+                <div class="p-5 flex flex-col justify-between flex-1 space-y-3.5 bg-slate-850">
+                    <div>
+                        <h3 class="font-black text-base text-white">พระนครคีรี (เขาวัง)</h3>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            พระราชวังบนยอดเขาสมัย ร.4 มีพระที่นั่งเพชรภูมิไพโรจน์ พระธาตุจอมเพชร และรถรางไฟฟ้า
+                        </p>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="selectPlace('พระนครคีรี (เขาวัง)')" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-comment-dots"></i> ถามน้องเพชร
+                        </button>
+                        <button onclick="openGoogleMapsSearch('พระนครคีรี เขาวัง เพชรบุรี')" class="py-2.5 px-3.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs rounded-xl transition border border-slate-600">
+                            <i class="fa-solid fa-location-arrow text-emerald-400"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Place 2: ถ้ำเขาหลวง -->
+            <div class="bg-slate-800 rounded-3xl overflow-hidden shadow-xl border border-slate-700 hover:border-emerald-500 transition-all flex flex-col group">
+                <div class="h-48 w-full bg-slate-700 relative overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1525926478800-7f28eece6b50?q=80&w=600&auto=format&fit=crop" alt="ถ้ำเขาหลวง" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
+                    <span class="absolute top-2.5 right-2.5 bg-black/75 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">✨ แสงสวรรค์</span>
+                </div>
+                <div class="p-5 flex flex-col justify-between flex-1 space-y-3.5 bg-slate-850">
+                    <div>
+                        <h3 class="font-black text-base text-white">ถ้ำเขาหลวง</h3>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            ถ้ำหินงอกหินย้อยอันวิจิตร ไฮไลท์คือลำแสงอาทิตย์ส่องลงสู่หลวงพ่อโต ช่วงเวลา 09:30 - 11:30 น.
+                        </p>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="selectPlace('ถ้ำเขาหลวง')" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-comment-dots"></i> ถามน้องเพชร
+                        </button>
+                        <button onclick="openGoogleMapsSearch('ถ้ำเขาหลวง เพชรบุรี')" class="py-2.5 px-3.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs rounded-xl transition border border-slate-600">
+                            <i class="fa-solid fa-location-arrow text-emerald-400"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Place 3: หาดชะอำ -->
+            <div class="bg-slate-800 rounded-3xl overflow-hidden shadow-xl border border-slate-700 hover:border-emerald-500 transition-all flex flex-col group">
+                <div class="h-48 w-full bg-slate-700 relative overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=600&auto=format&fit=crop" alt="หาดชะอำ" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
+                    <span class="absolute top-2.5 right-2.5 bg-black/75 text-cyan-300 text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">🌊 ทะเลชะอำ</span>
+                </div>
+                <div class="p-5 flex flex-col justify-between flex-1 space-y-3.5 bg-slate-850">
+                    <div>
+                        <h3 class="font-black text-base text-white">หาดชะอำ</h3>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            หาดทรายขาวยอดนิยม ขี่ม้าริมหาด บานาน่าโบ๊ท กิจกรรมทางน้ำ และสะพานปลาชะอำซีฟู้ดสดใหม่
+                        </p>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="selectPlace('หาดชะอำ')" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-comment-dots"></i> ถามน้องเพชร
+                        </button>
+                        <button onclick="openGoogleMapsSearch('หาดชะอำ เพชรบุรี')" class="py-2.5 px-3.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs rounded-xl transition border border-slate-600">
+                            <i class="fa-solid fa-location-arrow text-emerald-400"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Place 4: วัดมหาธาตุวรวิหาร -->
+            <div class="bg-slate-800 rounded-3xl overflow-hidden shadow-xl border border-slate-700 hover:border-emerald-500 transition-all flex flex-col group">
+                <div class="h-48 w-full bg-slate-700 relative overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1582291583070-55e28cd6f233?q=80&w=600&auto=format&fit=crop" alt="วัดมหาธาตุ" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
+                    <span class="absolute top-2.5 right-2.5 bg-black/75 text-orange-300 text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">🛕 ปรางค์ 5 ยอด</span>
+                </div>
+                <div class="p-5 flex flex-col justify-between flex-1 space-y-3.5 bg-slate-850">
+                    <div>
+                        <h3 class="font-black text-base text-white">วัดมหาธาตุวรวิหาร</h3>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            พระปรางค์ 5 ยอด ศิลปะอยุธยาผสมสุโขทัย ผลงานช่างเมืองเพชร และพระพุทธรูปศักดิ์สิทธิ์
+                        </p>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="selectPlace('วัดมหาธาตุวรวิหาร เพชรบุรี')" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-comment-dots"></i> ถามน้องเพชร
+                        </button>
+                        <button onclick="openGoogleMapsSearch('วัดมหาธาตุวรวิหาร เพชรบุรี')" class="py-2.5 px-3.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-xs rounded-xl transition border border-slate-600">
+                            <i class="fa-solid fa-location-arrow text-emerald-400"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="p-4 bg-slate-950/90 border-t border-slate-800 flex flex-wrap gap-3 items-center justify-between">
+        <span class="text-xs text-slate-400 font-medium">💡 คลิกที่สถานที่ใดก็ได้เพื่อสอบถามเส้นทาง ประวัติศาสตร์ หรือร้านอาหารเด็ดใกล้เคียง</span>
+        <div class="flex gap-2">
+            <button onclick="openTripPlannerModal()" class="py-2.5 px-5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>AI วางแผนทริปอัตโนมัติ</span>
+            </button>
+        </div>
+    </div>
+</div>

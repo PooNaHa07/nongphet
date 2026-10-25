@@ -1,0 +1,101 @@
+<!-- ========================================================================= -->
+<!-- TOP NAVIGATION & CONTROL BAR -->
+<!-- ========================================================================= -->
+<header class="w-full max-w-7xl mb-1.5 sm:mb-2.5 flex items-center justify-between gap-2 px-3 sm:px-5 py-2 glass-base rounded-2xl shadow-xl z-50 border border-white/10 shrink-0">
+    <!-- Logo & Branding -->
+    <div class="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onclick="navigateTo('screen-welcome')">
+        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-lg sm:text-2xl shadow-lg shadow-blue-500/40 ring-2 ring-white/25 shrink-0">
+            🤖
+        </div>
+        <div>
+            <div class="flex items-center gap-1.5">
+                <h1 class="font-extrabold text-xs sm:text-sm md:text-base leading-tight tracking-wide text-white drop-shadow whitespace-nowrap">น้องเพชร AI</h1>
+                <span class="hidden sm:inline-flex bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md items-center gap-1">
+                    <i class="fa-solid fa-gem text-[7px]"></i> PRO
+                </span>
+            </div>
+            <p class="text-[9px] sm:text-xs text-blue-300 font-medium truncate max-w-[120px] xs:max-w-[160px] sm:max-w-none">วิทยาลัยอาชีวศึกษาเพชรบุรี</p>
+        </div>
+    </div>
+
+    <!-- Real-time Live Weather & Time Capsule (Desktop only >= 1200px) -->
+    <div class="hidden xl:flex items-center gap-2.5 bg-slate-900/80 px-3.5 py-1.5 rounded-xl border border-slate-700/80 text-xs shadow-inner shrink-0">
+        <div class="flex items-center gap-1.5">
+            <i class="fa-solid fa-sun text-amber-400 text-xs animate-spin-slow"></i>
+            <span id="weatherTextHeader" class="text-slate-200 font-medium text-[11px]">เพชรบุรี: อากาศดี ☀️</span>
+        </div>
+        <div class="w-px h-3.5 bg-slate-700"></div>
+        <div id="liveClockDisplay" class="font-mono-code text-[11px] text-cyan-300 font-bold">--:-- น.</div>
+    </div>
+
+    <!-- Top Right Action Controls -->
+    <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+        <!-- Voice Gender Toggle in Header -->
+        <button id="voiceGenderBtn" onclick="toggleVoiceGender()" class="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl font-bold text-xs bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 transition flex items-center gap-1 shadow" title="สลับเสียงสังเคราะห์ (หญิง / ชาย)">
+            <span>👩🏻</span>
+            <span class="hidden md:inline text-[11px]">หญิง</span>
+        </button>
+
+        <!-- Live Camera Mode Button in Header -->
+        <button onclick="navigateTo('screen-live')" class="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl font-black text-xs transition bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-md border border-white/20 flex items-center gap-1.5 active:scale-95" title="คุยสดผ่านกล้อง LIVE">
+            <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+            <span class="font-bold text-[11px]">LIVE</span>
+        </button>
+
+        <!-- Language Selector -->
+        <select id="appLanguageSelect" onchange="changeLanguage(this.value)" class="bg-slate-900/90 text-white text-[11px] px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-xl border border-slate-700 hover:border-blue-500 transition focus:outline-none shadow">
+            <option value="th">🇹🇭 TH</option>
+            <option value="en">🇬🇧 EN</option>
+            <option value="zh">🇨🇳 ZH</option>
+        </select>
+
+        <!-- Emotion Display Link (Head Screen) -->
+        <a href="/emotion" target="_blank" class="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl font-bold text-xs bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition flex items-center gap-1 shadow" title="เปิดหน้าจอแสดงอารมณ์ส่วนหัว (2.4 - 3.5 นิ้ว)">
+            <i class="fa-solid fa-face-smile text-xs"></i>
+            <span class="hidden lg:inline text-[11px]">หน้าตา AI</span>
+        </a>
+
+        <!-- Analytics & Telemetry Dashboard Link -->
+        <a href="/admin" target="_blank" class="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl font-bold text-xs bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition flex items-center gap-1 shadow active:scale-95" title="แดชบอร์ด Telemetry และควบคุมระบบ">
+            <i class="fa-solid fa-chart-pie text-xs"></i>
+            <span class="hidden lg:inline text-[11px]">ควบคุม</span>
+        </a>
+
+        <!-- View Switcher (Kiosk 10.1" / Desktop / Phone / Poster) -->
+        <div class="hidden sm:flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-700/80 shadow">
+            <button id="btn-mode-kiosk" onclick="switchViewMode('kiosk')" class="px-2 py-1 rounded-lg font-bold text-[11px] transition bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white shadow-sm" title="โหมดตู้คีออส 10.1 นิ้ว">
+                <i class="fa-solid fa-tablet-screen-button"></i>
+                <span class="hidden md:inline ml-1">คีออส</span>
+            </button>
+            <button id="btn-mode-desktop" onclick="switchViewMode('desktop')" class="px-2 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition" title="โหมดหน้าจอคอมพิวเตอร์">
+                <i class="fa-solid fa-desktop"></i>
+                <span class="hidden md:inline ml-1">จอคอม</span>
+            </button>
+            <button id="btn-mode-phone" onclick="switchViewMode('phone')" class="px-2 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition" title="โหมดมือถือ">
+                <i class="fa-solid fa-mobile-screen"></i>
+            </button>
+            <button id="btn-mode-poster" onclick="switchViewMode('poster')" class="px-2 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition" title="โหมดภาพรวมโปสเตอร์">
+                <i class="fa-solid fa-table-cells"></i>
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Realtime IoT & Camera Floating Alert Toast -->
+<div id="iotAlertToast" class="fixed top-6 right-6 z-50 transform transition-all duration-300 translate-y-[-140%] opacity-0 pointer-events-none max-w-sm w-full">
+    <div class="p-4 rounded-2xl bg-slate-900/95 border border-emerald-400/50 shadow-2xl backdrop-blur-xl text-white flex items-center gap-3.5">
+        <div id="iotToastIcon" class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-xl text-emerald-300 shrink-0 shadow animate-pulse">
+            <i class="fa-solid fa-person-walking"></i>
+        </div>
+        <div class="flex-1">
+            <div class="flex items-center justify-between">
+                <h4 id="iotToastTitle" class="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span id="iotToastTitleText">ESP32: ตรวจพบผู้ใช้!</span>
+                </h4>
+                <span id="iotToastTime" class="text-[9px] text-slate-400 font-mono-code">00:00:00</span>
+            </div>
+            <p id="iotToastMsg" class="text-[11px] text-slate-200 mt-0.5">ระยะห่าง 45.0 ซม. (Ultrasonic HC-SR04)</p>
+        </div>
+    </div>
+</div>

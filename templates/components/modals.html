@@ -1,0 +1,229 @@
+<!-- ================= TRIP PLANNER MODAL ================= -->
+<div id="tripModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <h3 class="font-black text-base md:text-lg text-white flex items-center gap-2">
+                <i class="fa-solid fa-route text-emerald-400"></i> AI วางแผนทริปเที่ยวเพชรบุรี
+            </h3>
+            <button onclick="closeTripPlannerModal()" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <p class="text-xs text-slate-300 mb-4">ระบุความต้องการเพื่อให้น้องเพชร AI ช่วยคำนวณเส้นทางและเวลาให้อัตโนมัติ:</p>
+
+        <div class="space-y-4 mb-5">
+            <div>
+                <label class="text-xs font-bold text-slate-300 block mb-1.5">ระยะเวลาของทริป</label>
+                <select id="tripDaysSelect" class="w-full bg-slate-800 p-3 rounded-xl text-xs border border-slate-700 text-white focus:outline-none focus:border-emerald-500">
+                    <option value="1 วัน (One Day Trip เช้าไป-เย็นกลับ)">1 วัน (One Day Trip เช้าไป-เย็นกลับ)</option>
+                    <option value="2 วัน 1 คืน (พักค้างคืนชะอำ/แก่งกระจาน)">2 วัน 1 คืน (พักค้างคืนชะอำ/แก่งกระจาน)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-slate-300 block mb-1.5">สไตล์การท่องเที่ยว</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <label class="p-3 rounded-xl border border-slate-700 bg-slate-800/60 flex items-center gap-2 cursor-pointer hover:border-emerald-500 transition">
+                        <input type="radio" name="tripStyle" value="สายถ่ายรูป คาเฟ่ ชิคๆ" checked> 📸 คาเฟ่ ชิคๆ
+                    </label>
+                    <label class="p-3 rounded-xl border border-slate-700 bg-slate-800/60 flex items-center gap-2 cursor-pointer hover:border-emerald-500 transition">
+                        <input type="radio" name="tripStyle" value="สายมู ไหว้พระ เสริมสิริมงคล"> 🙏 สายมูไหว้พระ
+                    </label>
+                    <label class="p-3 rounded-xl border border-slate-700 bg-slate-800/60 flex items-center gap-2 cursor-pointer hover:border-emerald-500 transition">
+                        <input type="radio" name="tripStyle" value="สายชิลล์ ทะเล ธรรมชาติ"> 🌊 ทะเลธรรมชาติ
+                    </label>
+                    <label class="p-3 rounded-xl border border-slate-700 bg-slate-800/60 flex items-center gap-2 cursor-pointer hover:border-emerald-500 transition">
+                        <input type="radio" name="tripStyle" value="สายกิน ชิมของหวาน ข้าวแช่"> 🍧 ตะลอนกินแหลก
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="submitTripPlanner()" id="btnSubmitTrip" class="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs md:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>สร้างแผนการเดินทางระดับ World-Class</span>
+        </button>
+    </div>
+</div>
+
+<!-- ================= CAREER MATCHER MODAL ================= -->
+<div id="matcherModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 text-white rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col max-h-[85vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <h3 class="font-black text-base md:text-lg text-white flex items-center gap-2">
+                <i class="fa-solid fa-brain text-amber-400"></i> AI Future Career Matcher
+            </h3>
+            <button onclick="closeMatcherModal()" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <p class="text-xs text-slate-300 mb-4">วิเคราะห์ทักษะและเป้าหมายเพื่อเลือกสาขาวิชาในวิทยาลัยอาชีวศึกษาเพชรบุรี:</p>
+
+        <div class="space-y-4 mb-5">
+            <div>
+                <label class="text-xs font-bold text-slate-300 block mb-1.5">สิ่งที่คุณสนใจ / งานอดิเรก</label>
+                <input type="text" id="matcherInterests" placeholder="เช่น ทำกราฟิก, เขียนโปรแกรม, ทำอาหาร, ค้าขาย" class="w-full bg-slate-800 p-3 rounded-xl text-xs border border-slate-700 text-white focus:outline-none focus:border-amber-500">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-300 block mb-1.5">จุดเด่นหรือทักษะที่คุณมั่นใจ</label>
+                <input type="text" id="matcherStrengths" placeholder="เช่น ช่างสังเกต, สื่อสารเก่ง, ละเอียดรอบคอบ, มีความคิดสร้างสรรค์" class="w-full bg-slate-800 p-3 rounded-xl text-xs border border-slate-700 text-white focus:outline-none focus:border-amber-500">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-300 block mb-1.5">เป้าหมายหรืออาชีพในฝัน (ถ้ามี)</label>
+                <input type="text" id="matcherDream" placeholder="เช่น AI Developer, เจ้าของธุรกิจ, เชฟโรงแรม, นักบัญชีดิจิทัล" class="w-full bg-slate-800 p-3 rounded-xl text-xs border border-slate-700 text-white focus:outline-none focus:border-amber-500">
+            </div>
+        </div>
+
+        <button onclick="submitMatcher()" id="btnSubmitMatcher" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs md:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95">
+            <i class="fa-solid fa-magnifying-glass-chart"></i>
+            <span>สร้าง Career Blueprint อัจฉริยะ</span>
+        </button>
+    </div>
+</div>
+
+<!-- ================= QR CODE MODAL ================= -->
+<div id="qrModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl flex flex-col items-center">
+        <h3 class="font-black text-lg text-white mb-1">แนะแนวการศึกษาต่อ</h3>
+        <p class="text-xs text-slate-400 mb-4">สแกน QR Code เพื่อดูรายละเอียดหลักสูตรและการรับสมัคร</p>
+        
+        <div class="w-48 h-48 bg-white rounded-2xl p-3 border border-slate-600 flex items-center justify-center mb-4 shadow-xl">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://www.facebook.com/nongphetguide" alt="QR Code" class="w-full h-full object-contain">
+        </div>
+
+        <p class="text-xs font-bold text-blue-400 mb-5">วิทยาลัยอาชีวศึกษาเพชรบุรี</p>
+
+        <button onclick="closeQrModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm rounded-xl transition border border-slate-700">
+            ปิดหน้าต่าง
+        </button>
+    </div>
+</div>
+
+<!-- ================= CONTACT US MODAL ================= -->
+<div id="contactModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900/95 border border-cyan-500/40 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl flex flex-col items-center relative overflow-hidden">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-cyan-500/30 mb-3">
+            <i class="fa-solid fa-phone-volume"></i>
+        </div>
+
+        <h3 class="font-black text-xl text-white mb-1">ติดต่อเรา</h3>
+        <p class="text-xs text-cyan-300 font-bold mb-4">วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC)</p>
+
+        <div class="w-full space-y-2.5 text-xs text-slate-300 text-left mb-5">
+            <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-3">
+                <i class="fa-solid fa-phone text-cyan-400 text-base shrink-0"></i>
+                <div>
+                    <span class="text-[10px] text-slate-400 block">เบอร์โทรศัพท์ส่วนกลาง</span>
+                    <a href="tel:032425464" class="font-bold text-white hover:text-cyan-400 transition text-sm">032-425464</a>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-3">
+                <i class="fa-solid fa-location-dot text-rose-400 text-base shrink-0"></i>
+                <div>
+                    <span class="text-[10px] text-slate-400 block">ที่อยู่สถานศึกษา</span>
+                    <span class="font-medium text-white text-xs">252 ถ.ราชดำเนิน ต.คลองกระแชง อ.เมือง จ.เพชรบุรี 76000</span>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center gap-3">
+                <i class="fa-brands fa-facebook text-blue-400 text-base shrink-0"></i>
+                <div>
+                    <span class="text-[10px] text-slate-400 block">Facebook แฟนเพจ</span>
+                    <a href="https://www.facebook.com/nongphetguide" target="_blank" class="font-bold text-cyan-300 hover:underline">วิทยาลัยอาชีวศึกษาเพชรบุรี</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full flex gap-2">
+            <button onclick="openQrModal(); closeContactModal();" class="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs rounded-xl shadow transition">
+                <i class="fa-solid fa-qrcode mr-1"></i> สแกน QR สมัครเรียน
+            </button>
+            <button onclick="closeContactModal()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition border border-slate-700">
+                ปิด
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL: EXPLORE MORE (สำรวจข้อมูลเพิ่มเติม) ================= -->
+<div id="exploreModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card max-w-2xl w-full rounded-3xl p-6 border border-cyan-500/40 bg-slate-900/95 shadow-2xl relative max-h-[85vh] overflow-y-auto custom-scrollbar space-y-5">
+        <!-- Close Button -->
+        <button onclick="closeExploreModal()" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition text-sm">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+
+        <!-- Header -->
+        <div class="flex items-center gap-3 border-b border-white/10 pb-4">
+            <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-2xl border border-cyan-400/30 shrink-0">
+                <i class="fa-solid fa-compass"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-black text-white">สำรวจข้อมูลเพิ่มเติม & ไฮไลต์</h3>
+                <p class="text-xs text-cyan-300 font-semibold">น้องเพชร AI Smart Guide • วิทยาลัยอาชีวศึกษาเพชรบุรี</p>
+            </div>
+        </div>
+
+        <!-- Mascot Welcome -->
+        <div class="flex items-center gap-4 p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <div class="w-16 h-16 rounded-2xl overflow-hidden ring-2 ring-cyan-400/40 shrink-0 shadow-lg">
+                <img src="/static/img/mascot.jpg" alt="Mascot" class="w-full h-full object-cover">
+            </div>
+            <div class="space-y-1">
+                <span class="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">ยินดีต้อนรับสู่เมืองเพชรบุรี</span>
+                <p class="text-xs sm:text-sm text-slate-200">
+                    น้องเพชรพร้อมพาคุณเที่ยว วางแผนทริป และแนะนำ 9 สาขาวิชาแห่งอนาคตแบบเรียลไทม์ครับ
+                </p>
+            </div>
+        </div>
+
+        <!-- Quick Question Prompts -->
+        <div class="space-y-2">
+            <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-lightbulb text-amber-300"></i> คำถามยอดนิยม คลิกเพื่อเริ่มคุยกับ AI ทันที:
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button onclick="closeExploreModal(); sendQuickMessage('ช่วยวางแผนเที่ยวเพชรบุรี 1 วัน เช้าไป-เย็นกลับ แวะถ่ายรูปและกินของหวานเจ้าดัง');" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-cyan-600 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold text-left transition flex items-center gap-2">
+                    <span>🗺️</span> <span>แผนเที่ยว 1 วันจัดเต็ม</span>
+                </button>
+                <button onclick="closeExploreModal(); sendQuickMessage('ถ้ำเขาหลวง ช่วงเวลาแสงสวรรค์ส่องลงมาคือกี่โมง และต้องเตรียมตัวอย่างไร');" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-cyan-600 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold text-left transition flex items-center gap-2">
+                    <span>✨</span> <span>แสงสวรรค์ถ้ำเขาหลวง</span>
+                </button>
+                <button onclick="closeExploreModal(); sendQuickMessage('แนะนำร้านขนมหม้อแกงเตาฟืนและข้าวแช่ตำรับชาววังแท้ๆ ของเมืองเพชรบุรี');" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-cyan-600 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold text-left transition flex items-center gap-2">
+                    <span>🍧</span> <span>ขนมหม้อแกง & ข้าวแช่</span>
+                </button>
+                <button onclick="closeExploreModal(); sendQuickMessage('วิทยาลัยอาชีวศึกษาเพชรบุรี มีสาขาอะไรบ้างที่จบแล้วมีงานรองรับเงินเดือนสูง');" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-cyan-600 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold text-left transition flex items-center gap-2">
+                    <span>🎓</span> <span>หลักสูตรอาชีวะน่าเรียน</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Quick Navigation Grid -->
+        <div class="grid grid-cols-3 gap-2.5 pt-2">
+            <button onclick="closeExploreModal(); navigateTo('screen-places');" class="p-3 rounded-2xl bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-center transition">
+                <i class="fa-solid fa-place-of-worship text-emerald-400 text-lg block mb-1"></i>
+                <span class="text-xs font-bold text-white block">ที่เที่ยวเมืองเพชร</span>
+            </button>
+            <button onclick="closeExploreModal(); navigateTo('screen-courses');" class="p-3 rounded-2xl bg-blue-950/60 hover:bg-blue-900 border border-blue-500/40 text-center transition">
+                <i class="fa-solid fa-graduation-cap text-blue-400 text-lg block mb-1"></i>
+                <span class="text-xs font-bold text-white block">9 สาขาอาชีวะ</span>
+            </button>
+            <button onclick="closeExploreModal(); navigateTo('screen-vision');" class="p-3 rounded-2xl bg-purple-950/60 hover:bg-purple-900 border border-purple-500/40 text-center transition">
+                <i class="fa-solid fa-camera text-purple-400 text-lg block mb-1"></i>
+                <span class="text-xs font-bold text-white block">AI ตรวจจับภาพ</span>
+            </button>
+        </div>
+
+        <button onclick="closeExploreModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition border border-slate-700">
+            ปิดหน้าต่าง
+        </button>
+    </div>
+</div>
+
+<!-- Audio Player for TTS -->
+<audio id="audioPlayer" class="hidden"></audio>

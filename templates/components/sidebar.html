@@ -1,0 +1,148 @@
+<!-- ===================================================================== -->
+<!-- DESKTOP SIDEBAR (Visible in Desktop Mode) -->
+<!-- ===================================================================== -->
+<aside id="desktop-sidebar" class="w-72 bg-slate-950/90 border-r border-white/10 p-3.5 sm:p-4 flex flex-col gap-3.5 shrink-0 z-30 h-full overflow-y-auto custom-scrollbar">
+    <div class="space-y-3.5">
+        <!-- Brand Mascot Card in Sidebar -->
+        <div class="glass-card rounded-2xl p-3.5 flex items-center gap-3 border border-blue-500/25 bg-gradient-to-br from-blue-950/60 to-slate-900/90 shadow-xl">
+            <div class="w-12 h-12 rounded-xl overflow-hidden ring-2 ring-cyan-400/40 shrink-0 shadow-lg shadow-cyan-500/20 bg-slate-900 animate-float">
+                <img src="{{ url_for('static', filename='img/mascot.jpg') }}" alt="Mascot" class="w-full h-full object-cover">
+            </div>
+            <div>
+                <h2 class="font-black text-sm text-white">น้องเพชร AI</h2>
+                <p class="text-[11px] text-cyan-400 font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> พร้อมให้บริการสด
+                </p>
+                <span class="text-[9px] text-slate-400 font-mono-code">Gemini 2.5 & 3.8</span>
+            </div>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="space-y-1 text-xs font-bold">
+            <button onclick="navigateTo('screen-welcome')" data-screen="screen-welcome" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-house"></i></div>
+                <span>หน้าแรก & ภาพรวม</span>
+            </button>
+            <button onclick="navigateTo('screen-main-menu')" data-screen="screen-main-menu" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-compass"></i></div>
+                <span>เมนูหลัก (Quick Hub)</span>
+            </button>
+            <button onclick="navigateTo('screen-chat')" data-screen="screen-chat" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-amber-600/30 text-amber-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-comment-dots"></i></div>
+                <span class="flex-1 text-left">ถามน้องเพชร AI</span>
+                <span class="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9px] px-1.5 py-0.5 rounded-full font-bold">Chat</span>
+            </button>
+            <button onclick="navigateTo('screen-live')" data-screen="screen-live" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-rose-600/30 text-rose-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-video"></i></div>
+                <span class="flex-1 text-left">คุยสด LIVE ผ่านกล้อง</span>
+                <span class="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">LIVE</span>
+            </button>
+            <button onclick="navigateTo('screen-sign-language')" data-screen="screen-sign-language" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-hands-asl-interpreting"></i></div>
+                <span class="flex-1 text-left">โหมดภาษามือ (TSL AI)</span>
+                <span class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[9px] px-1.5 py-0.5 rounded-full font-black">คนพิการ</span>
+            </button>
+            <button onclick="navigateTo('screen-places')" data-screen="screen-places" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-emerald-600/30 text-emerald-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-place-of-worship"></i></div>
+                <span>เที่ยวเมืองเพชรบุรี</span>
+            </button>
+            <button onclick="navigateTo('screen-courses')" data-screen="screen-courses" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-graduation-cap"></i></div>
+                <span>แนะแนวศึกษาต่อ & อาชีพ</span>
+            </button>
+            <button onclick="navigateTo('screen-vision')" data-screen="screen-vision" class="sidebar-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-transparent transition text-slate-300 hover:text-white hover:bg-white/5">
+                <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-camera"></i></div>
+                <span>รู้จักสถานที่ (PHOTO AI)</span>
+            </button>
+        </nav>
+
+        <!-- Quick Tools Section -->
+        <div class="pt-2.5 border-t border-slate-800 space-y-1.5">
+            <span class="text-[10px] font-black text-slate-500 uppercase tracking-wider block px-1">เครื่องมือ AI พิเศษ</span>
+            <button onclick="openTripPlannerModal()" class="w-full py-2 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
+                <i class="fa-solid fa-route text-emerald-400"></i>
+                <span>AI วางแผนทริปเที่ยว</span>
+            </button>
+            <button onclick="openMatcherModal()" class="w-full py-2 px-3 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
+                <i class="fa-solid fa-brain text-amber-400"></i>
+                <span>Career Blueprint Matcher</span>
+            </button>
+            <button onclick="openQrModal()" class="w-full py-2 px-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
+                <i class="fa-solid fa-qrcode text-blue-400"></i>
+                <span>QR Code สมัครเรียน</span>
+            </button>
+            <a href="/admin" target="_blank" class="w-full py-2 px-3 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
+                <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+                <span>แผงควบคุม & Telemetry</span>
+                <span class="ml-auto text-[9px] bg-cyan-500/30 text-cyan-200 px-1.5 py-0.5 rounded font-mono-code font-bold">ADMIN</span>
+            </a>
+        </div>
+
+        <!-- ESP32 & Camera Smart Presence Detection (สอศ. ข้อ 4.2) -->
+        <div class="mt-2.5 p-3 rounded-2xl bg-slate-900/90 border border-emerald-500/30 text-[11px] space-y-2 shadow-lg">
+            <div class="flex items-center justify-between">
+                <span class="font-bold text-white flex items-center gap-1.5">
+                    <i class="fa-solid fa-person-rays text-emerald-400"></i> ตรวจจับคน (Sensor & AI)
+                </span>
+                <span id="iotStatusBadge" class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">ONLINE</span>
+            </div>
+            
+            <div class="space-y-1 text-[10px] text-slate-400">
+                <div class="flex items-center justify-between">
+                    <span>📡 เซนเซอร์ HC-SR04:</span>
+                    <span id="iotDistanceDisplay" class="font-mono-code text-cyan-300 font-bold">รอการตรวจจับ</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span>📷 กล้อง AI Presence:</span>
+                    <span id="cameraSensorStatus" class="font-mono-code text-slate-400">กล้องปิดอยู่</span>
+                </div>
+            </div>
+
+            <!-- Auto Live on Detection Toggle -->
+            <div class="flex items-center justify-between pt-1.5 border-t border-slate-800 text-[10px]">
+                <span class="text-slate-300 font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-bolt text-rose-400 animate-pulse"></i> คุยสด LIVE ทันทีเมื่อพบคน:
+                </span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="toggleAutoLiveCheckbox" checked onchange="toggleAutoLiveOnPresence(this.checked)" class="sr-only peer">
+                    <div class="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-rose-600 peer-checked:to-pink-600"></div>
+                </label>
+            </div>
+
+            <!-- Mini Camera Preview (Shown when Camera Sensor is active) -->
+            <div id="cameraSensorPreview" class="hidden relative rounded-lg overflow-hidden border border-emerald-500/40 bg-black aspect-video">
+                <video id="cameraSensorVideo" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
+                <div class="absolute inset-0 border-2 border-emerald-400/40 pointer-events-none rounded-lg"></div>
+                <div class="absolute top-1.5 left-1.5 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span id="cameraDetectionIndicator" class="text-[9px] font-medium text-slate-300 bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-700">สแกนหาคน...</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons for Detection -->
+            <div class="space-y-1.5 pt-1.5 border-t border-slate-800">
+                <button onclick="sendPresenceTrigger('manual_simulation', 45)" class="w-full py-2 px-2.5 bg-gradient-to-r from-rose-600/35 via-pink-600/35 to-purple-600/35 hover:from-rose-600/50 hover:to-pink-600/50 text-rose-200 hover:text-white border border-rose-500/40 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 shadow">
+                    <i class="fa-solid fa-play text-rose-400"></i>
+                    <span>⚡ ทดสอบตรวจพบคน & เปิดคุยสด LIVE</span>
+                </button>
+                <button id="btnToggleCameraSensor" onclick="toggleCameraSensor()" class="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-[10px] font-medium flex items-center justify-center gap-1.5 transition active:scale-95">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>เปิดสแกนคนผ่านกล้องหน้า (Webcam)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Status & System Info -->
+    <div class="mt-auto pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-2">
+        <div class="flex items-center justify-between">
+            <span>เสียงอ่านอัตโนมัติ</span>
+            <button id="toggleAutoSpeakBtn" onclick="toggleAutoSpeak()" class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs hover:border-blue-500 transition shadow">
+                <i id="autoSpeakIcon" class="fa-solid fa-volume-high text-emerald-400"></i>
+            </button>
+        </div>
+        <div class="text-[10px] text-slate-500 leading-tight">
+            Google Gemini 2.5 & 3.8 Live SDK + Edge Neural TTS
+        </div>
+    </div>
+</aside>

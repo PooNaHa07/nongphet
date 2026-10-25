@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nong Phet Robotics - Mission Control & Hardware Telemetry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="icon" type="image/svg+xml" href="/static/img/robot.svg">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700;800&display=swap');
+        body { font-family: 'Prompt', sans-serif; }
+        .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(56, 189, 248, 0.16);
+        }
+        .glass-card-glow {
+            background: radial-gradient(circle at top right, rgba(6, 182, 212, 0.08), transparent 70%), rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            box-shadow: 0 10px 35px -5px rgba(6, 182, 212, 0.15);
+        }
+        .gauge-ring {
+            transition: stroke-dashoffset 0.6s ease-in-out, stroke 0.4s ease;
+        }
+        .scanline-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.04));
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.04); }
+        }
+        .pulse-beacon {
+            animation: pulseGlow 2.5s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-full bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(14,165,233,0.18),rgba(255,255,255,0))] text-slate-100 p-3 sm:p-5 lg:p-7">
+
+    <div class="max-w-[1520px] mx-auto space-y-5">
+        
+        <!-- Top Command Header -->
+        <header class="glass-card-glow p-4 sm:p-5 rounded-2xl flex flex-wrap items-center justify-between gap-4 relative overflow-hidden">
+            <div class="flex items-center gap-4">
+                <div class="w-13 h-13 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 p-0.5 shadow-xl shadow-cyan-500/25 ring-2 ring-cyan-400/30">
+                    <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-2xl">
+                        🤖
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <h1 class="font-black text-lg sm:text-xl text-white tracking-wide">
+                            NONG PHET ROBOTICS // MISSION CONTROL & TELEMETRY
+                        </h1>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1.5 shadow-sm">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            RPI-5 ONLINE
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                            UPTIME: <span id="topUptimeBadge" class="font-bold text-white">00:00:00</span>
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                        <span>วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC)</span>
+                        <span class="text-slate-600">•</span>
+                        <span>IP: <span id="topIpBadge" class="font-mono-code text-cyan-400 font-semibold">127.0.0.1</span></span>
+                        <span class="text-slate-600">•</span>
+                        <span id="topNetworkStatus" class="text-emerald-400 text-[11px]"><i class="fa-solid fa-wifi text-xs mr-1"></i> เชื่อมต่อเครือข่ายเรียบร้อย</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Header Quick Action Links -->
+            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <a href="/" target="_blank" class="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-xs font-bold text-slate-200 border border-slate-700/80 transition flex items-center gap-1.5 shadow active:scale-95">
+                    <i class="fa-solid fa-desktop text-cyan-400"></i> จอหลัก Kiosk
+                </a>
+                <a href="/emotion" target="_blank" class="px-3 py-2 rounded-xl bg-cyan-950/70 hover:bg-cyan-900/80 text-xs font-bold text-cyan-300 border border-cyan-500/40 transition flex items-center gap-1.5 shadow active:scale-95">
+                    <i class="fa-solid fa-face-smile text-cyan-400"></i> จอหน้าตา Robot
+                </a>
+                <button onclick="fetchTelemetry(true)" class="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-xs font-bold text-white shadow-lg shadow-cyan-600/30 transition flex items-center gap-1.5 active:scale-95">
+                    <i class="fa-solid fa-rotate" id="refreshIcon"></i> รีเฟรชข้อมูล
+                </button>
+            </div>
+        </header>
+
+        <!-- SECTION 1: Hardware Telemetry Gauges (Raspberry Pi 5 Metrics) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            
+            <!-- Gauge 1: CPU Temperature (°C) -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-cyan-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-temperature-three-quarters text-cyan-400"></i> อุณหภูมิ CPU (RPi 5)
+                    </span>
+                    <span id="tempStatusPill" class="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        NORMAL
+                    </span>
+                </div>
+                <div class="mt-3 flex items-baseline justify-between">
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-3xl font-black font-mono-code text-white" id="teleCpuTemp">48.5</span>
+                        <span class="text-sm font-bold text-cyan-400">°C</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono-code text-right">
+                        <span>Active Cooler</span><br>
+                        <span class="text-emerald-400 font-bold" id="teleFanSpeed">FAN: 4,200 RPM</span>
+                    </div>
+                </div>
+                <!-- Temp Progress Bar -->
+                <div class="w-full bg-slate-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div id="tempBar" class="bg-gradient-to-r from-cyan-400 to-emerald-400 h-1.5 rounded-full transition-all duration-500" style="width: 48%"></div>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block">เกณฑ์ปลอดภัย: &lt; 65°C / สูงสุด: 80°C</span>
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-500 to-emerald-500"></div>
+            </div>
+
+            <!-- Gauge 2: CPU Load & Architecture -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-blue-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-microchip text-blue-400"></i> ภาระประมวลผล CPU
+                    </span>
+                    <span class="text-[10px] font-mono-code text-blue-400 font-bold">4 CORES</span>
+                </div>
+                <div class="mt-3 flex items-baseline justify-between">
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-3xl font-black font-mono-code text-white" id="teleCpuLoad">14.2</span>
+                        <span class="text-sm font-bold text-blue-400">%</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-mono-code text-right">Cortex-A76<br><span class="text-blue-300">@ 2.4 GHz</span></span>
+                </div>
+                <div class="w-full bg-slate-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div id="cpuLoadBar" class="bg-gradient-to-r from-blue-400 to-cyan-400 h-1.5 rounded-full transition-all duration-500" style="width: 14%"></div>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block">BCM2712 Quad-Core 64-bit</span>
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+            </div>
+
+            <!-- Gauge 3: RAM Memory (LPDDR4X) -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-indigo-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-memory text-indigo-400"></i> หน่วยความจำ RAM
+                    </span>
+                    <span class="text-[10px] font-mono-code text-indigo-400 font-bold" id="teleRamPercent">28.4%</span>
+                </div>
+                <div class="mt-3 flex items-baseline justify-between">
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-3xl font-black font-mono-code text-white" id="teleRamUsed">2.27</span>
+                        <span class="text-sm font-bold text-indigo-400">GB</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-mono-code text-right">จากทั้งหมด<br><span class="text-indigo-300 font-bold" id="teleRamTotal">8.00 GB</span></span>
+                </div>
+                <div class="w-full bg-slate-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div id="ramBar" class="bg-gradient-to-r from-indigo-400 to-purple-400 h-1.5 rounded-full transition-all duration-500" style="width: 28%"></div>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block">LPDDR4X High-Speed Bus</span>
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+            </div>
+
+            <!-- Gauge 4: Battery & Power (UPS Hat / 27W) -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-amber-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-battery-three-quarters text-amber-400"></i> แบตเตอรี่ & แหล่งจ่ายไฟ
+                    </span>
+                    <span class="px-1.5 py-0.2 rounded text-[9px] font-mono-code font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                        <i class="fa-solid fa-bolt text-[8px]"></i> 5.12V
+                    </span>
+                </div>
+                <div class="mt-3 flex items-baseline justify-between">
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-3xl font-black font-mono-code text-white" id="teleBatteryPercent">96</span>
+                        <span class="text-sm font-bold text-amber-400">%</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-mono-code text-right">สถานะไฟฟ้า<br><span class="text-emerald-400 font-bold" id="telePowerStatus">AC Online</span></span>
+                </div>
+                <div class="w-full bg-slate-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div id="batteryBar" class="bg-gradient-to-r from-amber-400 to-emerald-400 h-1.5 rounded-full transition-all duration-500" style="width: 96%"></div>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block" id="telePowerDetail">UPS Hat Battery Backup (27W PD)</span>
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 to-yellow-500"></div>
+            </div>
+
+            <!-- Gauge 5: Disk Storage -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-rose-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-hard-drive text-rose-400"></i> พื้นที่จัดเก็บ NVMe/SD
+                    </span>
+                    <span class="text-[10px] font-mono-code text-rose-400 font-bold" id="teleDiskPercent">32.1%</span>
+                </div>
+                <div class="mt-3 flex items-baseline justify-between">
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-3xl font-black font-mono-code text-white" id="teleDiskFree">43.5</span>
+                        <span class="text-sm font-bold text-rose-400">GB ว่าง</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-mono-code text-right">ความจุรวม<br><span class="text-slate-300 font-bold" id="teleDiskTotal">64.0 GB</span></span>
+                </div>
+                <div class="w-full bg-slate-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div id="diskBar" class="bg-gradient-to-r from-rose-400 to-pink-400 h-1.5 rounded-full transition-all duration-500" style="width: 32%"></div>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block">Local ML & Database Cache</span>
+                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-rose-500 to-pink-500"></div>
+            </div>
+
+        </div>
+
+        <!-- SECTION 2: Live Visor Mirror & Remote Command Console (คอนโซลควบคุมหุ่นยนต์สด) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            
+            <!-- Left: Live Emotion Visor Mirror (4 cols) -->
+            <div class="lg:col-span-4 glass-card p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between border-cyan-500/30">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+                        <h3 class="font-bold text-sm text-white flex items-center gap-1.5">
+                            <i class="fa-solid fa-eye text-cyan-400"></i> จอสะท้อนหน้าตาน้องเพชรสด (Visor Mirror)
+                        </h3>
+                    </div>
+                    <span class="text-[10px] font-mono-code text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30" id="liveEmotionLabel">
+                        IDLE (ปกติ)
+                    </span>
+                </div>
+
+                <!-- Animated Mini Robot Face Visualizer -->
+                <div class="my-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-950/90 border border-cyan-500/20 relative shadow-inner">
+                    <div class="w-44 h-32 flex flex-col items-center justify-center transition-all duration-300" id="mirrorFaceContainer">
+                        <!-- Eyes Row -->
+                        <div class="flex items-center justify-center gap-10">
+                            <!-- Left Eye -->
+                            <div class="w-12 h-14 rounded-full border-2 border-cyan-400 bg-cyan-500/10 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.6)] transition-all duration-300" id="mirrorEyeLeft">
+                                <span class="text-xl" id="mirrorEyeLeftIcon">✦</span>
+                            </div>
+                            <!-- Right Eye -->
+                            <div class="w-12 h-14 rounded-full border-2 border-cyan-400 bg-cyan-500/10 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.6)] transition-all duration-300" id="mirrorEyeRight">
+                                <span class="text-xl" id="mirrorEyeRightIcon">✦</span>
+                            </div>
+                        </div>
+                        <!-- Mouth Row -->
+                        <div class="mt-4 w-16 h-3 rounded-full border-2 border-cyan-400 bg-cyan-400/20 shadow-[0_0_15px_rgba(6,182,212,0.5)] transition-all duration-300" id="mirrorMouth"></div>
+                    </div>
+                    <div class="text-[10px] text-cyan-400/70 font-mono-code mt-3">
+                        CURRENT: <span id="mirrorStateText" class="font-bold text-white uppercase">IDLE</span>
+                    </div>
+                </div>
+
+                <!-- Live Vision & Sensor Status Pills -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
+                        <span class="text-[11px] text-slate-400"><i class="fa-solid fa-camera mr-1 text-cyan-400"></i> กล้องตรวจคน</span>
+                        <span class="text-[10px] font-bold text-emerald-400 font-mono-code">READY</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
+                        <span class="text-[11px] text-slate-400"><i class="fa-solid fa-hands-asl-interpreting mr-1 text-cyan-400"></i> ตรวจภาษามือ</span>
+                        <span class="text-[10px] font-bold text-cyan-400 font-mono-code">TSL 60 FPS</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Remote Admin Control Pad & Speech Broadcast (8 cols) -->
+            <div class="lg:col-span-8 glass-card p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between border-cyan-500/30">
+                <div class="border-b border-slate-800/80 pb-3 flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-gamepad text-cyan-400"></i> แผงรีโมตคอนโทรลสั่งการหุ่นยนต์ (Remote Robot Control Pad)
+                        </h3>
+                        <p class="text-[11px] text-slate-400 mt-0.5">คลิกสั่งเปลี่ยนอารมณ์บนใบหน้าหุ่นยนต์ หรือพิมพ์ข้อความสั่งให้น้องเพชรประกาศเสียงพูดสดทันที</p>
+                    </div>
+                    <span class="text-[10px] font-mono-code bg-emerald-500/10 text-emerald-400 px-2.5 py-0.5 rounded border border-emerald-400/30">
+                        LATENCY: &lt; 20ms (SSE BUS)
+                    </span>
+                </div>
+
+                <!-- Emotion Remote Buttons Matrix -->
+                <div class="my-4">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                        1. สั่งเปลี่ยนอารมณ์บนใบหน้าน้องเพชรทันที (Instant Emotion Override):
+                    </label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button onclick="remoteSetEmotion('idle')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-cyan-500/20 border border-slate-700/80 hover:border-cyan-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">😊</span> ปกติ (Idle)
+                        </button>
+                        <button onclick="remoteSetEmotion('happy')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-pink-500/20 border border-slate-700/80 hover:border-pink-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">🥰</span> ร่าเริง (Happy)
+                        </button>
+                        <button onclick="remoteSetEmotion('love')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-rose-500/20 border border-slate-700/80 hover:border-rose-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">💖</span> เขินรัก (Love)
+                        </button>
+                        <button onclick="remoteSetEmotion('scanner')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-cyan-500/20 border border-slate-700/80 hover:border-cyan-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">⚡</span> สแกน (Scan)
+                        </button>
+                        <button onclick="remoteSetEmotion('thinking')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-amber-500/20 border border-slate-700/80 hover:border-amber-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">🤔</span> คิดวิเคราะห์
+                        </button>
+                        <button onclick="remoteSetEmotion('wink')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-emerald-500/20 border border-slate-700/80 hover:border-emerald-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">😉</span> ขยิบตา (Wink)
+                        </button>
+                        <button onclick="remoteSetEmotion('surprised')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-purple-500/20 border border-slate-700/80 hover:border-purple-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">😲</span> ตื่นเต้น
+                        </button>
+                        <button onclick="remoteSetEmotion('sleeping')" class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-indigo-500/20 border border-slate-700/80 hover:border-indigo-400 text-xs font-bold text-slate-200 transition flex items-center gap-2 active:scale-95 shadow">
+                            <span class="text-base">💤</span> พักเครื่อง (Sleep)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Remote Speech Announcement Transmitter -->
+                <div class="mt-2 pt-3 border-t border-slate-800/80">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                        2. ส่งเสียงพูดประกาศสดผ่านหุ่นยนต์ (Neural TTS Voice Broadcast):
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-bullhorn absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400 text-xs"></i>
+                            <input type="text" id="adminBroadcastInput" placeholder="พิมพ์ข้อความที่ต้องการให้น้องเพชรพูดออกลำโพง เช่น ยินดีต้อนรับคณะกรรมการทุกท่านครับ..." class="w-full bg-slate-900/90 border border-slate-700/90 focus:border-cyan-400 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none transition">
+                        </div>
+                        <button onclick="remoteBroadcastSpeech()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow active:scale-95">
+                            <i class="fa-solid fa-paper-plane"></i> สั่งให้พูดสด
+                        </button>
+                    </div>
+
+                    <!-- Fast Presets Chips -->
+                    <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                        <span class="text-[10px] text-slate-500">ข้อความด่วน:</span>
+                        <button onclick="setBroadcastPreset('ยินดีต้อนรับคณะกรรมการและทุกท่านสู่วิทยาลัยอาชีวศึกษาเพชรบุรีครับ')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700/80 transition">
+                            ยินดีต้อนรับคณะกรรมการ
+                        </button>
+                        <button onclick="setBroadcastPreset('ขอเชิญร่วมชมนิทรรศการสิ่งประดิษฐ์คนรุ่นใหม่และผลงานนวัตกรรมอาชีวะครับ')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700/80 transition">
+                            ชมนิทรรศการสิ่งประดิษฐ์
+                        </button>
+                        <button onclick="setBroadcastPreset('อย่าลืมแวะชิมขนมหม้อแกงเตาฟืนและก๋วยเตี๋ยวน้ำแดงสูตรเพชรบุรีนะครับ')" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700/80 transition">
+                            ชวนชิมของอร่อยเมืองเพชร
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECTION 3: AI & Visitor Analytics KPI Cards (4 Cards) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- KPI 1: Visitors Detected -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-cyan-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">ผู้เข้าชมตรวจพบสะสม</span>
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-sm">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span class="text-3xl font-black text-white font-mono-code" id="metricVisitors">0</span>
+                    <span class="text-xs text-cyan-400 font-semibold">คน</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">กล้อง AI Vision & IoT เซนเซอร์จับระยะ</p>
+                <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500"></div>
+            </div>
+
+            <!-- KPI 2: Total Interactions -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-blue-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">บทสนทนา & ถามตอบสะสม</span>
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 text-sm">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span class="text-3xl font-black text-white font-mono-code" id="metricInteractions">0</span>
+                    <span class="text-xs text-blue-400 font-semibold">ครั้ง</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">คำถามเสียง STT & สัมผัสหน้าจอ Kiosk</p>
+                <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+            </div>
+
+            <!-- KPI 3: Local Edge ML Rate -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-emerald-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Edge AI Model บนเครื่อง</span>
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-sm">
+                        <i class="fa-solid fa-microchip"></i>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span class="text-3xl font-black text-emerald-400 font-mono-code" id="metricLocalRate">65%</span>
+                    <span class="text-xs text-emerald-300 font-semibold">ประมวลผลทันที</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">โมเดลออฟไลน์บน RPi 5 (ความเร็ว &lt; 50ms)</p>
+                <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+            </div>
+
+            <!-- KPI 4: Sign Language Interactions -->
+            <div class="glass-card p-4 rounded-2xl relative overflow-hidden group hover:border-pink-400/40 transition">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">ตรวจจับภาษามือไทย (TSL)</span>
+                    <div class="w-9 h-9 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 text-sm">
+                        <i class="fa-solid fa-hands-asl-interpreting"></i>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span class="text-3xl font-black text-pink-400 font-mono-code" id="metricSignCount">4</span>
+                    <span class="text-xs text-pink-300 font-semibold">ครั้ง (Universal Design)</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">MediaPipe 21 Joints + กฎเรขาคณิต 7 ท่า</p>
+                <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 to-rose-500"></div>
+            </div>
+
+        </div>
+
+        <!-- SECTION 4: Real-time Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            
+            <!-- Chart 1: Top Question Categories -->
+            <div class="glass-card p-5 rounded-2xl shadow-xl">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                    <h3 class="font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+                        5 อันดับหัวข้อที่ผู้เข้าชมถามมากที่สุด (Top Intent Topics)
+                    </h3>
+                    <span class="text-[10px] text-slate-400 font-mono-code">Edge Intent Analytics</span>
+                </div>
+                <div class="h-64 flex items-center justify-center">
+                    <canvas id="intentChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Hourly Traffic Heatmap -->
+            <div class="glass-card p-5 rounded-2xl shadow-xl">
+                <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                    <h3 class="font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-blue-400"></i>
+                        ความหนาแน่นของผู้เข้าใช้งานตามช่วงเวลา 24 ชม. (Hourly Traffic)
+                    </h3>
+                    <span class="text-[10px] text-slate-400 font-mono-code">Today's Peak Hours</span>
+                </div>
+                <div class="h-64 flex items-center justify-center">
+                    <canvas id="trafficChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- SECTION 5: Realtime Activity Stream Table & Reset -->
+        <div class="glass-card p-5 rounded-2xl shadow-xl">
+            <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800 flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
+                    <h3 class="font-bold text-sm text-white">
+                        บันทึกประวัติการมีปฏิสัมพันธ์แบบเรียลไทม์ (Live Interaction Stream)
+                    </h3>
+                    <span class="text-[10px] font-mono-code text-cyan-400 flex items-center gap-1.5 ml-2">
+                        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span> Real-time Stream
+                    </span>
+                </div>
+
+                <button onclick="resetAnalyticsStats()" class="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-[10px] font-bold text-rose-300 border border-rose-800/80 transition flex items-center gap-1.5 active:scale-95">
+                    <i class="fa-solid fa-trash-can"></i> รีเซ็ตสถิติรอบนี้
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-800/80">
+                            <th class="py-2.5 px-3">เวลา</th>
+                            <th class="py-2.5 px-3">ข้อความ / คำถาม / ท่าทางภาษามือ</th>
+                            <th class="py-2.5 px-3">หมวดหมู่ (Intent)</th>
+                            <th class="py-2.5 px-3">ความมั่นใจ</th>
+                            <th class="py-2.5 px-3">AI Engine ที่ประมวลผล</th>
+                            <th class="py-2.5 px-3">ภาษา</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody" class="divide-y divide-slate-800/40">
+                        <!-- Rows dynamically populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Toast Notification Overlay -->
+    <div id="adminToast" class="fixed bottom-6 right-6 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-cyan-500/50 text-white text-xs shadow-2xl backdrop-blur-md transform translate-y-16 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
+        <span id="toastIcon">✨</span>
+        <span id="toastText">สำเร็จ</span>
+    </div>
+
+    <script>
+        let intentChart = null;
+        let trafficChart = null;
+        let currentRobotEmotion = 'idle';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            fetchTelemetry();
+            setInterval(fetchTelemetry, 3500); // อัปเดตข้อมูลทุก 3.5 วินาที
+        });
+
+        function initCharts() {
+            // Intent Doughnut Chart
+            const ctxIntent = document.getElementById('intentChart').getContext('2d');
+            intentChart = new Chart(ctxIntent, {
+                type: 'doughnut',
+                data: {
+                    labels: ['สถานที่ท่องเที่ยว', 'ของกินของฝาก', 'การรับสมัคร/หลักสูตร', 'ภาษามือ (TSL)', 'ประวัติศาสตร์', 'ทั่วไป'],
+                    datasets: [{
+                        data: [35, 25, 18, 12, 6, 4],
+                        backgroundColor: ['#06b6d4', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6', '#64748b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: 'Prompt', size: 11 } } }
+                    }
+                }
+            });
+
+            // Traffic Line Chart
+            const ctxTraffic = document.getElementById('trafficChart').getContext('2d');
+            const hours = Array.from({length: 24}, (_, i) => `${String(i).padStart(2, '0')}:00`);
+            trafficChart = new Chart(ctxTraffic, {
+                type: 'line',
+                data: {
+                    labels: hours,
+                    datasets: [{
+                        label: 'จำนวนครั้งที่สนทนา',
+                        data: Array(24).fill(0),
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.35
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { ticks: { color: '#64748b', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { beginAtZero: true, ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        async function fetchTelemetry(isManual = false) {
+            const icon = document.getElementById('refreshIcon');
+            if (isManual && icon) icon.classList.add('fa-spin');
+
+            try {
+                const res = await fetch('/api/analytics');
+                const json = await res.json();
+                if (json.status === 'success') {
+                    if (json.telemetry) renderHardwareTelemetry(json.telemetry);
+                    if (json.data) renderVisitorAnalytics(json.data);
+                }
+            } catch (e) {
+                console.error('Fetch telemetry error:', e);
+            } finally {
+                if (isManual && icon) setTimeout(() => icon.classList.remove('fa-spin'), 600);
+            }
+        }
+
+        function renderHardwareTelemetry(tel) {
+            // CPU Temp
+            const tempEl = document.getElementById('teleCpuTemp');
+            const tempBar = document.getElementById('tempBar');
+            const tempStatus = document.getElementById('tempStatusPill');
+            if (tempEl) tempEl.textContent = tel.cpu_temp || 48.5;
+
+            if (tempBar) {
+                const pct = Math.min(100, Math.max(0, (tel.cpu_temp / 85) * 100));
+                tempBar.style.width = `${pct}%`;
+                if (tel.cpu_temp < 60) {
+                    tempBar.className = 'bg-gradient-to-r from-cyan-400 to-emerald-400 h-1.5 rounded-full';
+                    if (tempStatus) {
+                        tempStatus.className = 'px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30';
+                        tempStatus.textContent = 'NORMAL';
+                    }
+                } else if (tel.cpu_temp < 75) {
+                    tempBar.className = 'bg-gradient-to-r from-amber-400 to-orange-400 h-1.5 rounded-full';
+                    if (tempStatus) {
+                        tempStatus.className = 'px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30';
+                        tempStatus.textContent = 'WARM';
+                    }
+                } else {
+                    tempBar.className = 'bg-gradient-to-r from-rose-500 to-red-600 h-1.5 rounded-full';
+                    if (tempStatus) {
+                        tempStatus.className = 'px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-rose-500/20 text-rose-300 border border-rose-400/30 animate-pulse';
+                        tempStatus.textContent = 'HOT';
+                    }
+                }
+            }
+
+            // CPU Load
+            document.getElementById('teleCpuLoad').textContent = tel.cpu_percent || 0;
+            const cpuBar = document.getElementById('cpuLoadBar');
+            if (cpuBar) cpuBar.style.width = `${Math.min(100, tel.cpu_percent || 15)}%`;
+
+            // RAM
+            document.getElementById('teleRamUsed').textContent = tel.ram_used_gb || 0;
+            document.getElementById('teleRamTotal').textContent = `${tel.ram_total_gb || 8} GB`;
+            document.getElementById('teleRamPercent').textContent = `${tel.ram_percent || 0}%`;
+            const ramBar = document.getElementById('ramBar');
+            if (ramBar) ramBar.style.width = `${tel.ram_percent || 0}%`;
+
+            // Battery / Power
+            if (tel.power) {
+                document.getElementById('teleBatteryPercent').textContent = tel.power.percent || 96;
+                document.getElementById('telePowerStatus').textContent = tel.power.is_plugged ? 'AC Online' : 'Battery';
+                const batBar = document.getElementById('batteryBar');
+                if (batBar) batBar.style.width = `${tel.power.percent || 96}%`;
+            }
+
+            // Disk
+            document.getElementById('teleDiskFree').textContent = tel.disk_free_gb || 0;
+            document.getElementById('teleDiskTotal').textContent = `${tel.disk_total_gb || 64} GB`;
+            document.getElementById('teleDiskPercent').textContent = `${tel.disk_percent || 0}%`;
+            const diskBar = document.getElementById('diskBar');
+            if (diskBar) diskBar.style.width = `${tel.disk_percent || 0}%`;
+
+            // Header Telemetry
+            if (tel.uptime) document.getElementById('topUptimeBadge').textContent = tel.uptime;
+            if (tel.network && tel.network.ip_address) {
+                document.getElementById('topIpBadge').textContent = tel.network.ip_address;
+            }
+
+            // Live Visor Mirror State
+            if (tel.robot && tel.robot.current_emotion) {
+                updateMirrorEmotion(tel.robot.current_emotion);
+            }
+        }
+
+        function renderVisitorAnalytics(data) {
+            document.getElementById('metricVisitors').textContent = data.total_visitors || 0;
+            document.getElementById('metricInteractions').textContent = data.total_interactions || 0;
+            document.getElementById('metricSignCount').textContent = data.sign_language_count || 4;
+
+            const totalAI = (data.local_ai_count || 0) + (data.cloud_ai_count || 0);
+            const localRate = totalAI > 0 ? Math.round((data.local_ai_count / totalAI) * 100) : 65;
+            document.getElementById('metricLocalRate').textContent = `${localRate}%`;
+
+            // Update Intent Chart
+            if (intentChart && data.intents) {
+                const intentVals = [
+                    data.intents.travel || 0,
+                    data.intents.food || 0,
+                    data.intents.admission || 0,
+                    data.intents.sign_language || 0,
+                    data.intents.history || 0,
+                    data.intents.general || 0
+                ];
+                intentChart.data.datasets[0].data = intentVals;
+                intentChart.update();
+            }
+
+            // Update Traffic Chart
+            if (trafficChart && data.hourly_traffic) {
+                trafficChart.data.datasets[0].data = data.hourly_traffic;
+                trafficChart.update();
+            }
+
+            // Populate Table
+            const tbody = document.getElementById('logsTableBody');
+            if (tbody && data.recent_logs) {
+                tbody.innerHTML = '';
+                data.recent_logs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-800/30 transition';
+                    const isLocal = log.engine === 'local_model' || log.engine === 'mediapipe_tsl' || log.engine === 'local_rules';
+                    const isTsl = log.language === 'tsl' || log.intent === 'sign_language';
+                    tr.innerHTML = `
+                        <td class="py-2 px-3 font-mono-code text-slate-400">${log.time}</td>
+                        <td class="py-2 px-3 font-medium text-slate-200">${escapeHtml(log.message)}</td>
+                        <td class="py-2 px-3">
+                            <span class="px-2 py-0.5 rounded-full ${isTsl ? 'bg-pink-950 text-pink-300 border border-pink-700' : 'bg-blue-950 text-blue-300 border border-blue-800'} text-[10px] font-bold">
+                                ${log.intent}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 font-mono-code text-cyan-300 font-bold">${log.confidence}%</td>
+                        <td class="py-2 px-3">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isLocal ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-purple-950 text-purple-300 border border-purple-800'}">
+                                ${isLocal ? '⚡ Edge AI' : '🤖 Cloud GenAI'}
+                            </span>
+                        </td>
+                        <td class="py-2 px-3 uppercase font-mono-code ${isTsl ? 'text-pink-400 font-bold' : 'text-slate-400'}">${log.language}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        // Live Mirror Face State Visualizer
+        function updateMirrorEmotion(emotion) {
+            currentRobotEmotion = emotion;
+            const eyeL = document.getElementById('mirrorEyeLeft');
+            const eyeR = document.getElementById('mirrorEyeRight');
+            const eyeLIcon = document.getElementById('mirrorEyeLeftIcon');
+            const eyeRIcon = document.getElementById('mirrorEyeRightIcon');
+            const mouth = document.getElementById('mirrorMouth');
+            const label = document.getElementById('liveEmotionLabel');
+            const stateText = document.getElementById('mirrorStateText');
+
+            if (stateText) stateText.textContent = emotion;
+            if (label) label.textContent = `${emotion.toUpperCase()}`;
+
+            if (emotion === 'love') {
+                eyeL.className = 'w-12 h-14 rounded-full border-2 border-rose-400 bg-rose-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(244,63,94,0.7)]';
+                eyeR.className = 'w-12 h-14 rounded-full border-2 border-rose-400 bg-rose-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(244,63,94,0.7)]';
+                eyeLIcon.textContent = '💖';
+                eyeRIcon.textContent = '💖';
+                mouth.className = 'mt-4 w-12 h-5 rounded-b-full border-2 border-rose-400 bg-rose-400/30';
+            } else if (emotion === 'happy') {
+                eyeL.className = 'w-12 h-14 rounded-full border-2 border-pink-400 bg-pink-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(236,72,153,0.7)]';
+                eyeR.className = 'w-12 h-14 rounded-full border-2 border-pink-400 bg-pink-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(236,72,153,0.7)]';
+                eyeLIcon.textContent = '⌒';
+                eyeRIcon.textContent = '⌒';
+                mouth.className = 'mt-4 w-16 h-5 rounded-b-full border-2 border-pink-400 bg-pink-400/30';
+            } else if (emotion === 'wink') {
+                eyeL.className = 'w-12 h-14 rounded-full border-2 border-emerald-400 bg-emerald-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.7)]';
+                eyeR.className = 'w-12 h-3 rounded-full border-2 border-emerald-400 bg-emerald-400 flex items-center justify-center';
+                eyeLIcon.textContent = '✦';
+                eyeRIcon.textContent = '';
+                mouth.className = 'mt-4 w-14 h-4 rounded-b-full border-2 border-emerald-400 bg-emerald-400/30';
+            } else if (emotion === 'scanner') {
+                eyeL.className = 'w-12 h-14 rounded-full border-2 border-cyan-400 bg-cyan-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.9)] animate-pulse';
+                eyeR.className = 'w-12 h-14 rounded-full border-2 border-cyan-400 bg-cyan-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.9)] animate-pulse';
+                eyeLIcon.textContent = '⚡';
+                eyeRIcon.textContent = '⚡';
+                mouth.className = 'mt-4 w-20 h-2 bg-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.9)] animate-pulse';
+            } else if (emotion === 'thinking') {
+                eyeL.className = 'w-12 h-14 rounded-full border-2 border-amber-400 bg-amber-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.7)]';
+                eyeR.className = 'w-12 h-14 rounded-full border-2 border-amber-400 bg-amber-500/20 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.7)]';
+                eyeLIcon.textContent = '🤔';
+                eyeRIcon.textContent = '🤔';
+                mouth.className = 'mt-4 w-12 h-2.5 rounded-full border-2 border-amber-400 bg-amber-400/30';
+            } else if (emotion === 'sleeping') {
+                eyeL.className = 'w-12 h-2.5 rounded-full border border-indigo-400 bg-indigo-500/30 flex items-center justify-center';
+                eyeR.className = 'w-12 h-2.5 rounded-full border border-indigo-400 bg-indigo-500/30 flex items-center justify-center';
+                eyeLIcon.textContent = '';
+                eyeRIcon.textContent = '';
+                mouth.className = 'mt-4 w-10 h-2 rounded-full border border-indigo-400 bg-indigo-500/30';
+            } else { // Idle
+                eyeL.className = 'w-12 h-14 rounded-full border-2 border-cyan-400 bg-cyan-500/10 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.6)]';
+                eyeR.className = 'w-12 h-14 rounded-full border-2 border-cyan-400 bg-cyan-500/10 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.6)]';
+                eyeLIcon.textContent = '✦';
+                eyeRIcon.textContent = '✦';
+                mouth.className = 'mt-4 w-16 h-3 rounded-full border-2 border-cyan-400 bg-cyan-400/20 shadow-[0_0_15px_rgba(6,182,212,0.5)]';
+            }
+        }
+
+        // Remote Action Handlers
+        async function remoteSetEmotion(emotionState) {
+            try {
+                const res = await fetch('/api/admin/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'set_emotion', state: emotionState })
+                });
+                const json = await res.json();
+                if (json.status === 'success') {
+                    showToast('🎭', `เปลี่ยนอารมณ์น้องเพชรเป็น "${emotionState.toUpperCase()}" เรียบร้อยแล้ว`);
+                    updateMirrorEmotion(emotionState);
+                }
+            } catch (e) {
+                showToast('❌', 'เกิดข้อผิดพลาดในการส่งคำสั่ง');
+            }
+        }
+
+        async function remoteBroadcastSpeech() {
+            const input = document.getElementById('adminBroadcastInput');
+            const text = input ? input.value.trim() : '';
+            if (!text) {
+                showToast('⚠️', 'กรุณาพิมพ์ข้อความที่ต้องการให้น้องเพชรประกาศ');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'broadcast_speech', text: text })
+                });
+                const json = await res.json();
+                if (json.status === 'success') {
+                    showToast('📢', `กระจายเสียงออกลำโพงน้องเพชรแล้ว: "${text}"`);
+                    if (input) input.value = '';
+                    fetchTelemetry();
+                }
+            } catch (e) {
+                showToast('❌', 'เกิดข้อผิดพลาดในการส่งเสียงประกาศ');
+            }
+        }
+
+        function setBroadcastPreset(text) {
+            const input = document.getElementById('adminBroadcastInput');
+            if (input) {
+                input.value = text;
+                input.focus();
+            }
+        }
+
+        async function resetAnalyticsStats() {
+            if (!confirm('คุณต้องการรีเซ็ตสถิติผู้เข้าชมสำหรับเริ่มการจัดแสดงรอบใหม่ใช่หรือไม่?')) return;
+            try {
+                const res = await fetch('/api/admin/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'reset_analytics' })
+                });
+                const json = await res.json();
+                if (json.status === 'success') {
+                    showToast('🔄', 'รีเซ็ตข้อมูลสถิติเรียบร้อยแล้ว');
+                    fetchTelemetry();
+                }
+            } catch (e) {}
+        }
+
+        function showToast(icon, text) {
+            const toast = document.getElementById('adminToast');
+            const tIcon = document.getElementById('toastIcon');
+            const tText = document.getElementById('toastText');
+            if (!toast) return;
+
+            tIcon.textContent = icon;
+            tText.textContent = text;
+            toast.classList.remove('translate-y-16', 'opacity-0');
+
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => {
+                toast.classList.add('translate-y-16', 'opacity-0');
+            }, 3500);
+        }
+
+        function escapeHtml(text) {
+            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>

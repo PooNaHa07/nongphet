@@ -1,0 +1,160 @@
+<!-- ================= SCREEN 4: COURSES (แนะแนวศึกษาต่อและอาชีพ) ================= -->
+<div id="screen-courses" class="screen-view bg-slate-900 justify-between text-slate-100 overflow-y-auto custom-scrollbar">
+    <!-- Top Courses Header -->
+    <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 px-3.5 sm:px-6 py-3 sm:py-4 flex items-center justify-between text-white shadow-lg sticky top-0 z-20">
+        <div class="flex items-center gap-2.5 sm:gap-3.5">
+            <button onclick="navigateTo('screen-main-menu')" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition shrink-0">
+                <i class="fa-solid fa-chevron-left text-xs sm:text-sm"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-graduation-cap text-base sm:text-lg shrink-0"></i>
+                <h2 class="font-black text-sm sm:text-base md:text-lg tracking-wide truncate max-w-[190px] xs:max-w-[260px] sm:max-w-none">หลักสูตรสู่อาชีพแห่งอนาคต</h2>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="openMatcherModal()" class="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs flex items-center gap-1.5 transition shadow" title="ประเมินความถนัด">
+                <i class="fa-solid fa-brain text-amber-300"></i>
+                <span class="hidden xs:inline">ประเมินความถนัด</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Courses Grid (3 Columns on Desktop) -->
+    <div class="p-4 md:p-6 lg:p-8 flex-1">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            
+            <!-- Course 1: เทคโนโลยีธุรกิจดิจิทัล -->
+            <div onclick="selectCourse('เทคโนโลยีธุรกิจดิจิทัล')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+                <div class="space-y-3.5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-blue-500/30 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-mobile-screen"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาเทคโนโลยีธุรกิจดิจิทัล</h3>
+                        <p class="text-xs text-cyan-400 font-semibold mt-1">AI Developer, Full-stack Web/App, Content Creator</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                            เรียนรู้การประยุกต์ใช้ AI ในธุรกิจ, ออกแบบ UX/UI, เขียนโปรแกรม, การตลาดดิจิทัล และผลิตสื่อคอนเทนต์สร้างรายได้
+                        </p>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
+                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
+                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
+                </div>
+            </div>
+
+            <!-- Course 2: คอมพิวเตอร์ธุรกิจ -->
+            <div onclick="selectCourse('สาขาคอมพิวเตอร์ธุรกิจ')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+                <div class="space-y-3.5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-sky-500/30 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-desktop"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาคอมพิวเตอร์ธุรกิจ</h3>
+                        <p class="text-xs text-sky-400 font-semibold mt-1">IT Specialist, Database Admin, Enterprise Systems</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                            เชี่ยวชาญการดูแลระบบสารสนเทศองค์กร ความปลอดภัยเครือข่าย การบริหารฐานข้อมูล และซอฟต์แวร์สำนักงานอัจฉริยะ
+                        </p>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
+                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
+                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
+                </div>
+            </div>
+
+            <!-- Course 3: การบัญชี -->
+            <div onclick="selectCourse('การบัญชี')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+                <div class="space-y-3.5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-pink-500/30 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-calculator"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาการบัญชี</h3>
+                        <p class="text-xs text-pink-400 font-semibold mt-1">Digital Accountant, Financial Analyst, Tax Auditor</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                            บัญชีดิจิทัลยุคใหม่ วิเคราะห์งบการเงิน วางแผนภาษี และการใช้งานระบบ ERP มาตรฐานสากล
+                        </p>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
+                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
+                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
+                </div>
+            </div>
+
+            <!-- Course 4: การตลาด -->
+            <div onclick="selectCourse('การตลาด')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+                <div class="space-y-3.5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-500 to-amber-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-amber-500/30 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาการตลาด</h3>
+                        <p class="text-xs text-orange-400 font-semibold mt-1">Digital Marketing, Live Stream Commerce, Brand Strategist</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                            กลยุทธ์การขายออนไลน์ ไลฟ์สตรีมคอมเมิร์ซ ยิงแอดโฆษณา และการสร้างแบรนด์สู่ตลาดโลก
+                        </p>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
+                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
+                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
+                </div>
+            </div>
+
+            <!-- Course 5: การท่องเที่ยวและการโรงแรม -->
+            <div onclick="selectCourse('การท่องเที่ยวและการโรงแรม')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+                <div class="space-y-3.5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-amber-500/30 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-hotel"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาการท่องเที่ยวและการโรงแรม</h3>
+                        <p class="text-xs text-amber-400 font-semibold mt-1">International Hotelier, Event Organizer, Tour Guide</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                            บริการโรงแรมระดับ 5 ดาว มัคคุเทศก์มืออาชีพ การจัดเลี้ยง และภาษาต่างประเทศเพื่องานบริการ
+                        </p>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
+                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
+                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
+                </div>
+            </div>
+
+            <!-- Course 6: อาหารและโภชนาการ -->
+            <div onclick="selectCourse('สาขาวิชาอาหารและโภชนาการ')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+                <div class="space-y-3.5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-teal-500/30 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-utensils"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาอาหารและโภชนาการ</h3>
+                        <p class="text-xs text-emerald-400 font-semibold mt-1">Chef de Cuisine, Pastry Chef, Food Entrepreneur</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+                            ศิลปะการประกอบอาหารไทยและนานาชาติ เบเกอรี่ ขนมหวานเมืองเพชร และการจัดการธุรกิจร้านอาหาร
+                        </p>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
+                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
+                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="p-4 bg-slate-950/90 border-t border-slate-800 flex flex-wrap gap-3 items-center justify-between">
+        <button onclick="openMatcherModal()" class="py-2.5 px-5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95">
+            <i class="fa-solid fa-brain"></i>
+            <span>🎯 ทำแบบทดสอบค้นหาตัวเอง (Career Blueprint Matcher)</span>
+        </button>
+        <button onclick="openQrModal()" class="py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95">
+            <i class="fa-solid fa-qrcode"></i>
+            <span>ดูระเบียบการ / QR Code สมัครเรียน</span>
+        </button>
+    </div>
+</div>
