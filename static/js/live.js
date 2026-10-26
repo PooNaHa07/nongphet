@@ -255,7 +255,8 @@ async function startLiveSession() {
         }
 
         setLiveState('connecting', 'กำลังเชื่อมต่อ WebSocket กับ Gemini 3.8 Live...');
-        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${tokenData.token}`;
+        const authParam = tokenData.token.startsWith('ya29.') ? `access_token=${tokenData.token}` : `key=${tokenData.token}`;
+        const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?${authParam}`;
         liveWs = new WebSocket(wsUrl);
 
         liveWs.onopen = () => {

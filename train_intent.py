@@ -173,8 +173,41 @@ def get_seed_dataset():
         ]
     }
 
+    # ผสานคำถามและคีย์เวิร์ดทั้งหมดจาก knowledge_base.json เข้าสู่ชุดฝึกสอน
+    kb_path = "knowledge_base.json"
+    if os.path.exists(kb_path):
+        try:
+            import json
+            with open(kb_path, 'r', encoding='utf-8') as f:
+                kb_data = json.load(f)
+            for entry in kb_data.get("entries", []):
+                ent_intent = entry.get("intent", "general_faq")
+                if ent_intent == "witty":
+                    ent_id = entry.get("id", "")
+                    if "khaowang" in ent_id or "eiffel" in ent_id:
+                        target_class = "travel"
+                    elif "love" in ent_id:
+                        target_class = "greeting"
+                    elif "robot" in ent_id:
+                        target_class = "admission"
+                    else:
+                        target_class = "general_faq"
+                elif ent_intent in seed_dict:
+                    target_class = ent_intent
+                else:
+                    target_class = "general_faq"
 
-def augment_thai_dataset(seed_dict, target_per_class=300):
+                for q in entry.get("questions", []):
+                    if q not in seed_dict[target_class]:
+                        seed_dict[target_class].append(q)
+            print("  ✅ ผสานข้อมูลจาก knowledge_base.json เข้าสู่ชุด Seed Dataset สำเร็จ")
+        except Exception as e:
+            print(f"  ⚠️ ไม่สามารถอ่าน knowledge_base.json: {e}")
+
+    return seed_dict
+
+
+def augment_thai_dataset(seed_dict, target_per_class=400):
     """
     ฟังก์ชันขยายขนาดชุดข้อมูล (Data Augmentation) สำหรับภาษาไทย
     โดยการผสมคำขึ้นต้น (Prefixes) และคำลงท้าย/คำสร้อย (Suffixes) ตามธรรมชาติของการพูด

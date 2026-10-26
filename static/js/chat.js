@@ -144,8 +144,26 @@ function appendChatBubble(sender, text, meta = null) {
         if (meta && (meta.detected_intent || meta.intent)) {
             const intentName = meta.detected_intent || meta.intent;
             const confVal = meta.confidence ? (meta.confidence * 100).toFixed(1) : '99.0';
-            const isLocal = meta.engine === 'local_model';
-            const engineLabel = isLocal ? '⚡ Local Knowledge Base' : (meta.engine === 'gemini_fallback' ? '🔄 Gemini Flash-Lite' : '🤖 Gemini 2.5 Flash');
+            const isLocal = ['local_model', 'semantic_rag', 'offline_fallback', 'local_slm'].includes(meta.engine);
+            let engineLabel = '🤖 Gemini 2.5 Flash';
+            let iconClass = 'fa-solid fa-wand-magic-sparkles';
+            if (meta.engine === 'semantic_rag') {
+                const ragScore = meta.rag_score ? ` (${(meta.rag_score * 100).toFixed(0)}%)` : '';
+                engineLabel = `⚡ Local Semantic RAG${ragScore}`;
+                iconClass = 'fa-solid fa-bolt text-emerald-600';
+            } else if (meta.engine === 'local_model') {
+                engineLabel = '⚡ Local Knowledge Base';
+                iconClass = 'fa-solid fa-bolt text-emerald-600';
+            } else if (meta.engine === 'offline_fallback') {
+                engineLabel = '🛡️ Local Smart Fallback';
+                iconClass = 'fa-solid fa-shield text-amber-600';
+            } else if (meta.engine === 'local_slm') {
+                engineLabel = '🦙 Local SLM (Qwen 2.5)';
+                iconClass = 'fa-solid fa-brain text-teal-600';
+            } else if (meta.engine === 'gemini_fallback') {
+                engineLabel = '🔄 Gemini Flash-Lite';
+                iconClass = 'fa-solid fa-arrows-rotate text-purple-600';
+            }
             
             const badge = document.createElement('div');
             badge.className = 'mt-3 mb-1 flex flex-wrap items-center gap-1.5 text-[10px] font-mono-code';
@@ -154,8 +172,8 @@ function appendChatBubble(sender, text, meta = null) {
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-bold shadow-xs">
                     <i class="fa-solid fa-microchip text-blue-500"></i> Local ML: <strong>${intentName}</strong> (${confVal}%)
                 </span>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${isLocal ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-purple-50 text-purple-700 border border-purple-200'} font-semibold shadow-xs">
-                    <i class="${isLocal ? 'fa-solid fa-bolt' : 'fa-solid fa-wand-magic-sparkles'}"></i> ${engineLabel}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md ${isLocal ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-purple-50 text-purple-700 border border-purple-200'} font-semibold shadow-xs">
+                    <i class="${iconClass}"></i> ${engineLabel}
                 </span>
             `;
 

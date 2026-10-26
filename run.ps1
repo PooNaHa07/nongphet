@@ -17,6 +17,15 @@ if (-not (Test-Path $PythonExe)) {
     exit 1
 }
 
+# Start Local AI Engine (Ollama) if installed and not running
+$OllamaExe = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"
+if (Test-Path $OllamaExe) {
+    if (-not (Get-Process -Name "*ollama*" -ErrorAction SilentlyContinue)) {
+        Write-Host "[*] Starting Local AI Engine (Ollama Qwen 2.5)..." -ForegroundColor Magenta
+        Start-Process -FilePath $OllamaExe -ArgumentList "serve" -WindowStyle Hidden
+    }
+}
+
 Write-Host "[*] Opening browser at http://localhost:5000 ..." -ForegroundColor Green
 Start-Process "http://localhost:5000"
 

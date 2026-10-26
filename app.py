@@ -43,6 +43,8 @@ client = genai.Client(api_key=app.config['GEMINI_API_KEY'])
 
 # Initialize Local Intent Classifier (Hybrid ML Architecture)
 intent_classifier = NongPhetIntentClassifier()
+from semantic_retriever import get_semantic_retriever
+semantic_retriever = get_semantic_retriever()
 
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-2.5-flash-lite"
@@ -444,6 +446,11 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
             "• จุดชมวิวเมืองเพชรบุรี"
         )
 
+    # ค้นหาด้วย Semantic RAG ในเครื่องเป็นลำดับแรก
+    rag_match = semantic_retriever.retrieve(user_message, intent=intent)
+    if rag_match:
+        return rag_match['reply']
+
     matched = match_local_knowledge(user_message, intent or 'general_faq', 0.95, language)
     if matched:
         return matched
@@ -568,10 +575,31 @@ def chat():
     session_id = data.get('session_id') or session.get('session_id', 'default_user')
 
     # -------------------------------------------------------------------------
-    # ขั้นที่ 2: Hybrid Decision - หาก Intent ชัดเจน ตรงกับชุดข้อมูลท้องถิ่น และไม่ได้บังคับถาม LLM
-    # สามารถดึงคำตอบจากฐานข้อมูลในเครื่อง (Local Knowledge) ได้ทันทีเพื่อความรวดเร็ว (Ultra-fast response)
+    # ขั้นที่ 2: Semantic RAG & Local Knowledge Base (100% On-Device AI)
+    # ค้นหาคำตอบจาก Local Knowledge Base ด้วย Semantic RAG (TF-IDF Cosine Similarity)
+    # ทำงานระดับ Ultra-Fast (<20ms) ตอบคำถามตรงจุดโดยไม่ต้องพึ่งพา Cloud หรือ API ภายนอก
     # -------------------------------------------------------------------------
     if not force_llm:
+        rag_match = semantic_retriever.retrieve(user_message, intent=detected_intent)
+        if rag_match:
+            reply_text = rag_match['reply']
+            suggestions = rag_match.get('suggestions') or extract_suggestions(reply_text)
+            print(f"⚡ [Semantic RAG] Local Hit [{rag_match['id']}] (Score: {rag_match['score']:.4f}, Intent: {detected_intent})")
+            record_interaction(user_message, detected_intent, confidence, 'semantic_rag', language)
+            return jsonify({
+                'reply': reply_text,
+                'suggestions': suggestions,
+                'status': 'success',
+                'engine': 'semantic_rag',
+                'detected_intent': detected_intent,
+                'intent': detected_intent,
+                'intent_th': intent_th,
+                'confidence': round(confidence, 4),
+                'rag_score': rag_match['score'],
+                'source': f"semantic_rag:{rag_match['id']}"
+            })
+
+        # หาก Semantic RAG ยังไม่เจอ ลอง Rule-based Local Knowledge เดิม
         local_reply = match_local_knowledge(user_message, detected_intent, confidence, language)
         if local_reply:
             print(f"⚡ [Hybrid AI] Direct Local Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
@@ -590,7 +618,32 @@ def chat():
             })
 
     # -------------------------------------------------------------------------
-    # ขั้นที่ 3: หากต้องการคำตอบเชิงสนทนาที่ลึกซึ้ง หรือค่า Confidence ต่ำกว่าเกณฑ์
+    # ขั้นที่ 3: Local SLM (Qwen 2.5 On-Device via Ollama) - 100% Offline AI
+    # หากรัน Ollama ในเครื่อง ระบบจะประมวลผลคำตอบเชิงสนทนาในเครื่องทันทีโดยไม่พึ่ง Cloud
+    # -------------------------------------------------------------------------
+    if not force_llm:
+        from local_slm import generate_local_response, is_ollama_running
+        if is_ollama_running():
+            slm_result = generate_local_response(user_message)
+            if slm_result:
+                reply_text = slm_result['reply']
+                suggestions = extract_suggestions(reply_text)
+                print(f"🦙 [Local SLM] Qwen 2.5 Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
+                record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
+                return jsonify({
+                    'reply': reply_text,
+                    'suggestions': suggestions,
+                    'status': 'success',
+                    'engine': 'local_slm',
+                    'detected_intent': detected_intent,
+                    'intent': detected_intent,
+                    'intent_th': intent_th,
+                    'confidence': round(confidence, 4),
+                    'source': slm_result.get('source', 'local_slm_qwen2.5')
+                })
+
+    # -------------------------------------------------------------------------
+    # ขั้นที่ 4: Hybrid Enhancement (อุปกรณ์เชื่อมต่อเน็ตและไม่ได้ปิดใช้งาน API)
     # ส่งต่อไปยัง Google Gemini 2.5 Flash พร้อม Context Steering, Multi-turn Memory, และ Google Search Grounding
     # -------------------------------------------------------------------------
     try:
@@ -1681,5 +1734,7 @@ def ping_visitor():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug_mode = os.environ.get('RENDER') is None
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)
 

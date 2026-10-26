@@ -15,6 +15,12 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
+REM Auto-start Local AI Engine (Ollama) if available
+if exist "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" (
+    echo [*] Starting Local AI Engine (Ollama Qwen 2.5)...
+    start /b "" "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" serve >nul 2>nul
+)
+
 echo [*] Opening browser: http://localhost:5000 ...
 start "" "http://localhost:5000"
 
