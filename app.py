@@ -664,10 +664,14 @@ def chat():
         
         session_history = chat_histories[session_id]
 
+        # เพิ่มความเร็ว: ค้นหาเว็บเฉพาะเมื่อผู้ใช้ถามเรื่องสดใหม่ (ข่าว/สภาพอากาศ/วันนี้/ราคา) เพื่อลด Latency เหลือ < 1 วินาที
+        needs_search = bool(re.search(r'(ข่าว|วันนี้|ล่าสุด|สภาพอากาศ|พยากรณ์|กี่โมง|ราคา|อัปเดต|news|today|latest|weather)', user_message, re.IGNORECASE))
+        tools = [{'google_search': {}}] if needs_search else None
+
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             temperature=0.7,
-            tools=[{'google_search': {}}]
+            tools=tools
         )
 
         chat_session = client.chats.create(
@@ -1108,7 +1112,7 @@ def clean_text_for_speech(text, max_len=180, voice_gender='female'):
         
     return t
 
-async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+7%", pitch="+14Hz", volume="+0%", timeout=9.0):
+async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+0%", pitch="+0Hz", volume="+0%", timeout=9.5):
     """สร้างเสียงพูด Neural Audio Studio Quality ผ่าน Edge-TTS สตรีมตรงผ่าน Memory ไม่ต้องเขียนลง Disk"""
     communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, volume=volume)
     chunks = []
@@ -1163,17 +1167,15 @@ def tts():
         rate = data.get('rate', '+5%')
         pitch = data.get('pitch', '+8Hz')
     else:
-        # ภาษาไทย:
-        # หญิง (เปรมวดี): pitch=+14Hz, rate=+7% เสียงหวาน ใส เป็นมิตร สดใส ร่าเริง สไตล์มาสคอต AI
-        # ชาย (นิวัต): pitch=+10Hz, rate=+6% นุ่มนวล อบอุ่น เป็นกันเอง ไม่ทุ้มแข็ง
+        # ภาษาไทย: โทนเสียงพูดธรรมชาติ 100% สไตล์คนจริง นุ่มนวล ไม่ดัดเสียงแหลมเป็นหุ่นยนต์
         if voice_gender == 'female':
             voice = 'th-TH-PremwadeeNeural'
-            rate = data.get('rate', '+7%')
-            pitch = data.get('pitch', '+14Hz')
+            rate = data.get('rate', '+0%')
+            pitch = data.get('pitch', '+0Hz')
         else:
             voice = 'th-TH-NiwatNeural'
-            rate = data.get('rate', '+6%')
-            pitch = data.get('pitch', '+10Hz')
+            rate = data.get('rate', '+0%')
+            pitch = data.get('pitch', '+0Hz')
 
     # ตรวจสอบ Cache เพื่อตอบกลับด้วยความเร็วระดับ <1ms
     cache_key = f"{voice}_{pitch}_{rate}_{clean_text}"

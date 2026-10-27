@@ -285,7 +285,11 @@ document.addEventListener('DOMContentLoaded', () => {
         getSfxAudioContext();
         const a = document.getElementById('emotionAudioPlayer');
         if (a) {
-            a.play().then(() => a.pause()).catch(() => {});
+            if (!a.src) a.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+            a.play().then(() => {
+                a.pause();
+                a.currentTime = 0;
+            }).catch(() => {});
         }
     }
     window.addEventListener('pointerdown', primeAudioPlayback, { once: true });
@@ -880,7 +884,7 @@ function startVisionProcessing() {
         }
 
         prevFrameData = currentFrame;
-    }, 45);
+    }, 75); // ปรับจาก 45ms เป็น 75ms เพื่อลดภาระ CPU และทำให้เบราว์เซอร์ลื่นไหลขึ้น
 }
 
 // -----------------------------------------------------------------------------
@@ -1676,6 +1680,14 @@ function initDirectVoiceEngine() {
 }
 
 function toggleDirectVoice() {
+    // ปลดล็อก Audio Element ทันทีในจังหวะที่ผู้ใช้กดปุ่ม (User Gesture Activation)
+    getSfxAudioContext();
+    const a = document.getElementById('emotionAudioPlayer');
+    if (a) {
+        if (!a.src) a.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        a.play().then(() => { a.pause(); }).catch(() => {});
+    }
+
     if (!emotionRecognition) {
         initDirectVoiceEngine();
         if (!emotionRecognition) {
@@ -1754,22 +1766,16 @@ function fallbackBrowserSpeech(text) {
     if ('speechSynthesis' in window) {
         try {
             window.speechSynthesis.cancel();
-            // ตัดส่วนแนะนำคำถามต่อยอดเพื่อให้ออกเสียงกระชับสดใส
-            let clean = text.split('---')[0].replace(/[*#_~`>•\-=|]/g, ' ').replace(/\s+/g, ' ').trim();
-            if (clean.length > 250) clean = clean.substring(0, 250) + '...';
+            // ตัดส่วนแนะนำคำถามต่อยอดเพื่อให้ออกเสียงกระชับสดใส ไม่เกิน 150 ตัวอักษร
+            let clean = text.split(/\n|---|💡|❓/)[0].replace(/[*#_~`>•\-=|]/g, ' ').replace(/\s+/g, ' ').trim();
+            if (clean.length > 150) clean = clean.substring(0, 150) + '...';
             const u = new SpeechSynthesisUtterance(clean);
             u.lang = 'th-TH';
             u.rate = 1.05;
             u.pitch = 1.25;
             u.onstart = () => applyEmotion('speaking');
-            u.onend = () => {
-                applyEmotion('idle');
-                showVoiceSubtitle(text, 6000);
-            };
-            u.onerror = () => {
-                applyEmotion('idle');
-                showVoiceSubtitle(text, 6000);
-            };
+            u.onend = () => { applyEmotion('idle'); };
+            u.onerror = () => { applyEmotion('idle'); };
             window.speechSynthesis.speak(u);
             return;
         } catch (e) {
@@ -1777,14 +1783,58 @@ function fallbackBrowserSpeech(text) {
         }
     }
     applyEmotion('idle');
-    showVoiceSubtitle(text, 6000);
+}
+
+function playBase64ViaWebAudio(base64Data, onEndedCallback) {
+    try {
+        const ctx = getSfxAudioContext();
+        if (!ctx) return false;
+        if (ctx.state === 'suspended') ctx.resume();
+
+        const binary = atob(base64Data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+
+        ctx.decodeAudioData(bytes.buffer, (audioBuffer) => {
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+            applyEmotion('speaking');
+            startLocalLipSyncPulse();
+            source.onended = () => {
+                clearTimeout(emotionSafetyWatchdog);
+                applyEmotion('idle');
+                setLipSyncAmplitude(0);
+                if (typeof onEndedCallback === 'function') onEndedCallback();
+            };
+            source.start(0);
+        }, (err) => {
+            console.warn('Web Audio decode failed:', err);
+            applyEmotion('idle');
+        });
+        return true;
+    } catch (e) {
+        console.warn('Web Audio playback error:', e);
+        applyEmotion('idle');
+        return false;
+    }
 }
 
 async function playDirectVoiceTTS(text) {
+    // ตัดข้อความให้กระชับก่อนพูด: เอาแค่ประโยคแรก ไม่เกิน 150 ตัวอักษร
+    let speakText = text
+        .split(/\n|---|💡|❓/)[0]          // เอาแค่ย่อหน้าแรก
+        .replace(/[*#_~`>•\-=|🌟💬🏛️]/g, '') // ลบ markdown symbols และ emoji ที่ออกเสียงไม่ได้
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (speakText.length > 150) speakText = speakText.substring(0, 150) + '...';
+
     try {
         const audioEl = document.getElementById('emotionAudioPlayer');
         if (!audioEl) {
-            fallbackBrowserSpeech(text);
+            fallbackBrowserSpeech(speakText);
             return;
         }
 
@@ -1795,42 +1845,46 @@ async function playDirectVoiceTTS(text) {
         const ttsRes = await fetch('/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, lang: 'th', gender: 'female' }),
+            body: JSON.stringify({ text: speakText, lang: 'th', gender: 'female' }),
             signal: abortCtrl.signal
         });
         clearTimeout(timeoutId);
         const ttsData = await ttsRes.json();
 
         if (ttsData.audio_base64) {
-            applyEmotion('speaking');
             audioEl.src = 'data:audio/mp3;base64,' + ttsData.audio_base64;
             audioEl.volume = 1.0;
             audioEl.muted = false;
-            
-            // ขยับปากและแถบคลื่นเสียงอย่างเป็นธรรมชาติโดยไม่ Hijack หรือตัดเสียงลำโพง
-            startLocalLipSyncPulse();
-
-            audioEl.play().catch((err) => {
-                console.warn('Audio play prevented (autoplay policy):', err);
-                fallbackBrowserSpeech(text);
-            });
 
             audioEl.onended = () => {
                 clearTimeout(emotionSafetyWatchdog);
                 applyEmotion('idle');
                 setLipSyncAmplitude(0);
-                showVoiceSubtitle(text, 6000);
             };
 
             audioEl.onerror = () => {
-                fallbackBrowserSpeech(text);
+                console.warn('audioEl error, falling back to Web Audio');
+                playBase64ViaWebAudio(ttsData.audio_base64);
             };
+
+            // เริ่มเล่นเสียง: เมื่อเสียงดังจริงค่อยเริ่มขยับปากพูด!
+            try {
+                await audioEl.play();
+                applyEmotion('speaking');
+                startLocalLipSyncPulse();
+            } catch (playErr) {
+                console.warn('Audio play blocked by browser, attempting Web Audio API:', playErr);
+                const webAudioPlayed = playBase64ViaWebAudio(ttsData.audio_base64);
+                if (!webAudioPlayed) {
+                    fallbackBrowserSpeech(speakText);
+                }
+            }
         } else {
-            fallbackBrowserSpeech(text);
+            fallbackBrowserSpeech(speakText);
         }
     } catch (e) {
         console.warn('TTS request failed/aborted:', e);
-        fallbackBrowserSpeech(text);
+        fallbackBrowserSpeech(speakText);
     }
 }
 

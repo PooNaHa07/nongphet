@@ -53,6 +53,17 @@ function startLipSyncAnalysis() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+    // ปลดล็อก Browser Autoplay Policy ทันทีเมื่อผู้ใช้แตะหรือคลิกหน้าจอครั้งแรก
+    const unlockAudio = () => {
+        const p = document.getElementById('audioPlayer');
+        if (p && !p.src) {
+            p.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+            p.play().then(() => p.pause()).catch(() => {});
+        }
+    };
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+
     fetchLiveWeather();
     startClock();
     // Auto-detect mode from URL parameters (e.g. ?mode=kiosk on Raspberry Pi)
@@ -363,20 +374,26 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
         const data = await response.json();
         
         if (data.audio_base64) {
-            isSpeakingTTS = true;
-            setEmotion('speaking');
-            if (btnElement) {
-                btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
-            }
             audioPlayer.src = 'data:audio/mp3;base64,' + data.audio_base64;
             audioPlayer.volume = 1.0;
             audioPlayer.muted = false;
-            startLipSyncAnalysis();
-            audioPlayer.play().catch((err) => {
+
+            audioPlayer.play().then(() => {
+                isSpeakingTTS = true;
+                setEmotion('speaking');
+                if (btnElement) {
+                    btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+                }
+                startLipSyncAnalysis();
+            }).catch((err) => {
                 console.warn('Audio play prevented or blocked by browser autoplay:', err);
                 if ('speechSynthesis' in window) {
                     const u = new SpeechSynthesisUtterance(text);
                     u.lang = currentLang === 'en' ? 'en-US' : 'th-TH';
+                    u.onstart = () => {
+                        isSpeakingTTS = true;
+                        setEmotion('speaking');
+                    };
                     u.onend = () => {
                         isSpeakingTTS = false;
                         setEmotion('idle');
@@ -393,6 +410,10 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
                 } else {
                     isSpeakingTTS = false;
                     setEmotion('idle');
+                    if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+                    if (typeof onEndedCallback === 'function') onEndedCallback();
+                }
+            });
                     if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
                     if (typeof onEndedCallback === 'function') onEndedCallback();
                 }
