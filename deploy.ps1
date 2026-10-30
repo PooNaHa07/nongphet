@@ -29,7 +29,9 @@ $FILES_TO_SYNC = @(
     "vectorizer.pkl",
     "templates",
     "static",
-    "ml_artifacts"
+    "ml_artifacts",
+    "setup_ssl.sh",
+    "start_kiosk.sh"
 )
 
 Write-Host "[*] กำลังอัปโหลดไฟล์..." -ForegroundColor Yellow
