@@ -766,38 +766,46 @@ let lastSentNormX = 0;
 let lastSentNormY = 0;
 
 function initCrossScreenGazeTracking() {
-    function sendGaze(clientX, clientY) {
+    let lastHttpGazeSentTime = 0;
+
+    function sendGaze(clientX, clientY, isTouch = false) {
         const now = performance.now();
-        if (now - lastGazeSentTime < 250) return; // จำกัดความถี่ 4 ครั้ง/วินาที ประหยัดเครือข่ายและ CPU
+        const minInterval = isTouch ? 800 : 350;
+        if (now - lastGazeSentTime < 150) return;
 
         const normX = Math.max(-1.0, Math.min(1.0, (clientX - window.innerWidth / 2) / (window.innerWidth / 2)));
         const normY = Math.max(-1.0, Math.min(1.0, (clientY - window.innerHeight / 2) / (window.innerHeight / 2)));
 
-        if (Math.abs(normX - lastSentNormX) < 0.05 && Math.abs(normY - lastSentNormY) < 0.05) return;
+        if (Math.abs(normX - lastSentNormX) < 0.08 && Math.abs(normY - lastSentNormY) < 0.08) return;
 
         lastGazeSentTime = now;
         lastSentNormX = normX;
         lastSentNormY = normY;
 
+        // Zero-overhead BroadcastChannel for dual-screen tabs
         if (lipSyncBroadcast) {
             lipSyncBroadcast.postMessage({ type: 'gaze', x: normX, y: normY });
         }
 
-        fetch('/api/emotion/gaze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ x: normX, y: normY })
-        }).catch(() => {});
+        // Throttle HTTP POST to prevent flooding Flask and choking Pi CPU
+        if (now - lastHttpGazeSentTime > minInterval) {
+            lastHttpGazeSentTime = now;
+            fetch('/api/emotion/gaze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: normX, y: normY }),
+                keepalive: true
+            }).catch(() => {});
+        }
     }
 
     window.addEventListener('mousemove', (e) => {
-        sendGaze(e.clientX, e.clientY);
+        sendGaze(e.clientX, e.clientY, false);
     }, { passive: true });
 
     window.addEventListener('touchmove', (e) => {
         if (e.touches && e.touches[0]) {
-            sendGaze(e.touches[0].clientX, e.touches[0].clientY);
+            sendGaze(e.touches[0].clientX, e.touches[0].clientY, true);
         }
     }, { passive: true });
 }
-

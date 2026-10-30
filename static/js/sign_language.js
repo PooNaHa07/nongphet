@@ -30,9 +30,7 @@ let currentSignResult = {
     quick_options: ['แนะนำที่เที่ยวไฮไลท์', 'ดูหลักสูตรเรียนต่อ', 'ของฝากเมืองเพชร']
 };
 
-window.addEventListener('DOMContentLoaded', () => {
-    initMediaPipeHands();
-});
+// MediaPipe Hands is lazy-loaded on-demand when user opens camera to save Pi 5 RAM & CPU
 
 /**
  * Initialize MediaPipe Hands Detector

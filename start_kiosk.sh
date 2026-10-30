@@ -2,25 +2,28 @@
 # ==============================================================================
 # โครงการ: น้องเพชร AI Smart Guide
 # สคริปต์: สั่งเปิดระบบเข้าสู่โหมด Kiosk เต็มหน้าจอสัมผัส (start_kiosk.sh)
-# อุปกรณ์เป้าหมาย: Raspberry Pi 5 + จอสัมผัส 10.1 นิ้ว
+# อุปกรณ์เป้าหมาย: Raspberry Pi 5 + จอสัมผัส 10.1 นิ้ว (Hardware GPU Accelerated)
 # ==============================================================================
 
-# ตรวจสอบว่าอยู่ในไดเรกทอรีของโปรเจกต์
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
 echo "🤖 กำลังเริ่มต้นระบบ น้องเพชร AI Smart Guide Kiosk..."
 
 # 1. ตรวจสอบและรัน Flask Server หากยังไม่ได้รัน
-if ! curl -sk https://127.0.0.1:5000/api/iot/status > /dev/null; then
+if ! curl -s http://127.0.0.1:5000/api/iot/status > /dev/null; then
     echo "⚡ เริ่มต้น Flask Server..."
-    source .venv/bin/activate
+    if [ -d "venv" ]; then
+        source venv/bin/activate
+    elif [ -d ".venv" ]; then
+        source .venv/bin/activate
+    fi
     python app.py > /tmp/nongphet_flask.log 2>&1 &
     
     # รอนับเวลาให้ Flask พร้อมทำงาน
     echo "⏳ กำลังรอให้เซิร์ฟเวอร์พร้อมทำงาน..."
     for i in {1..20}; do
-        if curl -sk https://127.0.0.1:5000/api/iot/status > /dev/null; then
+        if curl -s http://127.0.0.1:5000/api/iot/status > /dev/null; then
             echo "✅ Flask Server พร้อมใช้งานแล้ว!"
             break
         fi
@@ -40,18 +43,19 @@ if [ -e "/dev/fb1" ]; then
     python emotion_display.py --fb /dev/fb1 > /tmp/emotion_display.log 2>&1 &
 fi
 
-# 4. เปิด Chromium Browser ในโหมด Kiosk เต็มหน้าจอสัมผัส 10.1 นิ้ว
-echo "🖥️ กำลังเปิดหน้าจอสัมผัสหลักในโหมด Fullscreen Kiosk..."
+# 4. เปิด Chromium Browser ในโหมด Kiosk พร้อมเร่งความเร็วฮาร์ดแวร์ GPU สำหรับ Pi 5
+echo "🖥️ กำลังเปิดหน้าจอสัมผัสหลักในโหมด Fullscreen Kiosk (GPU Accelerated 60 FPS)..."
 chromium-browser \
     --kiosk \
     --start-maximized \
     --noerrdialogs \
     --disable-infobars \
-    --ignore-certificate-errors \
-    --check-for-update-interval=31536000 \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
-    --enable-features=OverlayScrollbar \
+    --enable-gpu-rasterization \
+    --enable-zero-copy \
+    --ignore-gpu-blocklist \
+    --enable-features=VaapiVideoDecoder,CanvasOopRasterization,OverlayScrollbar \
     --window-position=0,0 \
-    https://127.0.0.1:5000?mode=kiosk
+    http://127.0.0.1:5000?mode=kiosk
