@@ -16,6 +16,16 @@ function playQuickAudioFeedback() {
         osc.stop(audioCtx.currentTime + 0.12);
     } catch (e) {}
 }
+
+function stripEmojiAndIcons(str) {
+    if (!str) return '';
+    return str
+        .replace(/[\p{Extended_Pictographic}\u2600-\u27BF\uFE0E\uFE0F\u200D\u2300-\u23FF\u2B50\u2B55]/gu, '')
+        .replace(/[*#_~>•\-=|]/g, ' ')
+        .replace(/[^\w\s\u0E00-\u0E7F.,!?'"-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 // -----------------------------------------------------------------------------
 // Universal Kiosk Toast Notification System (Replaces disruptive window.alert)
 // -----------------------------------------------------------------------------
@@ -388,10 +398,13 @@ function setEmotion(state) {
     } catch (e) {}
 }
 
+
 // -----------------------------------------------------------------------------
 // Neural TTS Audio Engine
 // -----------------------------------------------------------------------------
 async function playTTS(text, btnElement = null, onEndedCallback = null) {
+    const speechText = stripEmojiAndIcons(text);
+    if (!speechText) return;
     try {
         const audioPlayer = document.getElementById('audioPlayer');
         if (isSpeakingTTS && audioPlayer && !audioPlayer.paused) {
@@ -435,7 +448,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                text: text,
+                text: speechText,
                 lang: currentLang,
                 gender: currentVoiceGender
             })
@@ -461,7 +474,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
             }).catch((err) => {
                 console.warn('Audio play prevented or blocked by browser autoplay:', err);
                 if ('speechSynthesis' in window) {
-                    const u = new SpeechSynthesisUtterance(text);
+                    const u = new SpeechSynthesisUtterance(speechText);
                     u.lang = currentLang === 'en' ? 'en-US' : 'th-TH';
                     u.onstart = () => {
                         isSpeakingTTS = true;
@@ -666,6 +679,7 @@ function stopRecognitionSafe() {
         recognition.stop();
     } catch (e) {}
 }
+
 
 function toggleSpeechRecognition() {
     if (!recognition) {

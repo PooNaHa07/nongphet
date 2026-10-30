@@ -1170,8 +1170,15 @@ def clean_text_for_speech(text, max_len=350, voice_gender='female'):
     t = re.sub(r'\((?:อังกฤษ|Tel|โทร|ค่าเข้า|ราคา)[^)]*\)', '', t, flags=re.IGNORECASE)
     t = re.sub(r'[()\[\]{}]', ' ', t)
 
-    # 7. ลบ Emoji และสัญลักษณ์พิเศษ คงเหลือเฉพาะตัวอักษรไทย อังกฤษ ตัวเลข และเครื่องหมายวรรคตอนสำคัญ
-    t = re.sub(r'[^\w\s\u0E00-\u0E7F.,!?%:]', ' ', t)
+    # 7. ลบ Emoji และไอคอนสัญลักษณ์ทั้งหมดอย่างเด็ดขาด (ห้ามสังเคราะห์หรืออ่านออกเสียงชื่ออิโมจิ)
+    emoji_clean_regex = re.compile(
+        r'[\U00010000-\U0010FFFF]'
+        r'|[\u2600-\u27BF]'
+        r'|[\u2300-\u23FF]'
+        r'|[\u2B50\u2B55\u200D\uFE0E\uFE0F]'
+    )
+    t = emoji_clean_regex.sub('', t)
+    t = re.sub(r'[^a-zA-Z0-9\u0E00-\u0E7F\s.,!?\'"-]', ' ', t)
 
     # 8. ใส่จุดแบ่งจังหวะหายใจ (Prosodic Breath Pauses) ตามธรรมชาติของคนพูด
     pause_phrases = [
