@@ -1738,5 +1738,17 @@ def ping_visitor():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('RENDER') is None
-    app.run(debug=debug_mode, host='0.0.0.0', port=port)
+    
+    # Auto-detect SSL Certificates (HTTPS support for permanent Microphone access)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    cert_path = os.path.join(base_dir, 'cert.pem')
+    key_path = os.path.join(base_dir, 'key.pem')
+    
+    ssl_context = None
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        ssl_context = (cert_path, key_path)
+        print(f"🔒 HTTPS Enabled: running with SSL certificate on https://0.0.0.0:{port}")
+    else:
+        print(f"⚠️ SSL certificate not found, running HTTP on http://0.0.0.0:{port}")
 
+    app.run(debug=debug_mode, host='0.0.0.0', port=port, ssl_context=ssl_context)

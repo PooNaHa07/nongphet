@@ -12,7 +12,7 @@ cd "$SCRIPT_DIR"
 echo "🤖 กำลังเริ่มต้นระบบ น้องเพชร AI Smart Guide Kiosk..."
 
 # 1. ตรวจสอบและรัน Flask Server หากยังไม่ได้รัน
-if ! curl -s http://127.0.0.1:5000/api/iot/status > /dev/null; then
+if ! curl -sk https://127.0.0.1:5000/api/iot/status > /dev/null; then
     echo "⚡ เริ่มต้น Flask Server..."
     source .venv/bin/activate
     python app.py > /tmp/nongphet_flask.log 2>&1 &
@@ -20,7 +20,7 @@ if ! curl -s http://127.0.0.1:5000/api/iot/status > /dev/null; then
     # รอนับเวลาให้ Flask พร้อมทำงาน
     echo "⏳ กำลังรอให้เซิร์ฟเวอร์พร้อมทำงาน..."
     for i in {1..20}; do
-        if curl -s http://127.0.0.1:5000/api/iot/status > /dev/null; then
+        if curl -sk https://127.0.0.1:5000/api/iot/status > /dev/null; then
             echo "✅ Flask Server พร้อมใช้งานแล้ว!"
             break
         fi
@@ -47,10 +47,11 @@ chromium-browser \
     --start-maximized \
     --noerrdialogs \
     --disable-infobars \
+    --ignore-certificate-errors \
     --check-for-update-interval=31536000 \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
     --enable-features=OverlayScrollbar \
     --window-position=0,0 \
-    http://127.0.0.1:5000?mode=kiosk
+    https://127.0.0.1:5000?mode=kiosk
