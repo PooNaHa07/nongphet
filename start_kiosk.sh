@@ -71,13 +71,21 @@ if [ -e "/dev/fb1" ]; then
     python emotion_display.py --fb /dev/fb1 > /tmp/emotion_display.log 2>&1 &
 fi
 
-# 6. เปิด Chromium ในโหมด Kiosk เต็มหน้าจอสัมผัส 10.1 นิ้ว พร้อมเร่งความเร็วฮาร์ดแวร์ GPU สำหรับ Pi 5
+# 6. เคลียร์เบราว์เซอร์เดิมที่อาจเปิดค้างอยู่ เพื่อบังคับเปิดโหมด Kiosk ตัวใหม่ที่สะอาดและเต็มจอ
+echo "🔄 กำลังเตรียมสภาพแวดล้อม Kiosk..."
+killall -9 chromium chromium-browser 2>/dev/null || true
+sleep 0.5
+
+# 7. เปิด Chromium ในโหมด Kiosk เต็มหน้าจอสัมผัส 10.1 นิ้ว พร้อมเร่งความเร็วฮาร์ดแวร์ GPU สำหรับ Pi 5
 echo "🖥️ กำลังเปิดหน้าจอสัมผัสหลักในโหมด Fullscreen Kiosk บนจอ 10.1 นิ้ว..."
 $CHROME_BIN \
     --kiosk \
     --start-maximized \
     --noerrdialogs \
     --disable-infobars \
+    --no-first-run \
+    --user-data-dir=/tmp/nongphet_kiosk_profile \
+    --disable-session-crashed-bubble \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
