@@ -31,10 +31,11 @@
     <!-- Top Right Action Controls -->
     <div class="flex items-center gap-1 sm:gap-2 shrink-0">
         <!-- Voice Gender Toggle in Header -->
-        <button id="voiceGenderBtn" onclick="toggleVoiceGender()" class="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl font-bold text-xs bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 transition flex items-center gap-1 shadow" title="สลับเสียงสังเคราะห์ (หญิง / ชาย)">
-            <span>👩🏻</span>
-            <span class="hidden md:inline text-[11px]">หญิง</span>
-        </button>
+        <!-- Official Voice Identity Badge in Header -->
+        <div id="voiceGenderBtn" class="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl font-bold text-xs bg-slate-900/90 text-cyan-300 border border-slate-700 flex items-center gap-1.5 shadow select-none" title="เสียงพูดทางการน้องเพชร (เปรมวดี Neural)">
+            <span>🎙️</span>
+            <span class="hidden md:inline text-[11px] font-semibold text-slate-200">เสียงน้องเพชร</span>
+        </div>
 
         <!-- Live Camera Mode Button in Header -->
         <button onclick="navigateTo('screen-live')" class="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl font-black text-xs transition bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-md border border-white/20 flex items-center gap-1.5 active:scale-95" title="คุยสดผ่านกล้อง LIVE">

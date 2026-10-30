@@ -343,15 +343,9 @@ function toggleAutoSpeak() {
 }
 
 function toggleVoiceGender() {
-    currentVoiceGender = currentVoiceGender === 'female' ? 'male' : 'female';
-    const btn = document.getElementById('voiceGenderBtn');
-    if (btn) {
-        btn.innerHTML = currentVoiceGender === 'female' ? '👩🏻 หญิง' : '👨🏻 ชาย';
-        btn.title = currentVoiceGender === 'female' ? 'เสียงน้องเพชร (หญิง: เปรมวดี)' : 'เสียงน้องเพชร (ชาย: นิวัต)';
-    }
-    const chatGenderLabel = document.getElementById('chatVoiceGenderLabel');
-    if (chatGenderLabel) {
-        chatGenderLabel.textContent = currentVoiceGender === 'female' ? 'หญิง' : 'ชาย';
+    currentVoiceGender = 'female';
+    if (typeof showAppToast === 'function') {
+        showAppToast('น้องเพชรใช้เสียงทางการ: เปรมวดี Neural (สดใส นุ่มนวล)', 'info');
     }
 }
 

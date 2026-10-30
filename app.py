@@ -80,6 +80,11 @@ SYSTEM_PROMPT = """
 3. หลายภาษาไร้รอยต่อ (Polyglot: ไทย, English, 中文, 日本語, 한국어)
 4. จัดการคำตอบอย่างเป็นระบบ ใช้ Emoji, Bullet Points, และตารางเมื่อจำเป็น ทำให้อ่านง่าย สบายตา
 5. คิดเชิงรุก (Proactive Guide): ทุกครั้งที่ตอบจบ ให้แนะนำ 2-3 คำถามต่อยอดที่น่าสนใจ เพื่อให้ผู้ใช้สัมผัสหรือถามต่อได้ทันที
+6. 🎙️ กฎทองสำหรับการสนทนาด้วยเสียงพูดธรรมชาติ (Spoken Dialogue & Natural Prosody):
+   - "เขียนเพื่อการฟัง" (Write for the Ear): ใช้ภาษาพูดที่เป็นธรรมชาติ อบอุ่น สดใส น่ารัก เหมือนเพื่อนร่วมทางที่แสนรู้ใจ ไม่ใช้ภาษาเขียนแข็งกระด้างหรือภาษาราชการ
+   - จังหวะและการเว้นวรรค (Phrasing & Breath Pauses): ซอยประโยคเป็นท่อนสั้นๆ กระชับ (ไม่เกิน 15-20 คำต่อท่อน) เคาะวรรคเป็นจังหวะ เพื่อให้เสียงสังเคราะห์มีช่องไฟในการหายใจและออกเสียงได้อย่างมีมิติ ไม่พูดรัวเป็นพรืด
+   - คำเกริ่นและคำเชื่อมธรรมชาติ (Discourse Markers): เปิดคำตอบด้วยคำเชื่อมสนทนาที่เป็นมิตร เช่น "ยินดีเลยค่ะ, ", "อ๋อ, เรื่องนี้บอกเลยว่าน่าสนใจมากค่ะ, ", "ถ้าพูดถึงที่นี่นะคะ, "
+   - อัตลักษณ์เสียงเดียวและหางเสียงสม่ำเสมอ: แทนตัวเองว่า "น้องเพชร" และลงท้ายอย่างอ่อนหวานเป็นธรรมชาติด้วย "ค่ะ" หรือ "นะคะ" เสมอ ไม่ใช้ "ครับ"
 
 🏛️ คลังข้อมูลมหาศาล 8 อำเภอ จังหวัดเพชรบุรี (The Complete 8-District Matrix):
 1. [อำเภอเมืองเพชรบุรี - มนต์เสน่ห์ธานี 3 วัง และศูนย์รวมศิลปะช่างเมืองเพชร]:
@@ -1104,58 +1109,100 @@ def sign_language():
 TTS_CACHE = OrderedDict()
 MAX_TTS_CACHE_SIZE = 128
 
-def clean_text_for_speech(text, max_len=320, voice_gender='female'):
-    """ทำความสะอาดข้อความ Markdown, ตัดส่วนคำถามแนะนำออก, ปรับหางเสียงให้อ่อนหวานน่ารักตามเพศ, และตัดแบ่งประโยคอย่างนุ่มนวลไม่ตัดกลางคำ"""
+def clean_text_for_speech(text, max_len=350, voice_gender='female'):
+    """
+    ขัดเกลาและจัดวรรคตอนข้อความภาษาไทยเพื่อการสังเคราะห์เสียงที่เป็นธรรมชาติสูงสุด (Human-like Prosody & Phrasing)
+    ตามหลักการวิจัย Voice Agent:
+    1. เคลียร์ Markdown, Bullet points, URLs, และคำถามต่อยอด
+    2. กำหนดหางเสียง 'ค่ะ/นะคะ' สม่ำเสมอตามคาแรกเตอร์น้องเพชร
+    3. ถอดรหัสคำย่อ คำทับศัพท์ภาษาอังกฤษให้เป็นคำอ่านภาษาไทย (Phonetic Expansion)
+    4. แทรกจังหวะวรรคตอนและการหายใจ (Prosodic Breath Pauses) ด้วยเครื่องหมายจุลภาคและเคาะวรรค
+    """
     if not text:
         return ""
     t = text
 
-    # 0. ตัดส่วนแนะนำคำถามต่อยอด (Follow-up suggestions) ออกจากการออกเสียงพูด เพื่อความกระชับและรวดเร็ว
+    # 1. ตัดส่วนคำถามแนะนำต่อยอด (Follow-up suggestions)
     for delim in ['---', '💡 ถามต่อยอด', 'ถามต่อยอดกับน้องเพชร', '💡 แนะนำคำถาม', 'คำถามที่น่าสนใจ']:
         if delim in t:
             t = t.split(delim)[0].strip()
 
-    # 1. เอา URL ออก
+    # 2. นำ URLs และ Markdown Links ออก
     t = re.sub(r'https?://\S+|www\.\S+', '', t)
-    # 2. เอา Markdown Link [text](url) -> text
     t = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', t)
-    
-    # 3. ขัดเกลาหางเสียงและสรรพนามให้เข้ากับบุคลิกน่ารักเป็นมิตร
-    if voice_gender == 'female':
-        t = re.sub(r'ครับ/ค่ะ', 'ค่ะ', t)
-        t = re.sub(r'สวัสดีครับ', 'สวัสดีค่ะ', t)
-        t = re.sub(r'ผมน้องเพชร', 'น้องเพชร', t)
-        t = re.sub(r'\bผม\b', 'น้องเพชร', t)
-        t = re.sub(r'นะครับ', 'นะคะ', t)
-        t = re.sub(r'ครับผม', 'ยินดีค่ะ', t)
-        t = re.sub(r'ครับ', 'ค่ะ', t)
-    else:
-        t = re.sub(r'ครับ/ค่ะ', 'ครับ', t)
-        t = re.sub(r'ค่ะ/นะคะ', 'ครับ/นะครับ', t)
-        t = re.sub(r'สวัสดีค่ะ', 'สวัสดีครับ', t)
-        t = re.sub(r'นะคะ', 'นะครับ', t)
-        t = re.sub(r'ค่ะ', 'ครับ', t)
 
-    # 4. ลบสัญลักษณ์ Markdown ตกแต่ง (เช่น **, ##, ```, >, ~, •, -)
-    t = re.sub(r'[*#_~`>•\-=|]', ' ', t)
-    # 5. แปลงตัวเลขลำดับ เช่น 1. 2. เป็น 1, 2, เพื่อให้อ่านเว้นจังหวะธรรมชาติ
-    t = re.sub(r'(\d+)\.\s+', r'\1, ', t)
-    # 6. ลบ Emoji และอักขระพิเศษ แต่เก็บตัวอักษรไทย อังกฤษ ตัวเลข และวรรคตอนสำคัญ
-    t = re.sub(r'[^\w\s\u0E00-\u0E7F.,!?()%:]', ' ', t)
-    # 7. ยุบช่องว่างซ้ำซ้อนให้เหลือ 1 เคาะ เพื่อไม่ให้เกิดจังหวะหยุดหายใจเกินจำเป็น
+    # 3. กำหนดอัตลักษณ์เสียงเดียวของน้องเพชร: สุภาพ น่ารัก อบอุ่น เป็นมิตร (ค่ะ / นะคะ)
+    t = re.sub(r'ครับ/ค่ะ', 'ค่ะ', t)
+    t = re.sub(r'ค่ะ/นะคะ', 'ค่ะ', t)
+    t = re.sub(r'สวัสดีครับ', 'สวัสดีค่ะ', t)
+    t = re.sub(r'ผมน้องเพชร', 'น้องเพชร', t)
+    t = re.sub(r'\bผม\b', 'น้องเพชร', t)
+    t = re.sub(r'นะครับ', 'นะคะ', t)
+    t = re.sub(r'ครับผม', 'ยินดีค่ะ', t)
+    t = re.sub(r'ครับ', 'ค่ะ', t)
+
+    # 4. แปลงคำย่อและคำศัพท์เฉพาะให้เป็นคำอ่านภาษาไทยที่ออกเสียงเป็นธรรมชาติ (Phonetic Expansion)
+    abbrev_map = [
+        (r'\bร\.([๔-๙4-9])\b', r'รัชกาลที่ \1'),
+        (r'ร\.4', 'รัชกาลที่สี่'),
+        (r'ร\.5', 'รัชกาลที่ห้า'),
+        (r'ร\.6', 'รัชกาลที่หก'),
+        (r'\bกม\.', 'กิโลเมตร'),
+        (r'\bซม\.', 'เซนติเมตร'),
+        (r'\bม\.\s*(\d)', r'เมตร \1'),
+        (r'\bปวช\.', 'ระดับ ปวช.'),
+        (r'\bปวส\.', 'ระดับ ปวส.'),
+        (r'\bAI\b', 'เอไอ'),
+        (r'\bWi-?Fi\b', 'ไวไฟ'),
+        (r'\bGPS\b', 'จีพีเอส'),
+        (r'\bQR\s*Code\b', 'คิวอาร์โค้ด'),
+        (r'\bPBVC\b', 'พีบีวีซี วิทยาลัยอาชีวศึกษาเพชรบุรี'),
+        (r'\bUNESCO\b', 'ยูเนสโก'),
+        (r'\bGI\b', 'จีไอ สิ่งบ่งชี้ทางภูมิศาสตร์'),
+    ]
+    for pattern, repl in abbrev_map:
+        t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
+
+    # 5. ลบสัญลักษณ์ตกแต่ง Markdown (เช่น **, ##, `, >, ~, •, -, |)
+    t = re.sub(r'[*#_~>•\-=|]', ' ', t)
+
+    # 6. ลบวงเล็บและเนื้อหาข้างในที่เป็นเชิงอรรถยืดยาว เช่น (อังกฤษ: ...) หรือ (Tel: ...)
+    t = re.sub(r'\((?:อังกฤษ|Tel|โทร|ค่าเข้า|ราคา)[^)]*\)', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'[()\[\]{}]', ' ', t)
+
+    # 7. ลบ Emoji และสัญลักษณ์พิเศษ คงเหลือเฉพาะตัวอักษรไทย อังกฤษ ตัวเลข และเครื่องหมายวรรคตอนสำคัญ
+    t = re.sub(r'[^\w\s\u0E00-\u0E7F.,!?%:]', ' ', t)
+
+    # 8. ใส่จุดแบ่งจังหวะหายใจ (Prosodic Breath Pauses) ตามธรรมชาติของคนพูด
+    pause_phrases = [
+        (r'(\bสวัสดีค่ะ)\s*', r'\1, '),
+        (r'(\bยินดีต้อนรับค่ะ)\s*', r'\1, '),
+        (r'\s*(สำหรับ)\s*', r', สำหรับ '),
+        (r'\s*(นอกจากนี้)\s*', r', นอกจากนี้, '),
+        (r'\s*(บอกเลยว่า)\s*', r', บอกเลยว่า '),
+        (r'\s*(ไฮไลท์คือ)\s*', r', ไฮไลท์คือ '),
+        (r'\s*(ที่สำคัญคือ)\s*', r', ที่สำคัญคือ '),
+        (r'\s*(อย่างไรก็ตาม)\s*', r', อย่างไรก็ตาม, '),
+    ]
+    for pattern, repl in pause_phrases:
+        t = re.sub(pattern, repl, t)
+
+    # 9. ยุบช่องว่างและจุลภาคซ้ำซ้อน
+    t = re.sub(r'\s*,\s*', ', ', t)
+    t = re.sub(r',\s*,+', ', ', t)
     t = re.sub(r'\s+', ' ', t).strip()
-    
-    # 8. ตัดข้อความยาวแบบไม่ตัดกลางคำ (Smart Sentence Boundary) ให้กระชับ สดใส ไม่พูดยืดยาว
+
+    # 10. ตัดแบ่งประโยคอย่างนุ่มนวลตาม Sentence Boundary ไม่ตัดกลางคำ
     if len(t) > max_len:
         cutoff = t.rfind(' ', 0, max_len)
         if cutoff == -1 or cutoff < int(max_len * 0.7):
             cutoff = max_len
-        closing = ' และยังมีรายละเอียดที่น่าสนใจอีกมากมายนะคะ' if voice_gender == 'female' else ' และยังมีรายละเอียดที่น่าสนใจอีกมากมายครับ'
+        closing = ' และยังมีรายละเอียดที่น่าสนใจอีกมากมายเลยนะคะ'
         t = t[:cutoff].strip() + closing
-        
+
     return t
 
-async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+0%", pitch="+0Hz", volume="+0%", timeout=9.5):
+async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pitch="+1Hz", volume="+0%", timeout=9.5):
     """สร้างเสียงพูด Neural Audio Studio Quality ผ่าน Edge-TTS สตรีมตรงผ่าน Memory ไม่ต้องเขียนลง Disk"""
     communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, volume=volume)
     chunks = []
@@ -1197,30 +1244,25 @@ def tts():
     if not text:
         return jsonify({'error': 'Text is empty'}), 400
 
-    clean_text = clean_text_for_speech(text, max_len=180, voice_gender=voice_gender)
+        clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female')
 
-    # ปรับแต่งระดับความเร็ว (Rate) และระดับความสูงต่ำของเสียง (Pitch) ให้น่ารักสดใส
+    # เสียงหลักอัตลักษณ์เดียวของน้องเพชร (Single Canonical Voice: Premwadee Neural)
+    # ปรับแต่งพารามิเตอร์ทางสวนศาสตร์ (Acoustic Prosody) ให้มีความสดใส นุ่มนวล พูดเป็นธรรมชาติที่สุด
     volume = data.get('volume', '+0%')
     if lang == 'en':
-        voice = 'en-US-AriaNeural' if voice_gender == 'female' else 'en-US-GuyNeural'
-        rate = data.get('rate', '+5%')
-        pitch = data.get('pitch', '+8Hz')
+        voice = 'en-US-AriaNeural'
+        rate = '+3%'
+        pitch = '+1Hz'
     elif lang == 'zh':
         voice = 'zh-CN-XiaoxiaoNeural'
-        rate = data.get('rate', '+5%')
-        pitch = data.get('pitch', '+8Hz')
+        rate = '+3%'
+        pitch = '+1Hz'
     else:
-        # ภาษาไทย: โทนเสียงพูดธรรมชาติ 100% สไตล์คนจริง นุ่มนวล ไม่ดัดเสียงแหลมเป็นหุ่นยนต์
-        if voice_gender == 'female':
-            voice = 'th-TH-PremwadeeNeural'
-            rate = data.get('rate', '+0%')
-            pitch = data.get('pitch', '+0Hz')
-        else:
-            voice = 'th-TH-NiwatNeural'
-            rate = data.get('rate', '+0%')
-            pitch = data.get('pitch', '+0Hz')
+        # ภาษาไทย: เสียงทางการเดียวของน้องเพชร (เปรมวดี Neural) ด้วยจังหวะความเร็ว +2% และคีย์เสียง +1Hz
+        voice = 'th-TH-PremwadeeNeural'
+        rate = '+2%'
+        pitch = '+1Hz'
 
-    # ตรวจสอบ Cache เพื่อตอบกลับด้วยความเร็วระดับ <1ms
     cache_key = f"{voice}_{pitch}_{rate}_{clean_text}"
     if cache_key in TTS_CACHE:
         return jsonify({
