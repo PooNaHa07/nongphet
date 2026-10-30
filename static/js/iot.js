@@ -51,7 +51,7 @@ function showIoTToast(distance, timestamp, source = 'esp32_hardware') {
 }
 
 // โหมดสลับเข้าสู่กล้องตอบโต้ Live ทันทีเมื่อตรวจพบคน (Default: true)
-let autoLiveOnPresence = true;
+let autoLiveOnPresence = false;
 
 function toggleAutoLiveOnPresence(enabled) {
     autoLiveOnPresence = enabled;
@@ -190,7 +190,7 @@ async function toggleCameraSensor(forcedState) {
             startCameraDetectionLoop();
         } catch (e) {
             console.error('Camera Sensor error:', e);
-            alert('ไม่สามารถเปิดกล้องเพื่อตรวจจับคนได้ กรุณาอนุญาตสิทธิ์การเข้าถึงกล้องในเบราว์เซอร์ครับ');
+            if (typeof showAppToast === 'function') showAppToast('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์กล้องในเบราว์เซอร์', 'warning'); else alert('ไม่สามารถเปิดกล้องได้');
             isCameraSensorActive = false;
             if (previewContainer) previewContainer.classList.add('hidden');
         }

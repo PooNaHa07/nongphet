@@ -9,6 +9,9 @@ if hasattr(sys.stdout, 'reconfigure'):
 from flask import Flask, render_template, request, jsonify, session, Response
 import queue
 import os
+import time
+import logging
+from collections import OrderedDict
 import io
 import json
 import threading
@@ -34,9 +37,23 @@ except ImportError:
 
 APP_START_TIME = datetime.datetime.now()
 
+
 app = Flask(__name__)
 app.config.from_object(Config)
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get('SECRET_KEY', app.config.get('SECRET_KEY', 'nongphet_smart_guide_secure_key_2026_pbvc'))
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger("nongphet")
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Docker, systemd, and external monitoring"""
+    uptime_sec = int((datetime.datetime.now() - APP_START_TIME).total_seconds())
+    return jsonify({
+        'status': 'healthy',
+        'service': 'nongphet-ai-kiosk',
+        'uptime_seconds': uptime_sec,
+        'timestamp': datetime.datetime.now().isoformat()
+    }), 200
 
 # Initialize GenAI Client
 client = genai.Client(api_key=app.config['GEMINI_API_KEY'])
@@ -492,6 +509,25 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
 # ------------------------------------------------------------------------------
 # ระบบบันทึกสถิติผู้เข้าชมและปฏิสัมพันธ์ (Visitor Analytics Dashboard Engine)
 # ------------------------------------------------------------------------------
+ANALYTICS_FILE = os.path.join(os.path.dirname(__file__), 'analytics_data.json')
+
+def load_analytics():
+    if os.path.exists(ANALYTICS_FILE):
+        try:
+            with open(ANALYTICS_FILE, 'r', encoding='utf-8') as f:
+                saved = json.load(f)
+                visitor_analytics.update(saved)
+                print(f"[Analytics] Loaded persistent stats from {ANALYTICS_FILE}")
+        except Exception as e:
+            print(f"[Analytics] Note: Could not load analytics file: {e}")
+
+def save_analytics():
+    try:
+        with open(ANALYTICS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(visitor_analytics, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        pass
+
 visitor_analytics = {
     'total_visitors': 0,
     'total_interactions': 0,
@@ -511,6 +547,8 @@ visitor_analytics = {
     'hourly_traffic': [0] * 24,
     'recent_logs': []
 }
+load_analytics()
+
 
 def record_interaction(user_message, intent, confidence, engine, language):
     """บันทึกสถิติการใช้งานสำหรับแดชบอร์ด"""
@@ -546,6 +584,7 @@ def record_interaction(user_message, intent, confidence, engine, language):
     }
     visitor_analytics['recent_logs'].insert(0, log_entry)
     visitor_analytics['recent_logs'] = visitor_analytics['recent_logs'][:25]
+    save_analytics()
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -558,6 +597,10 @@ def chat():
     """
     data = request.json or {}
     user_message = data.get('message', '').strip()
+    if not user_message:
+        return jsonify({'response': 'สวัสดีครับ มีอะไรให้น้องเพชรช่วยไหมครับ'}), 400
+    if len(user_message) > 1000:
+        user_message = user_message[:1000]
     language = data.get('language', 'th')
     force_llm = data.get('force_llm', False)
     
@@ -1058,10 +1101,10 @@ def sign_language():
 
 
 # In-memory Cache for Ultra-Fast Instant Voice Synthesis (<1ms on hit)
-TTS_CACHE = {}
+TTS_CACHE = OrderedDict()
 MAX_TTS_CACHE_SIZE = 128
 
-def clean_text_for_speech(text, max_len=180, voice_gender='female'):
+def clean_text_for_speech(text, max_len=320, voice_gender='female'):
     """ทำความสะอาดข้อความ Markdown, ตัดส่วนคำถามแนะนำออก, ปรับหางเสียงให้อ่อนหวานน่ารักตามเพศ, และตัดแบ่งประโยคอย่างนุ่มนวลไม่ตัดกลางคำ"""
     if not text:
         return ""
@@ -1196,7 +1239,7 @@ def tts():
 
         # บันทึกลง Memory Cache
         if len(TTS_CACHE) >= MAX_TTS_CACHE_SIZE:
-            TTS_CACHE.pop(next(iter(TTS_CACHE)))
+            TTS_CACHE.popitem(last=False)
         TTS_CACHE[cache_key] = audio_base64
 
         return jsonify({
@@ -1447,8 +1490,11 @@ def api_emotion_state():
 def api_emotion_gaze():
     """รับพิกัดการมอง (x: -1.0 ถึง 1.0, y: -1.0 ถึง 1.0) จากหน้าจอสัมผัสหรือการตรวจจับภาพ"""
     data = request.json or {}
-    x = float(data.get('x', 0.0))
-    y = float(data.get('y', 0.0))
+    try:
+        x = max(-1.0, min(1.0, float(data.get('x', 0.0))))
+        y = max(-1.0, min(1.0, float(data.get('y', 0.0))))
+    except (ValueError, TypeError):
+        x, y = 0.0, 0.0
     broadcast_iot_event({
         'event': 'gaze_changed',
         'x': x,
@@ -1470,6 +1516,11 @@ def api_create_share():
     intent = data.get('intent', 'travel')
     maps_query = data.get('maps_query', 'จังหวัดเพชรบุรี')
     
+        # Auto-prune cards if memory exceeds 200 items (keep latest 150)
+    if len(shared_cards) > 200:
+        for k in list(shared_cards.keys())[:50]:
+            shared_cards.pop(k, None)
+
     share_id = uuid.uuid4().hex[:8]
     created_at = datetime.datetime.now().strftime("%d/%m/%Y %H:%M น.")
     
@@ -1734,10 +1785,11 @@ def ping_visitor():
         'total_visitors': visitor_analytics['total_visitors'],
         'hour': current_hour
     })
+    save_analytics()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    debug_mode = os.environ.get('RENDER') is None
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() in ('true', '1')
     
     # Auto-detect SSL Certificates (HTTPS support for permanent Microphone access)
     base_dir = os.path.dirname(os.path.abspath(__file__))

@@ -108,7 +108,7 @@ async function startSignLanguageCamera() {
         processSignVideoFrames();
     } catch (err) {
         console.error('Sign camera error:', err);
-        alert('ไม่สามารถเปิดกล้องได้: ' + (err.message || 'โปรดตรวจสอบการอนุญาตใช้งานกล้องบนอุปกรณ์'));
+        if (typeof showAppToast === 'function') showAppToast('ไม่สามารถเปิดกล้องได้: ' + (err.message || 'โปรดตรวจสอบสิทธิ์กล้อง'), 'error'); else alert('ไม่สามารถเปิดกล้องได้');
     }
 }
 
@@ -445,7 +445,7 @@ async function simulateGesture(gestureKey) {
 async function analyzeSignWithGemini() {
     const video = document.getElementById('signVideo');
     if (!video || !signIsCameraActive || video.videoWidth === 0) {
-        alert('กรุณาเปิดกล้องก่อนทำการวิเคราะห์ด้วย Gemini Vision ครับ');
+        if (typeof showAppToast === 'function') showAppToast('กรุณาเปิดกล้องก่อนทำการวิเคราะห์ด้วย Gemini Vision ครับ', 'warning'); else alert('กรุณาเปิดกล้องก่อน');
         return;
     }
 
@@ -477,11 +477,11 @@ async function analyzeSignWithGemini() {
         if (json.data) {
             displaySignLanguageResult(json.data, json.engine || 'gemini_vision_tsl');
         } else {
-            alert('ไม่สามารถวิเคราะห์ภาษามือจากภาพได้ กรุณาลองใหม่อีกครั้ง');
+            if (typeof showAppToast === 'function') showAppToast('ไม่สามารถวิเคราะห์ภาษามือจากภาพได้ กรุณาลองใหม่อีกครั้ง', 'warning');
         }
     } catch (err) {
         console.error('Gemini sign analysis error:', err);
-        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ Gemini Vision: ' + err.message);
+        if (typeof showAppToast === 'function') showAppToast('เกิดข้อผิดพลาดในการเชื่อมต่อ Gemini Vision', 'error');
     } finally {
         btn.innerHTML = origHtml;
         btn.disabled = false;

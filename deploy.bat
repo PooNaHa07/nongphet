@@ -11,7 +11,7 @@ echo [INFO] Password: nongphet999
 echo.
 
 echo [*] Transferring source code and web assets...
-scp -r app.py config.py intent_classifier.py semantic_retriever.py emotion_display.py esp32_listener.py local_slm.py knowledge_base.json model.pkl vectorizer.pkl templates static ml_artifacts setup_ssl.sh start_kiosk.sh pi@raspberrypi.local:~/nongphet/
+scp -r app.py config.py intent_classifier.py semantic_retriever.py emotion_display.py esp32_listener.py local_slm.py knowledge_base.json model.pkl vectorizer.pkl templates static ml_artifacts setup_ssl.sh start_kiosk.sh gunicorn.conf.py Procfile pi@raspberrypi.local:~/nongphet/
 
 if %errorlevel% equ 0 (
     echo.

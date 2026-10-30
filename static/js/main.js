@@ -1,3 +1,38 @@
+// -----------------------------------------------------------------------------
+// Universal Kiosk Toast Notification System (Replaces disruptive window.alert)
+// -----------------------------------------------------------------------------
+function showAppToast(message, type = 'info', duration = 3500) {
+    if (typeof window === 'undefined') return;
+    let container = document.getElementById('appToastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'appToastContainer';
+        container.className = 'fixed top-5 left-1/2 -translate-x-1/2 z-[99999] flex flex-col items-center gap-2 pointer-events-none transition-all duration-300';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const bgColors = {
+        info: 'bg-slate-900/95 border-blue-500/50 text-blue-100',
+        success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-100',
+        warning: 'bg-amber-950/95 border-amber-500/50 text-amber-100',
+        error: 'bg-rose-950/95 border-rose-500/50 text-rose-100'
+    };
+    const icons = {
+        info: '<i class=\"fa-solid fa-circle-info text-blue-400\"></i>',
+        success: '<i class=\"fa-solid fa-circle-check text-emerald-400\"></i>',
+        warning: '<i class=\"fa-solid fa-triangle-exclamation text-amber-400\"></i>',
+        error: '<i class=\"fa-solid fa-circle-exclamation text-rose-400\"></i>'
+    };
+    toast.className = 'flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border shadow-2xl backdrop-blur-md text-sm font-medium pointer-events-auto transition-all duration-300 transform translate-y-0 opacity-100 ' + (bgColors[type] || bgColors.info);
+    toast.innerHTML = '<span>' + (icons[type] || icons.info) + '</span><span>' + message + '</span>';
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+window.showAppToast = showAppToast;
 /**
  * nongphet AI Smart Guide - Main Core JS
  * Handles View modes, Routing, Clock, Weather, Voice Gender & Neural TTS, Speech-to-Text
@@ -90,7 +125,7 @@ function startClock() {
         if (clockPhone) clockPhone.textContent = `${hours}:${minutes}`;
     }
     updateTime();
-    setInterval(updateTime, 30000);
+    setInterval(updateTime, 1000);
 }
 
 async function fetchLiveWeather() {
@@ -559,7 +594,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         isRecording = false;
         console.warn('Speech recognition event:', e.error);
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-            alert('กรุณาอนุญาตการเข้าถึงไมโครโฟนในเบราว์เซอร์เพื่อใช้งานระบบเสียงครับ');
+            showAppToast('กรุณาอนุญาตการเข้าถึงไมโครโฟนในเบราว์เซอร์เพื่อใช้งานระบบเสียงครับ', 'warning');
             toggleRealtimeVoiceMode(false);
             return;
         }
@@ -594,7 +629,7 @@ function stopRecognitionSafe() {
 
 function toggleSpeechRecognition() {
     if (!recognition) {
-        alert('เบราว์เซอร์ของคุณไม่รองรับการสั่งการด้วยเสียง (Web Speech API)\nแนะนำให้ใช้ Google Chrome หรือ Microsoft Edge ครับ');
+        showAppToast('เบราว์เซอร์ของคุณไม่รองรับการสั่งการด้วยเสียง (แนะนำ Chrome หรือ Edge)', 'warning');
         return;
     }
     if (isRecording) {
@@ -606,7 +641,7 @@ function toggleSpeechRecognition() {
 
 function toggleRealtimeVoiceMode(forcedState) {
     if (!recognition) {
-        alert('เบราว์เซอร์ของคุณไม่รองรับการสนทนาด้วยเสียง (Web Speech API)\nแนะนำให้ใช้ Google Chrome หรือ Microsoft Edge ครับ');
+        showAppToast('เบราว์เซอร์ของคุณไม่รองรับการสนทนาด้วยเสียง (แนะนำ Chrome หรือ Edge)', 'warning');
         return;
     }
 
@@ -687,22 +722,31 @@ function setRealtimeVoiceStatus(state, msg) {
 // Cross-screen Gaze Follow: ส่งพิกัดสัมผัส/เมาส์จากจอหลักไปยังจอแสดงอารมณ์ส่วนหัว
 // -----------------------------------------------------------------------------
 let lastGazeSentTime = 0;
+let lastSentNormX = 0;
+let lastSentNormY = 0;
+
 function initCrossScreenGazeTracking() {
     function sendGaze(clientX, clientY) {
         const now = performance.now();
-        if (now - lastGazeSentTime < 100) return; // จำกัดความถี่ 10 ครั้ง/วินาทีเพื่อประหยัดเครือข่าย
-        lastGazeSentTime = now;
+        if (now - lastGazeSentTime < 250) return; // จำกัดความถี่ 4 ครั้ง/วินาที ประหยัดเครือข่ายและ CPU
 
-        const normX = (clientX - window.innerWidth / 2) / (window.innerWidth / 2);
-        const normY = (clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+        const normX = Math.max(-1.0, Math.min(1.0, (clientX - window.innerWidth / 2) / (window.innerWidth / 2)));
+        const normY = Math.max(-1.0, Math.min(1.0, (clientY - window.innerHeight / 2) / (window.innerHeight / 2)));
+
+        if (Math.abs(normX - lastSentNormX) < 0.05 && Math.abs(normY - lastSentNormY) < 0.05) return;
+
+        lastGazeSentTime = now;
+        lastSentNormX = normX;
+        lastSentNormY = normY;
+
+        if (lipSyncBroadcast) {
+            lipSyncBroadcast.postMessage({ type: 'gaze', x: normX, y: normY });
+        }
 
         fetch('/api/emotion/gaze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                x: Math.max(-1.0, Math.min(1.0, normX)),
-                y: Math.max(-1.0, Math.min(1.0, normY))
-            })
+            body: JSON.stringify({ x: normX, y: normY })
         }).catch(() => {});
     }
 

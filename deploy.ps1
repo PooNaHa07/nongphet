@@ -31,7 +31,9 @@ $FILES_TO_SYNC = @(
     "static",
     "ml_artifacts",
     "setup_ssl.sh",
-    "start_kiosk.sh"
+    "start_kiosk.sh",
+    "gunicorn.conf.py",
+    "Procfile"
 )
 
 Write-Host "[*] กำลังอัปโหลดไฟล์..." -ForegroundColor Yellow
