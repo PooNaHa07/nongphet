@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full w-full overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>น้องเพชร AI Smart Guide - 10.1" Kiosk Mode</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
+    <!-- Google MediaPipe Hands & Camera Utils (Lazy loaded with defer) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous" defer></script>
+    <!-- Modular Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.2">
+    <style>
+        /* Dedicated Kiosk Hardware Screen Overrides */
+        html, body {
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
+            background-color: #020716;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .touch-action-btn:active {
+            transform: scale(0.96);
+            transition: transform 0.08s ease;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col bg-[#020716] text-white overflow-hidden select-none" oncontextmenu="return false;">
+
+    <!-- ========================================================================= -->
+    <!-- 1. DEDICATED KIOSK STATUS & NAVIGATION BAR (ความสูงกะทัดรัด 54px พอดีกับจอ 10 นิ้ว) -->
+    <!-- ========================================================================= -->
+    <header class="w-full h-14 bg-slate-950/95 border-b border-cyan-500/30 px-3 sm:px-5 flex items-center justify-between z-50 shrink-0 shadow-lg">
+        <!-- Left: Logo & Branding -->
+        <div class="flex items-center gap-2.5 cursor-pointer touch-action-btn" onclick="navigateTo('screen-welcome')" title="แตะเพื่อกลับหน้าหลัก">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-xl shadow-lg ring-1 ring-white/30 shrink-0">
+                🤖
+            </div>
+            <div>
+                <div class="flex items-center gap-1.5 leading-none">
+                    <h1 class="font-black text-sm sm:text-base text-white tracking-wide">น้องเพชร AI</h1>
+                    <span class="bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[9px] font-bold px-1.5 py-0.2 rounded-full font-mono-code">10.1" KIOSK</span>
+                </div>
+                <p class="text-[10px] text-slate-300 font-medium">วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC)</p>
+            </div>
+        </div>
+
+        <!-- Center: Live Clock & Weather Widget -->
+        <div class="flex items-center gap-3 bg-slate-900/90 border border-slate-700/80 px-3 py-1 rounded-xl shadow-inner">
+            <div class="flex items-center gap-1.5 text-xs">
+                <i class="fa-solid fa-cloud-sun text-amber-400 text-sm"></i>
+                <span id="weatherTextHeader" class="text-slate-200 font-bold text-xs truncate max-w-[150px] sm:max-w-[200px]">อากาศแจ่มใส</span>
+            </div>
+            <div class="w-px h-3.5 bg-slate-700"></div>
+            <div id="liveClockDisplay" class="font-mono-code text-xs text-cyan-300 font-bold tracking-wider">--:-- น.</div>
+        </div>
+
+        <!-- Right: Kiosk Actions (Home Button, Language, Fullscreen) -->
+        <div class="flex items-center gap-2">
+            <!-- Home Button (เด่นชัด กลับหน้าหลักได้ทันทีจากทุกหน้า) -->
+            <button onclick="navigateTo('screen-welcome')" class="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs border border-cyan-300/40 transition touch-action-btn flex items-center gap-1.5 shadow-md shadow-cyan-600/30">
+                <i class="fa-solid fa-house"></i>
+                <span class="hidden sm:inline">หน้าแรก</span>
+            </button>
+
+            <!-- Language Switcher -->
+            <select id="appLanguageSelect" onchange="changeLanguage(this.value)" class="bg-slate-900 text-white text-xs px-2 py-1.5 rounded-xl border border-slate-700 font-bold focus:outline-none">
+                <option value="th">🇹🇭 ไทย</option>
+                <option value="en">🇬🇧 Eng</option>
+                <option value="zh">🇨🇳 中文</option>
+            </select>
+
+            <!-- Fullscreen Toggle -->
+            <button onclick="toggleKioskFullscreen()" class="w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 flex items-center justify-center text-xs transition touch-action-btn" title="เต็มจอ">
+                <i class="fa-solid fa-expand"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ========================================================================= -->
+    <!-- 2. FULL VIEWPORT MAIN STAGE (ไม่มี Sidebar, ไม่มีกรอบจำลองมือถือ, เต็มจอ 100%) -->
+    <!-- ========================================================================= -->
+    <main id="app-stage" class="flex-1 w-full h-full relative overflow-hidden bg-slate-950 flex flex-col">
+        
+        <!-- Screen 1: The 10.1" Pure Kiosk Welcome & Big 6 Touch Action Hub -->
+        <div id="screen-welcome" class="screen-view active p-3 sm:p-5 text-white overflow-y-auto custom-scrollbar relative justify-between h-full w-full bg-gradient-to-b from-[#020b22] via-[#04163d] to-[#02091c] select-none flex flex-col">
+            
+            <!-- Top Kiosk Welcome Banner -->
+            <div class="text-center pt-1 pb-2 shrink-0">
+                <h2 class="text-2xl sm:text-3xl font-black text-white tracking-wide drop-shadow-md">
+                    สวัสดีครับ ยินดีต้อนรับสู่อาชีวะเพชรบุรี
+                </h2>
+                <p class="text-xs sm:text-sm text-cyan-300 font-bold mt-0.5">
+                    น้องเพชร AI Smart Guide • แตะเมนูที่ต้องการเพื่อเริ่มใช้งานได้ทันที
+                </p>
+            </div>
+
+            <!-- The 6 Giant Touch Tiles (3x2 Grid เต็มพื้นที่จอ 10 นิ้ว กดง่าย ชัดเจน ไม่ต้องเลื่อนจอ) -->
+            <div class="flex-1 w-full max-w-6xl mx-auto grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 my-auto items-stretch">
+                
+                <!-- Tile 1: หลักสูตร 9 สาขาวิชา -->
+                <button onclick="navigateTo('screen-courses')" class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-blue-900/90 via-slate-900 to-indigo-950/90 hover:from-blue-800/90 border-2 border-cyan-500/40 hover:border-cyan-300 flex flex-col items-center justify-center gap-2 transition-all shadow-xl touch-action-btn">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center text-2xl shadow-lg ring-2 ring-white/20 shrink-0">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-black text-base sm:text-lg text-white drop-shadow">9 สาขาวิชาสู่อนาคต</span>
+                        <span class="block text-[11px] sm:text-xs text-cyan-300 font-semibold">ปวช. / ปวส. อาชีวะเพชรบุรี</span>
+                    </div>
+                </button>
+
+                <!-- Tile 2: แนะนำที่เที่ยว 8 อำเภอ -->
+                <button onclick="navigateTo('screen-places')" class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-emerald-950/90 via-slate-900 to-teal-950/90 hover:from-emerald-900/90 border-2 border-emerald-500/40 hover:border-emerald-300 flex flex-col items-center justify-center gap-2 transition-all shadow-xl touch-action-btn">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 text-white flex items-center justify-center text-2xl shadow-lg ring-2 ring-white/20 shrink-0">
+                        <i class="fa-solid fa-place-of-worship"></i>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-black text-base sm:text-lg text-white drop-shadow">เที่ยวเมืองเพชร 8 อำเภอ</span>
+                        <span class="block text-[11px] sm:text-xs text-emerald-300 font-semibold">เขาวัง หาดชะอำ มรดกโลกแก่งกระจาน</span>
+                    </div>
+                </button>
+
+                <!-- Tile 3: ถาม-ตอบ และคุยด้วยเสียงกับน้องเพชร AI -->
+                <button onclick="navigateTo('screen-chat')" class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-indigo-950/90 via-slate-900 to-purple-950/90 hover:from-indigo-900/90 border-2 border-indigo-500/40 hover:border-indigo-300 flex flex-col items-center justify-center gap-2 transition-all shadow-xl touch-action-btn">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-500 to-pink-500 text-white flex items-center justify-center text-2xl shadow-lg ring-2 ring-white/20 shrink-0">
+                        <i class="fa-solid fa-comment-dots"></i>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-black text-base sm:text-lg text-white drop-shadow">ถามน้องเพชร AI</span>
+                        <span class="block text-[11px] sm:text-xs text-indigo-300 font-semibold">คุยด้วยเสียง • ตอบสดทันที</span>
+                    </div>
+                </button>
+
+                <!-- Tile 4: โหมดตรวจจับภาษามือไทย TSL AI -->
+                <button onclick="navigateTo('screen-sign-language')" class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-cyan-950/90 via-slate-900 to-blue-950/90 hover:from-cyan-900/90 border-2 border-cyan-500/40 hover:border-cyan-300 flex flex-col items-center justify-center gap-2 transition-all shadow-xl touch-action-btn">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-cyan-600 via-sky-500 to-blue-600 text-white flex items-center justify-center text-2xl shadow-lg ring-2 ring-white/20 shrink-0">
+                        <i class="fa-solid fa-hands-asl-interpreting"></i>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-black text-base sm:text-lg text-white drop-shadow">ล่ามภาษามือ AI (TSL)</span>
+                        <span class="block text-[11px] sm:text-xs text-cyan-300 font-semibold">ตรวจจับท่าทางมือ 21 จุดผ่านกล้อง</span>
+                    </div>
+                </button>
+
+                <!-- Tile 5: คุยสดผ่านกล้อง LIVE -->
+                <button onclick="navigateTo('screen-live')" class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-rose-950/90 via-slate-900 to-pink-950/90 hover:from-rose-900/90 border-2 border-rose-500/40 hover:border-rose-300 flex flex-col items-center justify-center gap-2 transition-all shadow-xl touch-action-btn">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-rose-600 via-pink-500 to-red-500 text-white flex items-center justify-center text-2xl shadow-lg ring-2 ring-white/20 shrink-0 relative">
+                        <i class="fa-solid fa-video"></i>
+                        <span class="w-2.5 h-2.5 rounded-full bg-white absolute top-1 right-1 animate-ping"></span>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-black text-base sm:text-lg text-white drop-shadow">คุยสด LIVE ผ่านกล้อง</span>
+                        <span class="block text-[11px] sm:text-xs text-rose-300 font-semibold">มองเห็นและคุยสดกับ Gemini AI</span>
+                    </div>
+                </button>
+
+                <!-- Tile 6: วางแผนทริป & ข้อมูลติดต่อ -->
+                <button onclick="openPlannerModal()" class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-950/90 via-slate-900 to-orange-950/90 hover:from-amber-900/90 border-2 border-amber-500/40 hover:border-amber-300 flex flex-col items-center justify-center gap-2 transition-all shadow-xl touch-action-btn">
+                    <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-yellow-400 text-white flex items-center justify-center text-2xl shadow-lg ring-2 ring-white/20 shrink-0">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                    </div>
+                    <div class="text-center">
+                        <span class="block font-black text-base sm:text-lg text-white drop-shadow">จัดทริปท่องเที่ยว 1 วัน</span>
+                        <span class="block text-[11px] sm:text-xs text-amber-300 font-semibold">จัดทริปเฉพาะคุณในเมืองเพชรบุรี</span>
+                    </div>
+                </button>
+
+            </div>
+
+            <!-- Bottom Quick Voice Dock (ปุ่มคุยด้วยเสียงขนาดใหญ่สำหรับคนยืนหน้าตู้) -->
+            <div class="w-full max-w-2xl mx-auto pt-2 shrink-0">
+                <button onclick="navigateTo('screen-chat'); setTimeout(() => toggleSpeechRecognition(), 300);" class="w-full py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-sm sm:text-base shadow-2xl border border-white/30 flex items-center justify-center gap-2.5 touch-action-btn">
+                    <i class="fa-solid fa-microphone text-lg sm:text-xl animate-pulse"></i>
+                    <span>แตะที่นี่เพื่อพูดคุยด้วยเสียงกับน้องเพชร (Voice Assistant)</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Screen 2: Courses Guide -->
+        {% include 'components/screens/courses.html' %}
+
+        <!-- Screen 3: Places Grid -->
+        {% include 'components/screens/places.html' %}
+
+        <!-- Screen 4: Smart AI Chat & Voice Assistant -->
+        {% include 'components/screens/chat.html' %}
+
+        <!-- Screen 5: Live Interactive Mode (Gemini Live) -->
+        {% include 'components/screens/live.html' %}
+
+        <!-- Screen 6: Thai Sign Language AI (MediaPipe Hands) -->
+        {% include 'components/screens/sign_language.html' %}
+
+        <!-- Screen 7: Photo AI Vision Analysis -->
+        {% include 'components/screens/vision.html' %}
+
+        <!-- Screen 8: Main Menu Quick Hub -->
+        {% include 'components/screens/main_menu.html' %}
+
+    </main>
+
+    <!-- Modals (Trip Planner, Course Matcher, Contact Info) -->
+    {% include 'components/modals.html' %}
+
+    <!-- Hidden audio element for TTS -->
+    <audio id="audioPlayer" class="hidden" preload="auto"></audio>
+
+    <!-- Kiosk Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=1.0.2"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}?v=1.0.2"></script>
+    <script src="{{ url_for('static', filename='js/modals.js') }}?v=1.0.2"></script>
+    <script src="{{ url_for('static', filename='js/live.js') }}?v=1.0.2"></script>
+    <script src="{{ url_for('static', filename='js/iot.js') }}?v=1.0.2"></script>
+    <script src="{{ url_for('static', filename='js/sign_language.js') }}?v=1.0.2"></script>
+
+    <!-- 10.1" Kiosk Automatic Inactivity Watchdog -->
+    <script>
+        // Automatic Reset Watchdog: หากไม่มีการสัมผัสจอภายใน 60 วินาที จะกลับหน้าหลักอัตโนมัติ
+        let kioskIdleTimer = null;
+        const KIOSK_IDLE_TIMEOUT_MS = 60000; // 60 วินาที
+
+        function resetKioskIdleTimer() {
+            if (kioskIdleTimer) clearTimeout(kioskIdleTimer);
+            kioskIdleTimer = setTimeout(() => {
+                const activeScreen = document.querySelector('.screen-view.active');
+                if (activeScreen && activeScreen.id !== 'screen-welcome') {
+                    console.log('⏰ Kiosk idle timeout reached, returning to welcome screen...');
+                    if (typeof stopSignLanguageCamera === 'function') stopSignLanguageCamera();
+                    if (typeof stopLiveCamera === 'function') stopLiveCamera();
+                    navigateTo('screen-welcome');
+                }
+            }, KIOSK_IDLE_TIMEOUT_MS);
+        }
+
+        ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(evt => {
+            window.addEventListener(evt, resetKioskIdleTimer, { passive: true });
+        });
+        resetKioskIdleTimer();
+
+        // Kiosk Fullscreen Helper
+        function toggleKioskFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+    </script>
+</body>
+</html>

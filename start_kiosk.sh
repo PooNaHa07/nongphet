@@ -58,4 +58,4 @@ chromium-browser \
     --ignore-gpu-blocklist \
     --enable-features=VaapiVideoDecoder,CanvasOopRasterization,OverlayScrollbar \
     --window-position=0,0 \
-    http://127.0.0.1:5000?mode=kiosk
+    http://127.0.0.1:5000/kiosk

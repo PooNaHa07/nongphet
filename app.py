@@ -209,6 +209,12 @@ def index():
         session['session_id'] = str(uuid.uuid4())
     return render_template('index.html')
 
+@app.route('/kiosk')
+def kiosk():
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
+    return render_template('kiosk.html')
+
 def is_complex_or_trap_query(msg: str) -> bool:
     """
     ตรวจจับคำถามลองภูมิ, คำถามตรวจสอบข้อเท็จจริง (Doubt/Fact-check), 
