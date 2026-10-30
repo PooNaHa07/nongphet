@@ -14,7 +14,9 @@ let signFps = 0;
 // Gesture stability & hold tracking
 let signCurrentDetectedGesture = null;
 let signGestureHoldStartTime = 0;
-const SIGN_HOLD_DURATION_MS = 1000; // Hold steady for 1s to auto-trigger
+const SIGN_HOLD_DURATION_MS = 450; // Hold steady for 0.45s to auto-trigger
+let signLostFrameCount = 0;
+const SIGN_LOST_FRAME_TOLERANCE = 4; // Allow up to 4 dropped frames before resetting
 let signLastTriggeredGesture = null;
 let signLastTriggerTime = 0;
 
@@ -47,10 +49,10 @@ function initMediaPipeHands() {
         });
 
         signHands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.65
+            maxNumHands: 1,
+            modelComplexity: 0,
+            minDetectionConfidence: 0.55,
+            minTrackingConfidence: 0.55
         });
 
         signHands.onResults(onSignLanguageResults);
@@ -360,11 +362,15 @@ function handleDetectedGesture(gestureKey) {
     const floatingName = document.getElementById('signFloatingName');
 
     if (!gestureKey) {
-        if (liveBanner) liveBanner.classList.add('hidden');
-        signCurrentDetectedGesture = null;
-        updateHoldProgressBar(0);
+        signLostFrameCount++;
+        if (signLostFrameCount > SIGN_LOST_FRAME_TOLERANCE) {
+            if (liveBanner) liveBanner.classList.add('hidden');
+            signCurrentDetectedGesture = null;
+            updateHoldProgressBar(0);
+        }
         return;
     }
+    signLostFrameCount = 0;
 
     const gestureNames = {
         'love': { name: 'ฉันรักเธอ (I Love You)', emoji: '🤟' },
@@ -415,28 +421,33 @@ function updateHoldProgressBar(percent) {
 async function simulateGesture(gestureKey) {
     const engineBadge = document.getElementById('signEngineBadge');
     if (engineBadge) {
-        engineBadge.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-amber-400"></i> กำลังแปลความหมาย...';
+        engineBadge.innerHTML = '<i class="fa-solid fa-bolt text-cyan-400"></i> แปลผลทันที (Edge AI)';
     }
 
+    // 1. ตอบสนองทันทีแบบ 0ms ด้วย Client-side Knowledge
+    const localData = getClientGestureData(gestureKey);
+    if (localData) {
+        displaySignLanguageResult(localData, 'edge_realtime');
+        if (typeof autoSpeak !== 'undefined' && autoSpeak && typeof playTTS === 'function') {
+            playTTS(localData.reply);
+        }
+    }
+
+    // 2. ซิงค์สถิติเข้าสู่ Backend Analytics แบบ Background โดยไม่บล็อกหน้าจอ
     try {
-        const res = await fetch('/api/sign_language', {
+        fetch('/api/sign_language', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 gesture_hint: gestureKey,
                 language: currentLang || 'th'
             })
-        });
-
-        const json = await res.json();
-        if (json.status === 'success' || json.status === 'fallback') {
-            displaySignLanguageResult(json.data, json.engine || 'local_rules');
-        }
-    } catch (e) {
-        console.warn('API error, using client fallback:', e);
-        // Client-side instant fallback
-        displaySignLanguageResult(getClientGestureData(gestureKey), 'client_offline');
-    }
+        }).then(res => res.json()).then(json => {
+            if (json.status === 'success' && json.data) {
+                displaySignLanguageResult(json.data, json.engine || 'local_rules');
+            }
+        }).catch(() => {});
+    } catch (e) {}
 }
 
 /**

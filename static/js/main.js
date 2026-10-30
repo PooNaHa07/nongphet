@@ -1,3 +1,21 @@
+const clientAudioCache = new Map();
+
+function playQuickAudioFeedback() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {}
+}
 // -----------------------------------------------------------------------------
 // Universal Kiosk Toast Notification System (Replaces disruptive window.alert)
 // -----------------------------------------------------------------------------
@@ -386,6 +404,28 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
             return;
         }
 
+                const cacheKey = (currentLang || 'th') + '_' + text;
+        if (clientAudioCache.has(cacheKey)) {
+            const cachedBase64 = clientAudioCache.get(cacheKey);
+            audioPlayer.src = cachedBase64;
+            audioPlayer.volume = 1.0;
+            audioPlayer.muted = false;
+            audioPlayer.play().then(() => {
+                isSpeakingTTS = true;
+                setEmotion('speaking');
+                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+                startLipSyncAnalysis();
+            }).catch(() => {});
+            audioPlayer.onended = () => {
+                isSpeakingTTS = false;
+                setEmotion('idle');
+                if (lipSyncBroadcast) lipSyncBroadcast.postMessage({ type: 'lipsync', amp: 0 });
+                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+                if (typeof onEndedCallback === 'function') onEndedCallback();
+            };
+            return;
+        }
+
         if (btnElement) {
             btnElement.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500"></i> กำลังโหลดเสียง...';
         }
@@ -402,8 +442,12 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
         });
         const data = await response.json();
         
-        if (data.audio_base64) {
-            audioPlayer.src = 'data:audio/mp3;base64,' + data.audio_base64;
+                if (data.audio_base64) {
+            const audioDataUri = 'data:audio/mp3;base64,' + data.audio_base64;
+            if (clientAudioCache.size < 64) {
+                clientAudioCache.set(cacheKey, audioDataUri);
+            }
+            audioPlayer.src = audioDataUri;
             audioPlayer.volume = 1.0;
             audioPlayer.muted = false;
 
@@ -534,19 +578,20 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             }
         }
 
-        if (finalTranscript && finalTranscript.trim().length > 0) {
+                if (finalTranscript && finalTranscript.trim().length > 0) {
             if (chatInput) chatInput.value = finalTranscript.trim();
             if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
             if (isRealtimeVoiceActive) {
                 setRealtimeVoiceStatus('thinking', '⚡ น้องเพชรกำลังประมวลผลคำตอบ...');
             }
             stopRecognitionSafe();
+            playQuickAudioFeedback();
             sendChatMessage();
             return;
         }
 
-        // Automatic silence debounce (auto-submit if speaker pauses for ~1.6s)
-        if (interimTranscript && interimTranscript.trim().length > 2) {
+        // Automatic silence debounce (auto-submit if speaker pauses for ~750ms for ultra-fast response)
+        if (interimTranscript && interimTranscript.trim().length > 1) {
             if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
             speechSilenceTimer = setTimeout(() => {
                 const currentVal = chatInput ? chatInput.value.trim() : '';
@@ -555,9 +600,10 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                         setRealtimeVoiceStatus('thinking', '⚡ น้องเพชรกำลังประมวลผลคำตอบ...');
                     }
                     stopRecognitionSafe();
+                    playQuickAudioFeedback();
                     sendChatMessage();
                 }
-            }, 1600);
+            }, 750);
         }
     };
 

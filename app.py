@@ -1244,7 +1244,7 @@ def tts():
     if not text:
         return jsonify({'error': 'Text is empty'}), 400
 
-        clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female')
+    clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female')
 
     # เสียงหลักอัตลักษณ์เดียวของน้องเพชร (Single Canonical Voice: Premwadee Neural)
     # ปรับแต่งพารามิเตอร์ทางสวนศาสตร์ (Acoustic Prosody) ให้มีความสดใส นุ่มนวล พูดเป็นธรรมชาติที่สุด
