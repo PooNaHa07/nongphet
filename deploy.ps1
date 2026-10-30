@@ -3,7 +3,7 @@
 # สคริปต์: ซิงก์โค้ดและ Assets ไปยัง Raspberry Pi 5 (deploy.ps1)
 # ==============================================================================
 
-$PI_HOST = "192.168.1.162"
+$PI_HOST = if ($args[0]) { $args[0] } else { "raspberrypi.local" }
 $PI_USER = "pi"
 $PI_TARGET = "~/nongphet/"
 
