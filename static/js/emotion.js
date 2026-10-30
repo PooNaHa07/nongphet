@@ -1352,13 +1352,25 @@ function handleEmotionSignTrigger(gestureKey) {
 }
 
 // =============================================================================
-// ระบบ Lip-Sync ตามคลื่นเสียงจริง (Web Audio Analyser Receiver)
+// ระบบ Lip-Sync & Dual-Screen Synchronization (BroadcastChannel Receiver)
 // =============================================================================
 function initLipSyncReceiver() {
     if (lipSyncBroadcast) {
         lipSyncBroadcast.onmessage = (event) => {
-            if (event.data && event.data.type === 'lipsync') {
-                setLipSyncAmplitude(event.data.amp || 0);
+            if (!event.data) return;
+            const msg = event.data;
+            if (msg.type === 'lipsync') {
+                setLipSyncAmplitude(msg.amp || 0);
+            } else if (msg.type === 'emotion' && msg.state) {
+                if (msg.state !== 'sleeping') wakeUpFromSleep();
+                applyEmotion(msg.state);
+            } else if (msg.type === 'gaze') {
+                if (!isMouseActive) {
+                    targetGazeX = msg.x;
+                    targetGazeY = msg.y;
+                    lastInteractionTime = performance.now();
+                    wakeUpFromSleep();
+                }
             }
         };
     }
@@ -1470,6 +1482,9 @@ async function pollEmotionState() {
 function setEmotionLocally(state) {
     playSfx('click');
     applyEmotion(state);
+    if (lipSyncBroadcast) {
+        lipSyncBroadcast.postMessage({ type: 'emotion', state: state });
+    }
     fetch('/api/emotion/state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

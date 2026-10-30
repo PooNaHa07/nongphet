@@ -390,10 +390,16 @@ function formatMarkdown(text) {
 function setEmotion(state) {
     if (!state) return;
     try {
+        // 1. ส่งสัญญาณข้ามหน้าจอทันทีแบบ 0ms ด้วย BroadcastChannel (Dual-Screen Sync)
+        if (lipSyncBroadcast) {
+            lipSyncBroadcast.postMessage({ type: 'emotion', state: state });
+        }
+        // 2. ซิงค์สถานะเข้าสู่ Flask Backend และกระจายผ่าน SSE
         fetch('/api/emotion/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state: state })
+            body: JSON.stringify({ state: state }),
+            keepalive: true
         }).catch(() => {});
     } catch (e) {}
 }
@@ -631,6 +637,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                 micBtn.classList.add('text-slate-300', 'border-slate-700');
             }
             if (chatInput) chatInput.placeholder = 'พิมพ์คำถาม หรือกดไมโครโฟนเพื่อพูดคุย...';
+            if (!isWaitingChatResponse && !isSpeakingTTS) {
+                setEmotion('idle');
+            }
         } else {
             // In Real-time Hands-free mode, auto restart listening when idle
             if (!isSpeakingTTS && !isWaitingChatResponse) {
@@ -646,6 +655,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onerror = (e) => {
         isRecording = false;
         console.warn('Speech recognition event:', e.error);
+        if (!isWaitingChatResponse && !isSpeakingTTS) {
+            setEmotion('idle');
+        }
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
             showAppToast('กรุณาอนุญาตการเข้าถึงไมโครโฟนในเบราว์เซอร์เพื่อใช้งานระบบเสียงครับ', 'warning');
             toggleRealtimeVoiceMode(false);

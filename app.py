@@ -626,6 +626,19 @@ def chat():
     intent_th = ml_result.get('intent_th', 'ไม่ระบุ')
     confidence = float(ml_result.get('confidence', 0.0))
 
+    # จับคู่อารมณ์หุ่นยนต์ตามเจตนาของบทสนทนา (Dual-Screen Dynamic Emotion Mapping)
+    INTENT_EMOTION_MAP = {
+        'travel': 'excited',
+        'food': 'happy',
+        'admission': 'smile',
+        'greeting': 'happy',
+        'general_faq': 'smile',
+        'general': 'smile',
+        'emergency': 'surprised',
+        'love': 'love'
+    }
+    target_emotion = INTENT_EMOTION_MAP.get(detected_intent, 'happy')
+
     session_id = data.get('session_id') or session.get('session_id', 'default_user')
 
     # -------------------------------------------------------------------------
@@ -650,7 +663,8 @@ def chat():
                 'intent_th': intent_th,
                 'confidence': round(confidence, 4),
                 'rag_score': rag_match['score'],
-                'source': f"semantic_rag:{rag_match['id']}"
+                'source': f"semantic_rag:{rag_match['id']}",
+                'emotion': target_emotion
             })
 
         # หาก Semantic RAG ยังไม่เจอ ลอง Rule-based Local Knowledge เดิม
@@ -668,7 +682,8 @@ def chat():
                 'intent': detected_intent,
                 'intent_th': intent_th,
                 'confidence': round(confidence, 4),
-                'source': 'local_knowledge_base'
+                'source': 'local_knowledge_base',
+                'emotion': target_emotion
             })
 
     # -------------------------------------------------------------------------
@@ -693,7 +708,8 @@ def chat():
                     'intent': detected_intent,
                     'intent_th': intent_th,
                     'confidence': round(confidence, 4),
-                    'source': slm_result.get('source', 'local_slm_qwen2.5')
+                    'source': slm_result.get('source', 'local_slm_qwen2.5'),
+                    'emotion': target_emotion
                 })
 
     # -------------------------------------------------------------------------
@@ -766,7 +782,8 @@ def chat():
             'intent': detected_intent,
             'intent_th': intent_th,
             'confidence': round(confidence, 4),
-            'source': 'gemini-2.5-flash'
+            'source': 'gemini-2.5-flash',
+            'emotion': target_emotion
         })
     except Exception as e:
         print(f"Primary Gemini API error: {e} -> Attempting Fallback Model...")
@@ -795,7 +812,8 @@ def chat():
                 'intent': detected_intent,
                 'intent_th': intent_th,
                 'confidence': round(confidence, 4),
-                'source': 'gemini-2.5-flash-lite'
+                'source': 'gemini-2.5-flash-lite',
+                'emotion': target_emotion
             })
         except Exception as e2:
             # -----------------------------------------------------------------
@@ -814,7 +832,8 @@ def chat():
                 'intent': detected_intent,
                 'intent_th': intent_th,
                 'confidence': round(confidence, 4),
-                'source': 'local_smart_knowledge'
+                'source': 'local_smart_knowledge',
+                'emotion': target_emotion
             })
 
 @app.route('/plan_trip', methods=['POST'])

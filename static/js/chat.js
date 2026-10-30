@@ -86,6 +86,7 @@ async function sendChatMessage() {
         if (data.reply) {
             appendChatBubble('ai', data.reply, data);
             
+            const targetEmotion = data.emotion || 'happy';
             const shouldSpeak = (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) || (typeof autoSpeak !== 'undefined' && autoSpeak);
             
             if (shouldSpeak && typeof playTTS === 'function') {
@@ -95,6 +96,14 @@ async function sendChatMessage() {
                 
                 playTTS(data.reply, null, () => {
                     // When speech playback finishes
+                    if (typeof setEmotion === 'function') {
+                        setEmotion(targetEmotion);
+                        setTimeout(() => {
+                            if (!isSpeakingTTS && !isWaitingChatResponse && !isRecording) {
+                                setEmotion('idle');
+                            }
+                        }, 3500);
+                    }
                     if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) {
                         if (typeof setRealtimeVoiceStatus === 'function') {
                             setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยไม่ต้องกดปุ่ม)');
@@ -107,7 +116,14 @@ async function sendChatMessage() {
                     }
                 });
             } else {
-                if (typeof setEmotion === 'function') setEmotion('idle');
+                if (typeof setEmotion === 'function') {
+                    setEmotion(targetEmotion);
+                    setTimeout(() => {
+                        if (!isSpeakingTTS && !isWaitingChatResponse && !isRecording) {
+                            setEmotion('idle');
+                        }
+                    }, 3500);
+                }
                 if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) {
                     if (typeof setRealtimeVoiceStatus === 'function') {
                         setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยไม่ต้องกดปุ่ม)');
@@ -118,12 +134,14 @@ async function sendChatMessage() {
                 }
             }
         } else {
+            if (typeof setEmotion === 'function') setEmotion('idle');
             appendChatBubble('ai', data.error || 'ขออภัยครับ เกิดข้อผิดพลาดในการประมวลผล');
             if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive && typeof startRecognitionSafe === 'function') {
                 setTimeout(() => startRecognitionSafe(), 1000);
             }
         }
     } catch (err) {
+        if (typeof setEmotion === 'function') setEmotion('idle');
         isWaitingChatResponse = false;
         if (typingIndicator) typingIndicator.classList.add('hidden');
         appendChatBubble('ai', 'ไม่สามารถเชื่อมต่อระบบ AI ได้ในขณะนี้');
