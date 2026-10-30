@@ -414,11 +414,6 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
                     if (typeof onEndedCallback === 'function') onEndedCallback();
                 }
             });
-                    if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                    if (typeof onEndedCallback === 'function') onEndedCallback();
-                }
-            });
-            
             audioPlayer.onended = () => {
                 isSpeakingTTS = false;
                 setEmotion('idle');
