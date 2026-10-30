@@ -1266,6 +1266,26 @@ def run_coroutine(coro, timeout=12.0):
     """รัน coroutine บน worker thread ถาวรพร้อม connection reuse"""
     return tts_worker.run(coro, timeout=timeout)
 
+# -----------------------------------------------------------------------------
+# ตัวจัดการโมเดลเสียงสังเคราะห์ภาษาไทย PyThaiTTS (On-Device Local TTS)
+# -----------------------------------------------------------------------------
+pythaitts_engine = None
+pythaitts_checked = False
+
+def get_pythaitts_engine():
+    """โหลดโมเดลเสียงภาษาไทย PyThaiTTS (On-Device Local AI Voice)"""
+    global pythaitts_engine, pythaitts_checked
+    if not pythaitts_checked:
+        pythaitts_checked = True
+        try:
+            from pythaitts import TTS
+            pythaitts_engine = TTS(pretrained="fastthaig2p")
+            print("✅ [PyThaiTTS] โหลดโมเดลเสียงภาษาไทย On-Device สำเร็จพร้อมใช้งาน (fastthaig2p)")
+        except Exception as e:
+            print(f"ℹ️ [PyThaiTTS] ยังไม่ได้ติดตั้งหรือโหลดโมเดลไม่สำเร็จ: {e} (ระบบจะใช้ Edge-TTS สำรอง)")
+            pythaitts_engine = None
+    return pythaitts_engine
+
 @app.route('/tts', methods=['POST'])
 def tts():
     data = request.json or {}
@@ -1277,6 +1297,49 @@ def tts():
         return jsonify({'error': 'Text is empty'}), 400
 
     clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female')
+
+    # -------------------------------------------------------------------------
+    # ขั้นที่ 1: ตรวจสอบและใช้งาน PyThaiTTS สำหรับภาษาไทย (On-Device Offline TTS)
+    # -------------------------------------------------------------------------
+    if lang == 'th':
+        pytts = get_pythaitts_engine()
+        if pytts:
+            pytts_cache_key = f"pythaitts_{clean_text}"
+            if pytts_cache_key in TTS_CACHE:
+                return jsonify({
+                    'audio_base64': TTS_CACHE[pytts_cache_key],
+                    'audio_format': 'wav',
+                    'engine': 'pythaitts-cache',
+                    'voice': 'fastthaig2p',
+                    'status': 'success'
+                })
+            try:
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_f:
+                    tmp_wav_path = tmp_f.name
+                try:
+                    pytts.tts(clean_text, filename=tmp_wav_path)
+                    with open(tmp_wav_path, 'rb') as f:
+                        wav_bytes = f.read()
+                    audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
+                    if len(TTS_CACHE) >= MAX_TTS_CACHE_SIZE:
+                        TTS_CACHE.popitem(last=False)
+                    TTS_CACHE[pytts_cache_key] = audio_base64
+                    return jsonify({
+                        'audio_base64': audio_base64,
+                        'audio_format': 'wav',
+                        'engine': 'pythaitts',
+                        'voice': 'fastthaig2p',
+                        'status': 'success'
+                    })
+                finally:
+                    if os.path.exists(tmp_wav_path):
+                        try:
+                            os.remove(tmp_wav_path)
+                        except Exception:
+                            pass
+            except Exception as pe:
+                print(f"⚠️ [PyThaiTTS Error]: {pe} -> สลับไปใช้โมเดลเสียงสำรอง")
 
     # เสียงหลักอัตลักษณ์เดียวของน้องเพชร (Single Canonical Voice: Premwadee Neural)
     # ปรับแต่งพารามิเตอร์ทางสวนศาสตร์ (Acoustic Prosody) ให้มีความสดใส นุ่มนวล พูดเป็นธรรมชาติที่สุด

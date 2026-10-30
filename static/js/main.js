@@ -462,7 +462,8 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
         const data = await response.json();
         
                 if (data.audio_base64) {
-            const audioDataUri = 'data:audio/mp3;base64,' + data.audio_base64;
+            const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
+            const audioDataUri = `data:${mime};base64,` + data.audio_base64;
             if (clientAudioCache.size < 64) {
                 clientAudioCache.set(cacheKey, audioDataUri);
             }
