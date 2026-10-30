@@ -86,6 +86,9 @@ $CHROME_BIN \
     --no-first-run \
     --user-data-dir=/tmp/nongphet_kiosk_profile \
     --disable-session-crashed-bubble \
+    --disable-sync \
+    --disable-background-networking \
+    --disable-component-update \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
@@ -95,4 +98,6 @@ $CHROME_BIN \
     --ignore-gpu-blocklist \
     --enable-features=VaapiVideoDecoder,CanvasOopRasterization,OverlayScrollbar \
     --window-position=0,0 \
-    http://127.0.0.1:5000/kiosk
+    http://127.0.0.1:5000/kiosk > /dev/null 2>&1 &
+
+echo "🎉 เปิดโหมด Kiosk บนหน้าจอสัมผัส 10.1 นิ้ว สำเร็จเรียบร้อยแล้ว!"
