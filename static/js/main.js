@@ -544,6 +544,17 @@ let isRecording = false;
 let isRealtimeVoiceActive = false;
 let isWaitingChatResponse = false;
 let speechSilenceTimer = null;
+let realtimeVoiceInactivityTimer = null;
+const REALTIME_VOICE_TIMEOUT_MS = 45000; // 45 วินาที ไม่มีการสนทนา -> ปิดโหมดคุยสด
+
+function resetRealtimeVoiceInactivityTimer() {
+    if (!isRealtimeVoiceActive) return;
+    clearTimeout(realtimeVoiceInactivityTimer);
+    realtimeVoiceInactivityTimer = setTimeout(() => {
+        console.log('⏱️ [Kiosk Voice] ไม่มีการสนทนานาน 45 วินาที -> ปิดโหมดคุยสดอัตโนมัติ');
+        toggleRealtimeVoiceMode(false);
+    }, REALTIME_VOICE_TIMEOUT_MS);
+}
 
 function getRecognitionLang() {
     if (currentLang === 'en') return 'en-US';
@@ -592,13 +603,15 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const chatInput = document.getElementById('chatInput');
         
         if (interimTranscript) {
+            resetRealtimeVoiceInactivityTimer();
             if (chatInput) chatInput.value = interimTranscript;
             if (isRealtimeVoiceActive) {
                 setRealtimeVoiceStatus('listening', `🎙️ กำลังได้ยิน: "${interimTranscript}"`);
             }
         }
 
-                if (finalTranscript && finalTranscript.trim().length > 0) {
+        if (finalTranscript && finalTranscript.trim().length > 0) {
+            resetRealtimeVoiceInactivityTimer();
             if (chatInput) chatInput.value = finalTranscript.trim();
             if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
             if (isRealtimeVoiceActive) {
@@ -727,6 +740,7 @@ function toggleRealtimeVoiceMode(forcedState) {
 
     if (isRealtimeVoiceActive) {
         autoSpeak = true;
+        resetRealtimeVoiceInactivityTimer();
         const autoSpeakIcon = document.getElementById('autoSpeakIcon');
         if (autoSpeakIcon) autoSpeakIcon.className = 'fa-solid fa-volume-high text-emerald-400';
 
@@ -751,6 +765,7 @@ function toggleRealtimeVoiceMode(forcedState) {
         startRecognitionSafe();
     } else {
         if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
+        if (realtimeVoiceInactivityTimer) clearTimeout(realtimeVoiceInactivityTimer);
         if (banner) banner.classList.add('hidden');
         if (headerBtn) {
             headerBtn.className = 'px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-600/30 text-slate-300 hover:text-emerald-300 text-xs font-bold border border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5 shadow';

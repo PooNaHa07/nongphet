@@ -295,6 +295,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('pointerdown', primeAudioPlayback, { once: true });
     window.addEventListener('touchstart', primeAudioPlayback, { once: true });
     window.addEventListener('keydown', primeAudioPlayback, { once: true });
+
+    // เริ่มต้นตรวจจับกล้องเพื่อมองตามคนและทักทายอัตโนมัติทันทีเมื่อเปิดหน้า
+    setTimeout(() => {
+        if (!isCameraTracking && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            startCameraTracking(true).catch(err => {
+                console.log('Standby camera tracking:', err);
+            });
+        }
+    }, 1200);
 });
 
 let emotionSafetyWatchdog = null;
@@ -658,7 +667,7 @@ async function toggleCameraTracking() {
     }
 }
 
-async function startCameraTracking() {
+async function startCameraTracking(silent = false) {
     try {
         const constraints = {
             video: {
@@ -691,8 +700,10 @@ async function startCameraTracking() {
         console.log('🎥 [Vision Engine] เริ่มต้นกล้องมองตามคนเรียบร้อยแล้ว');
         startVisionProcessing();
     } catch (err) {
-        console.error('ไม่สามารถเปิดกล้องได้:', err);
-        alert('ไม่สามารถเข้าถึงกล้องเว็บแคมได้ กรุณาตรวจสอบสิทธิ์การใช้งานกล้องในเบราว์เซอร์');
+        console.warn('ไม่สามารถเปิดกล้องได้:', err);
+        if (!silent) {
+            alert('ไม่สามารถเข้าถึงกล้องเว็บแคมได้ กรุณาตรวจสอบสิทธิ์การใช้งานกล้องในเบราว์เซอร์');
+        }
     }
 }
 
@@ -781,7 +792,7 @@ function startVisionProcessing() {
 
         let detectedPersonInCenter = false;
 
-        // 1. ลองใช้ FaceDetector API
+        // 1. ลองใช้ FaceDetector API (ถ้าเบราว์เซอร์รองรับ)
         if (faceDetector) {
             try {
                 const faces = await faceDetector.detect(TRACKING_VIDEO);
@@ -796,7 +807,7 @@ function startVisionProcessing() {
                     targetGazeY = (faceCenterY - 0.5) * 2.0;
                     lastInteractionTime = performance.now();
 
-                    if (Math.abs(faceCenterX - 0.5) < 0.25) {
+                    if (Math.abs(faceCenterX - 0.5) < 0.32) {
                         detectedPersonInCenter = true;
                     }
 
@@ -809,82 +820,125 @@ function startVisionProcessing() {
             } catch (e) {}
         }
 
-        // 2. อัลกอริทึม Optical Motion Difference Centroid
-        if (!detectedPersonInCenter && prevFrameData) {
-            let motionPixels = 0;
-            let sumX = 0;
-            let sumY = 0;
+        // 2. อัลกอริทึม Skin-Tone Centroid & Optical Motion
+        // ทำงานได้ทั้งตอนคนเดินเข้ามา (Motion) และตอนคนหยุดยืนนิ่งสบตามองตรงหน้า (Skin Presence)
+        let skinPixels = 0;
+        let skinSumX = 0;
+        let skinSumY = 0;
+        let motionPixels = 0;
+        let motionSumX = 0;
+        let motionSumY = 0;
 
-            const curr = currentFrame.data;
-            const prev = prevFrameData.data;
-            const totalPixels = w * h;
+        const curr = currentFrame.data;
+        const prev = prevFrameData ? prevFrameData.data : null;
+        const totalPixels = w * h;
 
-            for (let i = 0; i < totalPixels; i++) {
-                const idx = i * 4;
-                const rDiff = Math.abs(curr[idx] - prev[idx]);
-                const gDiff = Math.abs(curr[idx + 1] - prev[idx + 1]);
-                const bDiff = Math.abs(curr[idx + 2] - prev[idx + 2]);
+        for (let i = 0; i < totalPixels; i++) {
+            const idx = i * 4;
+            const r = curr[idx];
+            const g = curr[idx + 1];
+            const b = curr[idx + 2];
+
+            const px = i % w;
+            const py = Math.floor(i / w);
+
+            // ตรวจจับผิวหน้าคนในส่วนบน-กลางภาพ
+            if (py < h * 0.85) {
+                if (r > 60 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b) > 15) && Math.abs(r - g) > 12) {
+                    skinPixels++;
+                    skinSumX += px;
+                    skinSumY += py;
+                }
+            }
+
+            // ตรวจจับความเคลื่อนไหว (Optical Difference)
+            if (prev) {
+                const rDiff = Math.abs(r - prev[idx]);
+                const gDiff = Math.abs(g - prev[idx + 1]);
+                const bDiff = Math.abs(b - prev[idx + 2]);
                 const diff = (rDiff + gDiff + bDiff) / 3;
 
-                if (diff > 30) {
-                    const px = i % w;
-                    const py = Math.floor(i / w);
-                    sumX += px;
-                    sumY += py;
+                if (diff > 28) {
+                    motionSumX += px;
+                    motionSumY += py;
                     motionPixels++;
                 }
             }
+        }
 
-            if (motionPixels > 250) {
+        // A. ถ้ามีคนเคลื่อนไหว (เดินเข้ามาหากล้อง)
+        if (motionPixels > 220) {
+            wakeUpFromSleep();
+            const avgX = motionSumX / motionPixels;
+            const avgY = motionSumY / motionPixels;
+
+            const normX = ((w - avgX) - w / 2) / (w / 2);
+            const normY = (avgY - h / 2) / (h / 2);
+
+            targetGazeX = Math.max(-1.0, Math.min(1.0, normX * 1.5));
+            targetGazeY = Math.max(-1.0, Math.min(1.0, normY * 1.3));
+            lastInteractionTime = performance.now();
+
+            if (Math.abs(normX) < 0.35 && motionPixels > 400) {
+                detectedPersonInCenter = true;
+            }
+
+            // ตรวจจับท่าทางมือไร้สัมผัส (Touchless Air Gestures)
+            detectAirGestures(avgX, avgY, motionPixels, w, h);
+        }
+
+        // B. ถ้าคนหยุดยืนมองตรงหน้า (Skin Presence สูงและอยู่กึ่งกลาง แม้จะยืนนิ่งสนิท)
+        if (skinPixels > 120) {
+            const skinAvgX = skinSumX / skinPixels;
+            const skinAvgY = skinSumY / skinPixels;
+
+            const skinNormX = ((w - skinAvgX) - w / 2) / (w / 2);
+            const skinNormY = (skinAvgY - h / 2) / (h / 2);
+
+            if (Math.abs(skinNormX) < 0.35) {
+                detectedPersonInCenter = true;
                 wakeUpFromSleep();
-                const avgX = sumX / motionPixels;
-                const avgY = sumY / motionPixels;
+                pingVisitorDetected();
 
-                const normX = ((w - avgX) - w / 2) / (w / 2);
-                const normY = (avgY - h / 2) / (h / 2);
-
-                targetGazeX = Math.max(-1.0, Math.min(1.0, normX * 1.5));
-                targetGazeY = Math.max(-1.0, Math.min(1.0, normY * 1.3));
+                // สายตาสบตามองคนตรงกลาง
+                targetGazeX = Math.max(-1.0, Math.min(1.0, skinNormX * 1.6));
+                targetGazeY = Math.max(-1.0, Math.min(1.0, skinNormY * 1.4));
                 lastInteractionTime = performance.now();
+            }
 
-                if (Math.abs(normX) < 0.35 && motionPixels > 450) {
-                    detectedPersonInCenter = true;
-                }
-
-                if (showPipPreview && pipCtx) {
-                    pipCtx.strokeStyle = '#38bdf8';
-                    pipCtx.fillStyle = '#00f0ff';
-                    pipCtx.beginPath();
-                    pipCtx.arc(avgX, avgY, 8, 0, Math.PI * 2);
-                    pipCtx.fill();
-                    pipCtx.stroke();
-                }
-
-                // ตรวจจับท่าทางมือไร้สัมผัส (Touchless Air Gestures: Wave 👋 & Swipe ↔️)
-                detectAirGestures(avgX, avgY, motionPixels, w, h);
+            if (showPipPreview && pipCtx) {
+                pipCtx.strokeStyle = '#38bdf8';
+                pipCtx.fillStyle = '#00f0ff';
+                pipCtx.beginPath();
+                pipCtx.arc(skinAvgX, skinAvgY, 8, 0, Math.PI * 2);
+                pipCtx.fill();
+                pipCtx.stroke();
             }
         }
 
-        // 3. ตรวจจับการสบตาต่อเนื่อง > 1.5 วินาที เพื่อทักทายอัตโนมัติ (Autonomous Greeting)
+        // 3. ตรวจจับการหยุดมองต่อเนื่อง > 1.1 วินาที เพื่อทักทายอัตโนมัติ (Autonomous Greeting)
         const now = performance.now();
         if (detectedPersonInCenter) {
             if (eyeContactStartTime === null) {
                 eyeContactStartTime = now;
-            } else if (now - eyeContactStartTime > 1400) {
-                // ยืนสบตาเกิน 1.4 วินาที และพ้นระยะ Cool-down (40 วินาที)
-                if (now - lastGreetingTriggerTime > 40000) {
+            } else if (now - eyeContactStartTime > 1100) {
+                // ยืนหยุดมองเกิน 1.1 วินาที และพ้นระยะ Cool-down (25 วินาที)
+                if (now - lastGreetingTriggerTime > 25000) {
                     lastGreetingTriggerTime = now;
                     eyeContactStartTime = null;
-                    console.log('👋 [Autonomous Greet] ตรวจพบการสบตาตรงหน้า! เริ่มต้นทักทายอัตโนมัติ');
+                    console.log('👋 [Autonomous Greet] ตรวจพบคนมาหยุดมองระบบ! เริ่มต้นทักทายอัตโนมัติ');
                     triggerAutonomousGreeting();
                 }
             }
         } else {
-            eyeContactStartTime = null;
+            // หากเดินหลุดระยะเกิน 1.5 วินาที ให้รีเซ็ต timer
+            if (eyeContactStartTime !== null && (now - eyeContactStartTime > 1500)) {
+                eyeContactStartTime = null;
+            }
         }
 
         prevFrameData = currentFrame;
-    }, 75); // ปรับจาก 45ms เป็น 75ms เพื่อลดภาระ CPU และทำให้เบราว์เซอร์ลื่นไหลขึ้น
+    }, 75); // 75ms loop
 }
 
 // -----------------------------------------------------------------------------
@@ -969,22 +1023,43 @@ function onAirGestureDetected(gesture, param = null) {
 }
 
 /**
- * สั่งทักทายอัตโนมัติเมื่อคนเดินมาหยุดหน้ากล้อง
+ * สั่งทักทายอัตโนมัติเมื่อมีคนมาหยุดมองระบบ
  */
 function triggerAutonomousGreeting() {
     wakeUpFromSleep();
     applyEmotion('happy');
 
-    // ส่งสัญญาณไปยัง Flask Backend เพื่อกระจายเสียงทักทายไปยังจอสัมผัสหลัก
+    // รายการประโยคทักทายที่อบอุ่นและเป็นมิตร
+    const greetingQuotes = [
+        "สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำ สอบถามได้เลยนะครับ",
+        "สวัสดีครับ! ยินดีต้อนรับสู่น้องเพชร AI ครับ มีข้อมูลสถานที่ท่องเที่ยวและวิทยาลัยอาชีวะเพชรบุรี สอบถามได้เลยนะครับ",
+        "สวัสดีครับ ยินดีต้อนรับครับ น้องเพชรพร้อมให้บริการแล้ว แตะที่หน้าจอเพื่อสอบถามหรือคุยกับน้องเพชรได้เลยนะครับ"
+    ];
+    const quote = greetingQuotes[Math.floor(Math.random() * greetingQuotes.length)];
+
+    showVoiceSubtitle(quote, 5500);
+
+    // 1. ส่งสัญญาณไปยัง Flask Backend เพื่อกระจายเสียงทักทายไปยังจอสัมผัสหลัก
     fetch('/api/iot/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             event: 'user_detected',
             distance: 40.0,
-            source: 'camera_eye_contact'
+            source: 'camera_eye_contact',
+            greeting_text: quote
         })
     }).catch(() => {});
+
+    // 2. สั่งพูดทักทายโดยตรง (กรณีจอแสดงอารมณ์เปิดเดี่ยวๆ หรือทดสอบหน้าจอใบหน้า)
+    // หลังพูดจบให้เปิดโหมดคุยอัตโนมัติ hands-free ทันที
+    playDirectVoiceTTS(quote);
+    // เปิด autoVoiceMode หลังจาก TTS เริ่ม (จะ auto-restart ใน onended callback)
+    setTimeout(() => {
+        if (!autoVoiceMode) {
+            startAutoVoiceMode();
+        }
+    }, 500);
 }
 
 function togglePipPreview() {
@@ -1434,9 +1509,12 @@ function initEventStream() {
                 } else if (data.event === 'user_detected') {
                     wakeUpFromSleep();
                     applyEmotion('happy');
+                    if (data.greeting_text) {
+                        showVoiceSubtitle(data.greeting_text, 5500);
+                    }
                     setTimeout(() => {
                         if (currentEmotion === 'happy') applyEmotion('idle');
-                    }, 4000);
+                    }, 4500);
                 }
             } catch (e) {}
         };
@@ -1640,11 +1718,99 @@ function initHudClock() {
 
 // =============================================================================
 // ระบบคุยด้วยเสียงกับน้องเพชรโดยตรงบนหน้าจอแสดงอารมณ์ (Direct Voice Interaction)
+// Always-On Hands-Free Conversation Loop
 // =============================================================================
 let emotionRecognition = null;
 let isEmotionListening = false;
 let isEmotionSpeaking = false;
 let voiceSubtitleTimer = null;
+
+// โหมดคุยอัตโนมัติ: เปิดหลังจากทักทายครั้งแรก ปิดเมื่อไม่มีคนนาน 45 วินาที
+let autoVoiceMode = false;
+let autoVoiceSilenceTimer = null;
+const AUTO_VOICE_TIMEOUT_MS = 45000; // 45 วินาที ไม่มีเสียง -> กลับ idle
+
+/**
+ * รีเซ็ต silence timer: นับเวลาจาก 0 ใหม่ทุกครั้งที่มีกิจกรรม
+ */
+function resetAutoVoiceSilenceTimer() {
+    if (!autoVoiceMode) return;
+    clearTimeout(autoVoiceSilenceTimer);
+    autoVoiceSilenceTimer = setTimeout(() => {
+        console.log('⏱️ [Auto Voice] ไม่มีการพูดนาน 45 วินาที -> ปิดโหมดคุยอัตโนมัติ');
+        stopAutoVoiceMode();
+    }, AUTO_VOICE_TIMEOUT_MS);
+}
+
+/**
+ * เริ่มโหมดคุยอัตโนมัติ (เรียกหลังจาก greeting TTS จบ)
+ */
+function startAutoVoiceMode() {
+    if (!emotionRecognition) return;
+    autoVoiceMode = true;
+    resetAutoVoiceSilenceTimer();
+    console.log('🎙️ [Auto Voice] เปิดโหมดคุยอัตโนมัติแบบ hands-free แล้ว');
+    // แสดงไอคอนบอกสถานะ
+    showAutoVoiceIndicator(true);
+    // เริ่มฟังทันทีเลย
+    startAutoListening();
+}
+
+/**
+ * ปิดโหมดคุยอัตโนมัติ กลับสู่ idle
+ */
+function stopAutoVoiceMode() {
+    autoVoiceMode = false;
+    clearTimeout(autoVoiceSilenceTimer);
+    showAutoVoiceIndicator(false);
+    if (isEmotionListening) {
+        try { emotionRecognition.stop(); } catch(e) {}
+    }
+    showVoiceSubtitle('💤 หยุดโหมดคุยอัตโนมัติแล้ว กดปุ่มไมค์เพื่อคุยอีกครั้ง', 3000);
+    if (currentEmotion === 'listening') applyEmotion('idle');
+    console.log('🛑 [Auto Voice] ปิดโหมดคุยอัตโนมัติ');
+}
+
+/**
+ * เริ่มฟังเสียง (ป้องกัน race condition และเสียง feedback จาก TTS)
+ */
+function startAutoListening() {
+    if (!autoVoiceMode || !emotionRecognition) return;
+    if (isEmotionSpeaking || isEmotionListening) return;
+    try {
+        emotionRecognition.lang = 'th-TH';
+        emotionRecognition.start();
+    } catch(e) {
+        // อาจกำลังทำงานอยู่ ลองใหม่หลัง 300ms
+        setTimeout(() => {
+            if (autoVoiceMode && !isEmotionListening && !isEmotionSpeaking) {
+                try { emotionRecognition.start(); } catch(e2) {}
+            }
+        }, 300);
+    }
+}
+
+/**
+ * แสดง/ซ่อนไอคอนบอกสถานะโหมดคุยอัตโนมัติ
+ */
+function showAutoVoiceIndicator(active) {
+    let indicator = document.getElementById('autoVoiceIndicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'autoVoiceIndicator';
+        indicator.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;padding:4px 14px;border-radius:999px;font-size:12px;font-weight:600;pointer-events:none;transition:opacity 0.4s;';
+        document.body.appendChild(indicator);
+    }
+    if (active) {
+        indicator.style.background = 'rgba(16,185,129,0.25)';
+        indicator.style.border = '1px solid rgba(52,211,153,0.6)';
+        indicator.style.color = '#6ee7b7';
+        indicator.innerHTML = '🎙️ โหมดคุยอัตโนมัติ: เปิดอยู่';
+        indicator.style.opacity = '1';
+    } else {
+        indicator.style.opacity = '0';
+    }
+}
 
 function initDirectVoiceEngine() {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -1652,13 +1818,14 @@ function initDirectVoiceEngine() {
         emotionRecognition = new SpeechRec();
         emotionRecognition.lang = 'th-TH';
         emotionRecognition.interimResults = true;
-        emotionRecognition.continuous = false;
+        emotionRecognition.continuous = false; // ใช้ manual restart แทน continuous เพื่อป้องกัน feedback
 
         emotionRecognition.onstart = () => {
             isEmotionListening = true;
             wakeUpFromSleep();
             applyEmotion('listening');
             showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... พูดได้เลยครับ');
+            resetAutoVoiceSilenceTimer(); // reset timer ทุกครั้งที่เริ่มฟัง
             const micBtn = document.getElementById('btnEmotionVoice');
             if (micBtn) {
                 micBtn.className = 'absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-12 h-12 rounded-2xl bg-rose-500/30 border border-rose-400 text-rose-300 text-lg shadow-2xl animate-pulse z-40 flex items-center justify-center';
@@ -1676,20 +1843,32 @@ function initDirectVoiceEngine() {
             if (event.results[0] && event.results[0].isFinal) {
                 const finalQuery = event.results[0][0].transcript.trim();
                 if (finalQuery) {
+                    resetAutoVoiceSilenceTimer(); // มีการพูด -> reset timer
                     processDirectVoiceQuery(finalQuery);
                 }
             }
         };
 
-        emotionRecognition.onerror = () => {
+        emotionRecognition.onerror = (e) => {
             isEmotionListening = false;
             resetMicButton();
             if (currentEmotion === 'listening') applyEmotion('idle');
+            // หาก error ไม่ใช่ไมค์ถูกบล็อก ให้ลองฟังใหม่ใน auto mode
+            if (autoVoiceMode && e.error !== 'not-allowed' && e.error !== 'service-not-allowed') {
+                setTimeout(() => startAutoListening(), 800);
+            } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                console.warn('🚫 [Auto Voice] ไมค์ถูกบล็อก หยุดโหมดอัตโนมัติ');
+                stopAutoVoiceMode();
+            }
         };
 
         emotionRecognition.onend = () => {
             isEmotionListening = false;
             resetMicButton();
+            // ถ้าอยู่ใน auto mode และไม่กำลังพูด TTS ให้ฟังต่อทันที
+            if (autoVoiceMode && !isEmotionSpeaking) {
+                setTimeout(() => startAutoListening(), 500);
+            }
         };
     }
 }
@@ -1750,6 +1929,8 @@ function showVoiceSubtitle(text, autoHideMs = 0) {
 }
 
 async function processDirectVoiceQuery(queryText) {
+    // ป้องกัน feedback: ไม่ฟังระหว่าง thinking + speaking
+    isEmotionSpeaking = true;
     applyEmotion('thinking');
     showVoiceSubtitle(`⚡ น้องเพชรกำลังคิด: "${queryText}"`);
 
@@ -1769,10 +1950,15 @@ async function processDirectVoiceQuery(queryText) {
         const reply = chatData.reply || 'น้องเพชรพร้อมให้บริการครับ';
 
         showVoiceSubtitle(reply);
-        playDirectVoiceTTS(reply);
+        playDirectVoiceTTS(reply); // isEmotionSpeaking จะ set ใน playDirectVoiceTTS
     } catch (e) {
+        isEmotionSpeaking = false;
         showVoiceSubtitle('ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ AI', 3000);
         applyEmotion('idle');
+        // ถ้า error ให้ฟังต่อใน auto mode
+        if (autoVoiceMode) {
+            setTimeout(() => startAutoListening(), 1000);
+        }
     }
 }
 
@@ -1873,31 +2059,43 @@ async function playDirectVoiceTTS(text) {
 
             audioEl.onended = () => {
                 clearTimeout(emotionSafetyWatchdog);
+                isEmotionSpeaking = false;
                 applyEmotion('idle');
                 setLipSyncAmplitude(0);
+                // Auto-start listening หลัง TTS จบ ถ้าอยู่ใน auto mode
+                if (autoVoiceMode) {
+                    setTimeout(() => startAutoListening(), 600);
+                }
             };
 
             audioEl.onerror = () => {
                 console.warn('audioEl error, falling back to Web Audio');
-                playBase64ViaWebAudio(ttsData.audio_base64);
+                isEmotionSpeaking = false;
+                playBase64ViaWebAudio(ttsData.audio_base64, () => {
+                    if (autoVoiceMode) setTimeout(() => startAutoListening(), 600);
+                });
             };
 
             // เริ่มเล่นเสียง: เมื่อเสียงดังจริงค่อยเริ่มขยับปากพูด!
             try {
                 await audioEl.play();
+                isEmotionSpeaking = true; // mark ว่ากำลังพูด เพื่อกัน feedback
                 applyEmotion('speaking');
                 startLocalLipSyncPulse();
             } catch (playErr) {
                 console.warn('Audio play blocked by browser, attempting Web Audio API:', playErr);
+                isEmotionSpeaking = false;
                 const webAudioPlayed = playBase64ViaWebAudio(ttsData.audio_base64);
                 if (!webAudioPlayed) {
                     fallbackBrowserSpeech(speakText);
                 }
             }
         } else {
+            isEmotionSpeaking = false;
             fallbackBrowserSpeech(speakText);
         }
     } catch (e) {
+        isEmotionSpeaking = false;
         console.warn('TTS request failed/aborted:', e);
         fallbackBrowserSpeech(speakText);
     }

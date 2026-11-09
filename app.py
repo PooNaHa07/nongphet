@@ -65,7 +65,7 @@ semantic_retriever = get_semantic_retriever()
 
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-2.5-flash-lite"
-
+                                                                                                                                                                                                                                                                                                    
 # ==============================================================================
 # Comprehensive World-Class System Knowledge (Encyclopedic Nong Phet AI)
 # ==============================================================================
@@ -1512,11 +1512,12 @@ def broadcast_iot_event(event_data):
 
 @app.route('/api/iot/trigger', methods=['POST'])
 def iot_trigger():
-    """รับสัญญาณ Trigger เมื่อเซนเซอร์ Ultrasonic (HC-SR04) ตรวจพบผู้ใช้ < 80 cm"""
+    """รับสัญญาณ Trigger เมื่อเซนเซอร์ Ultrasonic (HC-SR04) หรือกล้อง AI ตรวจพบคนมาหยุดมอง"""
     data = request.json or {}
     event_type = data.get('event', 'user_detected')
     distance = data.get('distance')
     source = data.get('source', 'esp32_hardware')
+    greeting_text = data.get('greeting_text')
     
     now_str = datetime.datetime.now().strftime("%H:%M:%S")
     iot_state['connected'] = True
@@ -1533,7 +1534,8 @@ def iot_trigger():
         'distance': distance,
         'timestamp': now_str,
         'total_triggers': iot_state['total_triggers'],
-        'source': source
+        'source': source,
+        'greeting_text': greeting_text
     }
     
     # ส่งสัญญาณ Realtime ไปยัง Browser ทุกแท็บ

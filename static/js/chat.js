@@ -48,6 +48,14 @@ async function sendChatMessage() {
     appendChatBubble('user', text);
     chatInput.value = '';
 
+    // สลับไปยังหน้าต่างแชทอัตโนมัติหากพูดขณะอยู่หน้า welcome หรือหน้าอื่น
+    if (typeof navigateTo === 'function') {
+        const activeScreen = document.querySelector('.screen-view.active');
+        if (activeScreen && activeScreen.id !== 'screen-chat' && activeScreen.id !== 'screen-live') {
+            navigateTo('screen-chat');
+        }
+    }
+
     isWaitingChatResponse = true;
     if (typeof setEmotion === 'function') setEmotion('thinking');
     if (typeof stopRecognitionSafe === 'function') {

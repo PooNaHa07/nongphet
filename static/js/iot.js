@@ -11,43 +11,70 @@ let cameraDetectionInterval = null;
 let cameraConsecutiveDetections = 0;
 let prevFrameData = null;
 
-function showIoTToast(distance, timestamp, source = 'esp32_hardware') {
-    const toast = document.getElementById('iotAlertToast');
-    const timeEl = document.getElementById('iotToastTime');
-    const msgEl = document.getElementById('iotToastMsg');
-    const titleText = document.getElementById('iotToastTitleText');
-    const iconEl = document.getElementById('iotToastIcon');
-    const distDisp = document.getElementById('iotDistanceDisplay');
+function showIoTToast(distance, timestamp, source = 'esp32_hardware', customText = null) {
+    let toast = document.getElementById('iotAlertToast');
+    let timeEl = document.getElementById('iotToastTime');
+    let msgEl = document.getElementById('iotToastMsg');
+    let titleText = document.getElementById('iotToastTitleText');
+    let iconEl = document.getElementById('iotToastIcon');
+    let distDisp = document.getElementById('iotDistanceDisplay');
+
+    // ถ้ายังไม่มี toast ใน DOM (เช่น บน kiosk.html) ให้สร้างขึ้นมาโดยอัตโนมัติ
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'iotAlertToast';
+        toast.className = 'fixed top-4 right-4 sm:top-6 sm:right-6 z-50 transform transition-all duration-300 translate-y-[-140%] opacity-0 pointer-events-none max-w-md w-[92vw] sm:w-full shadow-2xl';
+        toast.innerHTML = `
+            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-900/95 border border-cyan-400/50 shadow-2xl backdrop-blur-xl text-white flex items-center gap-3">
+                <div id="iotToastIcon" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-xl text-cyan-300 shrink-0 shadow animate-pulse">
+                    <i class="fa-solid fa-person-walking"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between">
+                        <h4 id="iotToastTitle" class="text-xs font-black text-cyan-300 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                            <span id="iotToastTitleText">ตรวจพบคนหยุดมองระบบ!</span>
+                        </h4>
+                        <span id="iotToastTime" class="text-[9px] text-slate-400 font-mono-code">00:00:00</span>
+                    </div>
+                    <p id="iotToastMsg" class="text-xs text-slate-200 mt-0.5 truncate"></p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        timeEl = document.getElementById('iotToastTime');
+        msgEl = document.getElementById('iotToastMsg');
+        titleText = document.getElementById('iotToastTitleText');
+        iconEl = document.getElementById('iotToastIcon');
+    }
 
     if (timeEl) timeEl.textContent = timestamp || new Date().toLocaleTimeString();
 
-    if (source === 'camera_ai') {
-        if (titleText) titleText.textContent = 'กล้อง AI: ตรวจพบผู้ใช้!';
-        if (msgEl) msgEl.textContent = 'ตรวจพบบุคคลยืนอยู่หน้ากล้อง (Smart Camera Presence)';
-        if (iconEl) iconEl.innerHTML = '<i class="fa-solid fa-camera text-cyan-300"></i>';
-        if (distDisp) distDisp.textContent = 'พบคนผ่านกล้อง 📷';
+    if (source === 'camera_eye_contact' || source === 'camera_ai') {
+        if (titleText) titleText.textContent = '👀 กล้อง AI: มีคนมาหยุดมองระบบ!';
+        if (msgEl) msgEl.textContent = customText || 'สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI Smart Guide';
+        if (iconEl) iconEl.innerHTML = '<i class="fa-solid fa-face-smile text-cyan-300"></i>';
+        if (distDisp) distDisp.textContent = 'พบคนหยุดมอง 📷';
     } else if (source === 'manual_simulation') {
-        if (titleText) titleText.textContent = 'จำลอง: ตรวจพบผู้ใช้!';
-        if (msgEl) msgEl.textContent = `จำลองพบผู้ใช้ระยะ ${distance || 45} ซม. (Simulated Presence)`;
+        if (titleText) titleText.textContent = 'จำลอง: ตรวจพบคนหยุดมอง!';
+        if (msgEl) msgEl.textContent = customText || `จำลองพบผู้ใช้ระยะ ${distance || 45} ซม.`;
         if (iconEl) iconEl.innerHTML = '<i class="fa-solid fa-bolt text-amber-300"></i>';
         if (distDisp) distDisp.textContent = `${distance || 45} cm (จำลอง)`;
     } else {
-        if (titleText) titleText.textContent = 'ESP32: ตรวจพบผู้ใช้!';
-        if (msgEl) msgEl.textContent = `พบผู้ใช้ในระยะ ${distance} ซม. (Ultrasonic HC-SR04)`;
+        if (titleText) titleText.textContent = '📡 เซนเซอร์: ตรวจพบผู้ใช้!';
+        if (msgEl) msgEl.textContent = customText || `พบผู้ใช้ในระยะ ${distance} ซม. (Ultrasonic HC-SR04)`;
         if (iconEl) iconEl.innerHTML = '<i class="fa-solid fa-person-walking text-emerald-300"></i>';
         if (distDisp) distDisp.textContent = `${distance} cm (ตรวจพบ)`;
     }
 
-    if (toast) {
-        toast.classList.remove('translate-y-[-140%]', 'opacity-0', 'pointer-events-none');
-        toast.classList.add('translate-y-0', 'opacity-100');
+    toast.classList.remove('translate-y-[-140%]', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-y-0', 'opacity-100');
 
-        setTimeout(() => {
-            toast.classList.add('translate-y-[-140%]', 'opacity-0', 'pointer-events-none');
-            toast.classList.remove('translate-y-0', 'opacity-100');
-            if (distDisp && !isCameraSensorActive) distDisp.textContent = 'ปกติ (พร้อมใช้งาน)';
-        }, 5000);
-    }
+    setTimeout(() => {
+        toast.classList.add('translate-y-[-140%]', 'opacity-0', 'pointer-events-none');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        if (distDisp && !isCameraSensorActive) distDisp.textContent = 'ปกติ (พร้อมใช้งาน)';
+    }, 5500);
 }
 
 // โหมดสลับเข้าสู่กล้องตอบโต้ Live ทันทีเมื่อตรวจพบคน (Default: true)
@@ -88,10 +115,10 @@ function updateLiveSensorHud(distance, source) {
     }
 }
 
-function triggerAutoGreeting(distance, source = 'esp32_hardware') {
+function triggerAutoGreeting(distance, source = 'esp32_hardware', customText = null) {
     const now = Date.now();
-    // ป้องกันการกล่าวทักทายซ้ำซ้อนภายใน 10 วินาที
-    if (now - lastAutoGreetTime < 10000) return;
+    // ป้องกันการกล่าวทักทายซ้ำซ้อนภายใน 25 วินาที
+    if (now - lastAutoGreetTime < 25000) return;
     lastAutoGreetTime = now;
 
     // อัปเดตสถานะเซนเซอร์บนหน้าจอ Live HUD
@@ -104,19 +131,34 @@ function triggerAutoGreeting(distance, source = 'esp32_hardware') {
         body: JSON.stringify({ state: 'speaking' })
     }).catch(() => {});
 
+    // รายการประโยคทักทายที่อบอุ่นและเป็นมิตรของน้องเพชร
+    const greetingQuotes = [
+        "สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำ สอบถามได้เลยนะครับ",
+        "สวัสดีครับ! ยินดีต้อนรับสู่น้องเพชร AI ครับ แตะที่หน้าจอเพื่อเลือกดูหลักสูตร ที่เที่ยว หรือพูดคุยกับน้องเพชรได้เลยครับ",
+        "สวัสดีครับ ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีครับ น้องเพชรพร้อมแนะนำข้อมูลการศึกษาและสถานที่ท่องเที่ยวเพชรบุรีแล้วครับ"
+    ];
+    const welcomeText = customText || greetingQuotes[Math.floor(Math.random() * greetingQuotes.length)];
+
+    // แสดงข้อความต้อนรับบนจอ (Toast / Floating Banner)
+    showIoTToast(distance, new Date().toLocaleTimeString(), source, welcomeText);
+
+    // ปลุกหน้าจอ Kiosk และกลับสู่หน้า welcome หากหน้าจอพักอยู่
+    if (typeof resetKioskIdleTimer === 'function') resetKioskIdleTimer();
+    const activeScreen = document.querySelector('.screen-view.active');
+    if (!activeScreen) {
+        if (typeof navigateTo === 'function') navigateTo('screen-welcome');
+    }
+
     // หากเปิดโหมด Auto Live (สลับเข้ากล้องตอบโต้ Real-time ทันที)
     if (autoLiveOnPresence) {
-        // 1. นำทางไปยังหน้าจอกล้องคุยสด
         if (typeof navigateTo === 'function') {
             navigateTo('screen-live');
         }
 
-        // 2. เริ่มต้น Live Session อัตโนมัติ (เปิดกล้องและไมค์คุยทันที)
         setTimeout(async () => {
             if (typeof liveIsActive !== 'undefined' && !liveIsActive) {
                 if (typeof startLiveSession === 'function') {
                     try {
-                        // ปิดกล้องตรวจจับพื้นหลังก่อนเพื่อให้กล้องหลักใช้งานได้
                         if (isCameraSensorActive) {
                             stopCameraSensor();
                         }
@@ -130,10 +172,16 @@ function triggerAutoGreeting(distance, source = 'esp32_hardware') {
             }
         }, 400);
     } else {
-        // โหมดธรรมดา: เล่นเสียงทักทายผ่าน Neural TTS
-        const welcomeText = "สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำจังหวัดเพชรบุรีและวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำไหมครับ";
+        // โหมดอัตโนมัติ: พูดทักทายต้อนรับด้วยเสียงภาษาไทย (Neural TTS)
+        // หลังพูดจบให้เปิดโหมดคุยสด hands-free อัตโนมัติ
         if (typeof playTTS === 'function') {
-            playTTS(welcomeText);
+            playTTS(welcomeText, null, () => {
+                // TTS จบ -> เปิดโหมด Realtime Voice อัตโนมัติ
+                if (typeof toggleRealtimeVoiceMode === 'function' && typeof isRealtimeVoiceActive !== 'undefined' && !isRealtimeVoiceActive) {
+                    console.log('🎙️ [Kiosk Auto Voice] Greeting จบ -> เปิดโหมดคุยสด hands-free');
+                    toggleRealtimeVoiceMode(true);
+                }
+            });
         }
     }
 
@@ -148,9 +196,9 @@ function triggerAutoGreeting(distance, source = 'esp32_hardware') {
 }
 
 // -----------------------------------------------------------------------------
-// Real-time Camera AI Human Presence Detection
+// Real-time Camera AI Human Presence Detection (ตรวจจับคนมาหยุดมองอัตโนมัติ)
 // -----------------------------------------------------------------------------
-async function toggleCameraSensor(forcedState) {
+async function toggleCameraSensor(forcedState, silent = false) {
     if (forcedState !== undefined) {
         isCameraSensorActive = forcedState;
     } else {
@@ -158,9 +206,20 @@ async function toggleCameraSensor(forcedState) {
     }
 
     const btn = document.getElementById('btnToggleCameraSensor');
-    const video = document.getElementById('cameraSensorVideo');
+    let video = document.getElementById('cameraSensorVideo');
     const previewContainer = document.getElementById('cameraSensorPreview');
     const statusText = document.getElementById('cameraSensorStatus');
+
+    // ถ้าไม่มี <video> ในหน้า (เช่น บน kiosk.html) ให้สร้างแท็ก hidden video อัตโนมัติ
+    if (!video) {
+        video = document.createElement('video');
+        video.id = 'cameraSensorVideo';
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.style.display = 'none';
+        document.body.appendChild(video);
+    }
 
     if (isCameraSensorActive) {
         try {
@@ -187,10 +246,15 @@ async function toggleCameraSensor(forcedState) {
                 statusText.className = 'font-mono-code text-emerald-400 font-bold';
             }
 
+            console.log('📷 [Smart Sensor] กล้องตรวจจับคนมาหยุดมองเริ่มต้นทำงานเรียบร้อยแล้ว');
             startCameraDetectionLoop();
         } catch (e) {
-            console.error('Camera Sensor error:', e);
-            if (typeof showAppToast === 'function') showAppToast('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์กล้องในเบราว์เซอร์', 'warning'); else alert('ไม่สามารถเปิดกล้องได้');
+            console.warn('Camera Sensor standby:', e);
+            if (!silent) {
+                if (typeof showAppToast === 'function') {
+                    showAppToast('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตสิทธิ์กล้องในเบราว์เซอร์', 'warning');
+                }
+            }
             isCameraSensorActive = false;
             if (previewContainer) previewContainer.classList.add('hidden');
         }
@@ -228,14 +292,14 @@ function startCameraDetectionLoop() {
     canvas.width = 64;
     canvas.height = 48;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const video = document.getElementById('cameraSensorVideo');
+    let video = document.getElementById('cameraSensorVideo');
     const indicator = document.getElementById('cameraDetectionIndicator');
 
     const hasNativeFaceDetector = ('FaceDetector' in window);
     let nativeFaceDetector = null;
     if (hasNativeFaceDetector) {
         try {
-            nativeFaceDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 3 });
+            nativeFaceDetector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 2 });
         } catch (e) {}
     }
 
@@ -254,23 +318,34 @@ function startCameraDetectionLoop() {
             } catch (err) {}
         }
 
-        // 2. Fallback Computer Vision: Skin-tone & Motion presence in Central Region
+        // 2. Fallback Computer Vision: Skin-tone & Central Region Presence
+        // ตรวจจับทั้งการขยับเข้ามา และการหยุดยืนนิ่งสบตามองตรงหน้า
         if (!personDetected && ctx) {
             ctx.drawImage(video, 0, 0, 64, 48);
             const frame = ctx.getImageData(0, 0, 64, 48);
             const data = frame.data;
 
             let skinPixelCount = 0;
+            let centerSkinCount = 0;
             let diffScore = 0;
 
+            const total = 64 * 48;
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
 
-                // Rule-based Skin tone detection
-                if (r > 60 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b) > 15) && Math.abs(r - g) > 15) {
+                const pixelIndex = i / 4;
+                const px = pixelIndex % 64;
+                const py = Math.floor(pixelIndex / 64);
+
+                // ตรวจจับผิวหน้า/คน (Skin-Tone Presence)
+                if (r > 60 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b) > 15) && Math.abs(r - g) > 12) {
                     skinPixelCount++;
+                    // ถ้าอยู่ในโซนตรงกลางจอ (ยืนอยู่ตรงหน้าระบบ)
+                    if (px >= 16 && px <= 48 && py <= 40) {
+                        centerSkinCount++;
+                    }
                 }
 
                 if (prevFrameData) {
@@ -283,10 +358,12 @@ function startCameraDetectionLoop() {
 
             prevFrameData = new Uint8ClampedArray(data);
 
-            const skinRatio = skinPixelCount / (64 * 48);
-            const avgDiff = diffScore / (64 * 48 * 3);
+            const skinRatio = skinPixelCount / total;
+            const centerSkinRatio = centerSkinCount / (32 * 40);
+            const avgDiff = diffScore / (total * 3);
 
-            if (skinRatio > 0.05 || (avgDiff > 10 && skinRatio > 0.025)) {
+            // เมื่อมีคนหยุดยืนมองตรงกลาง (center skin ratio > 0.05) หรือมีคนเข้ามาตรงหน้า
+            if (centerSkinRatio > 0.05 || skinRatio > 0.07 || (avgDiff > 9 && skinRatio > 0.03)) {
                 personDetected = true;
             }
         }
@@ -294,14 +371,14 @@ function startCameraDetectionLoop() {
         if (personDetected) {
             cameraConsecutiveDetections++;
             if (indicator) {
-                indicator.textContent = '👤 ตรวจพบคนหน้ากล้อง!';
-                indicator.className = 'text-[9px] font-bold text-emerald-300 bg-emerald-950/90 px-2 py-0.5 rounded-full border border-emerald-500/50 animate-pulse';
+                indicator.textContent = '👀 มีคนหยุดมองระบบ!';
+                indicator.className = 'text-[9px] font-bold text-cyan-300 bg-cyan-950/90 px-2 py-0.5 rounded-full border border-cyan-500/50 animate-pulse';
             }
 
-            // ถ้าตรวจพบต่อเนื่อง 2 รอบ (~1.2 วินาที)
+            // ถ้ามีคนหยุดมองต่อเนื่อง 2 รอบ (~1.1 วินาที)
             if (cameraConsecutiveDetections >= 2) {
                 cameraConsecutiveDetections = 0;
-                sendPresenceTrigger('camera_ai', 50);
+                sendPresenceTrigger('camera_eye_contact', 45);
             }
         } else {
             cameraConsecutiveDetections = Math.max(0, cameraConsecutiveDetections - 1);
@@ -310,17 +387,18 @@ function startCameraDetectionLoop() {
                 indicator.className = 'text-[9px] font-medium text-slate-300 bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-700';
             }
         }
-    }, 600);
+    }, 550);
 }
 
-function sendPresenceTrigger(source = 'manual_simulation', distance = 45) {
+function sendPresenceTrigger(source = 'manual_simulation', distance = 45, greetingText = null) {
     fetch('/api/iot/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             event: 'user_detected',
             distance: distance,
-            source: source
+            source: source,
+            greeting_text: greetingText
         })
     }).catch(err => console.log('Presence trigger error:', err));
 }
@@ -345,8 +423,8 @@ function initIoTEventStream() {
                 try {
                     const data = JSON.parse(e.data);
                     if (data.event === 'user_detected') {
-                        showIoTToast(data.distance, data.timestamp, data.source);
-                        triggerAutoGreeting(data.distance, data.source);
+                        showIoTToast(data.distance, data.timestamp, data.source, data.greeting_text);
+                        triggerAutoGreeting(data.distance, data.source, data.greeting_text);
                     }
                 } catch (err) {}
             };
@@ -364,6 +442,15 @@ function initIoTEventStream() {
     }
 }
 
-// เริ่มต้นการเชื่อมต่อ IoT SSE ทันทีที่โหลดหน้าเว็บ
-window.addEventListener('DOMContentLoaded', initIoTEventStream);
+// เริ่มต้นการเชื่อมต่อ IoT SSE และระบบกล้องตรวจจับคนหยุดมองอัตโนมัติ
+window.addEventListener('DOMContentLoaded', () => {
+    initIoTEventStream();
+    
+    // เริ่มต้นตรวจจับคนหยุดมองในเบื้องหลังโดยอัตโนมัติ (หน่วงเวลา 1.2 วินาทีเพื่อให้ DOM พร้อม)
+    setTimeout(() => {
+        if (!isCameraSensorActive && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            toggleCameraSensor(true, true).catch(() => {});
+        }
+    }, 1200);
+});
 
