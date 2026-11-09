@@ -1812,7 +1812,91 @@ function showAutoVoiceIndicator(active) {
     }
 }
 
-function initDirectVoiceEngine() {
+/**
+ * ตรวจจับและสกัดคำปลุกเรียก (Wake Word) อัจฉริยะ 3 ภาษา (ไทย, อังกฤษ, จีน)
+ * - ภาษาไทย: "น้องเพชร", "น้องเพชรครับ/คะ", "เฮ้น้องเพชร", "สวัสดีน้องเพชร"
+ * - ภาษาอังกฤษ: "Hey Nong Phet", "Hello Nong Phet", "Nong Phet"
+ * - ภาษาจีน: "小佩特", "小碧", "佩特"
+ */
+function parseWakeWord(transcript) {
+    if (!transcript) return { isWakeWord: false, isWakeOnly: false, query: '', detectedLang: 'th' };
+
+    const raw = transcript.trim();
+    const lower = raw.toLowerCase();
+
+    // 1. ตรวจจับภาษาของเสียงพูดเบื้องต้น
+    let detectedLang = 'th';
+    if (/[\u4e00-\u9fa5]/.test(raw)) {
+        detectedLang = 'zh';
+    } else if (/[a-zA-Z]/.test(raw) && !/[\u0e00-\u0e7f]/.test(raw)) {
+        detectedLang = 'en';
+    }
+
+    // 2. Regular Expressions สำหรับ Wake Words
+    const thaiWakeRegex = /^(?:เฮ้|เฮ้ย|สวัสดี|ฮัลโหล|ดีครับ|ดีค่ะ)?\s*(?:น้องเพชร|น้องเพ็ด|น้องเพชรครับ|น้องเพชรคะ|น้องเพชรจ๋า|น้องเพชรจ๊ะ)\s*[,.!?~]*\s*(.*)$/i;
+    const engWakeRegex = /^(?:hey|hello|hi|ok)?\s*(?:nong\s*phet|nongphet|phet)\s*[,.!?~]*\s*(.*)$/i;
+    const zhWakeRegex = /^(?:你好|嗨)?\s*(?:小佩特|小碧|佩特)\s*[,.!?~]*\s*(.*)$/i;
+
+    let match = raw.match(thaiWakeRegex);
+    if (match) {
+        const query = match[1] ? match[1].trim() : '';
+        return { isWakeWord: true, isWakeOnly: query.length === 0, query: query, detectedLang: 'th' };
+    }
+
+    match = raw.match(engWakeRegex);
+    if (match) {
+        const query = match[1] ? match[1].trim() : '';
+        return { isWakeWord: true, isWakeOnly: query.length === 0, query: query, detectedLang: 'en' };
+    }
+
+    match = raw.match(zhWakeRegex);
+    if (match) {
+        const query = match[1] ? match[1].trim() : '';
+        return { isWakeWord: true, isWakeOnly: query.length === 0, query: query, detectedLang: 'zh' };
+    }
+
+    return { isWakeWord: false, isWakeOnly: false, query: raw, detectedLang: detectedLang };
+}
+
+function handleEmotionVoiceInput(finalRaw) {
+    const parsed = parseWakeWord(finalRaw);
+
+    if (parsed.isWakeWord) {
+        console.log('⚡ [Wake Word Detected]', finalRaw, 'Query:', parsed.query, 'Lang:', parsed.detectedLang);
+        wakeUpFromSleep();
+        playSfx('wake');
+        applyEmotion('wink');
+        setTimeout(() => applyEmotion('happy'), 500);
+
+        if (parsed.isWakeOnly) {
+            // เรียกเฉพาะคำว่า "น้องเพชร"
+            startAutoVoiceMode();
+            const wakeReplies = {
+                th: 'ครับผม! น้องเพชรพร้อมแล้วครับ สอบถามได้เลยครับ ✨',
+                en: "Yes! I'm Nong Phet. How can I help you today? ✨",
+                zh: '在呢！请问有什么我可以帮您的吗？ ✨'
+            };
+            const reply = wakeReplies[parsed.detectedLang] || wakeReplies.th;
+            showVoiceSubtitle(reply, 4000);
+            playDirectVoiceTTS(reply, parsed.detectedLang);
+            return;
+        } else {
+            // พูดคำสั่งพร้อมคำปลุกเรียก เช่น "น้องเพชร แนะนำที่เที่ยวหน่อย"
+            startAutoVoiceMode();
+            processDirectVoiceQuery(parsed.query, parsed.detectedLang);
+            return;
+        }
+    }
+
+    // กรณีไม่มี Wake Word:
+    // ถ้าอยู่ใน autoVoiceMode (คุยต่อเนื่อง) ให้ประมวลผลคำตอบได้เลย
+    if (autoVoiceMode) {
+        processDirectVoiceQuery(parsed.query, parsed.detectedLang);
+    } else {
+        // หากอยู่นอกโหมดสนทนา แนะนำคำปลุกเรียก
+        showVoiceSubtitle('💡 เรียก "น้องเพชร" หรือ "Hey Nong Phet" เพื่อเริ่มคุยได้เลยครับ', 3000);
+    }
+}
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         emotionRecognition = new SpeechRec();
@@ -1844,7 +1928,7 @@ function initDirectVoiceEngine() {
                 const finalQuery = event.results[0][0].transcript.trim();
                 if (finalQuery) {
                     resetAutoVoiceSilenceTimer(); // มีการพูด -> reset timer
-                    processDirectVoiceQuery(finalQuery);
+                    handleEmotionVoiceInput(finalQuery);
                 }
             }
         };
@@ -1928,7 +2012,7 @@ function showVoiceSubtitle(text, autoHideMs = 0) {
     }
 }
 
-async function processDirectVoiceQuery(queryText) {
+async function processDirectVoiceQuery(queryText, forcedLang = null) {
     // ป้องกัน feedback: ไม่ฟังระหว่าง thinking + speaking
     isEmotionSpeaking = true;
     applyEmotion('thinking');
@@ -1944,13 +2028,14 @@ async function processDirectVoiceQuery(queryText) {
         const chatRes = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: queryText, language: 'th', session_id: sessionId })
+            body: JSON.stringify({ message: queryText, language: forcedLang || 'auto', session_id: sessionId })
         });
         const chatData = await chatRes.json();
         const reply = chatData.reply || 'น้องเพชรพร้อมให้บริการครับ';
+        const replyLang = chatData.language || forcedLang || 'th';
 
         showVoiceSubtitle(reply);
-        playDirectVoiceTTS(reply); // isEmotionSpeaking จะ set ใน playDirectVoiceTTS
+        playDirectVoiceTTS(reply, replyLang);
     } catch (e) {
         isEmotionSpeaking = false;
         showVoiceSubtitle('ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ AI', 3000);
@@ -1962,7 +2047,7 @@ async function processDirectVoiceQuery(queryText) {
     }
 }
 
-function fallbackBrowserSpeech(text) {
+function fallbackBrowserSpeech(text, lang = 'th') {
     clearTimeout(emotionSafetyWatchdog);
     if ('speechSynthesis' in window) {
         try {
@@ -1971,8 +2056,20 @@ function fallbackBrowserSpeech(text) {
             let clean = text.split(/\n|---|💡|❓/)[0].replace(/[*#_~`>•\-=|]/g, ' ').replace(/\s+/g, ' ').trim();
             if (clean.length > 150) clean = clean.substring(0, 150) + '...';
             const u = new SpeechSynthesisUtterance(clean);
-            u.lang = 'th-TH';
+            u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
             u.rate = 1.05;
+            u.pitch = 1.25;
+            u.onstart = () => applyEmotion('speaking');
+            u.onend = () => { applyEmotion('idle'); };
+            u.onerror = () => { applyEmotion('idle'); };
+            window.speechSynthesis.speak(u);
+            return;
+        } catch (e) {
+            console.warn('SpeechSynthesis error:', e);
+        }
+    }
+    applyEmotion('idle');
+}
             u.pitch = 1.25;
             u.onstart = () => applyEmotion('speaking');
             u.onend = () => { applyEmotion('idle'); };
@@ -2023,7 +2120,7 @@ function playBase64ViaWebAudio(base64Data, onEndedCallback) {
     }
 }
 
-async function playDirectVoiceTTS(text) {
+async function playDirectVoiceTTS(text, lang = 'th') {
     // ตัดข้อความให้กระชับก่อนพูด: เอาแค่ประโยคแรก ไม่เกิน 150 ตัวอักษร
     let speakText = text
         .split(/\n|---|💡|❓/)[0]          // เอาแค่ย่อหน้าแรก
@@ -2035,7 +2132,7 @@ async function playDirectVoiceTTS(text) {
     try {
         const audioEl = document.getElementById('emotionAudioPlayer');
         if (!audioEl) {
-            fallbackBrowserSpeech(speakText);
+            fallbackBrowserSpeech(speakText, lang);
             return;
         }
 
@@ -2046,7 +2143,7 @@ async function playDirectVoiceTTS(text) {
         const ttsRes = await fetch('/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: speakText, lang: 'th', gender: 'female' }),
+            body: JSON.stringify({ text: speakText, lang: lang, gender: 'female' }),
             signal: abortCtrl.signal
         });
         clearTimeout(timeoutId);

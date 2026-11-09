@@ -36,7 +36,7 @@ function sendQuickMessage(text) {
     }
 }
 
-async function sendChatMessage() {
+async function sendChatMessage(forcedLang = null) {
     const chatInput = document.getElementById('chatInput');
     const chatBox = document.getElementById('chatBox');
     const typingIndicator = document.getElementById('typingIndicator');
@@ -83,7 +83,7 @@ async function sendChatMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: text,
-                language: currentLang,
+                language: forcedLang || currentLang || 'auto',
                 session_id: sessionId
             })
         });
@@ -94,6 +94,12 @@ async function sendChatMessage() {
         if (data.reply) {
             appendChatBubble('ai', data.reply, data);
             
+            // ปรับภาษาตามที่ระบบตรวจจับได้
+            const replyLang = data.language || forcedLang || currentLang || 'th';
+            if (replyLang && typeof changeLanguage === 'function' && replyLang !== currentLang) {
+                changeLanguage(replyLang);
+            }
+
             const targetEmotion = data.emotion || 'happy';
             const shouldSpeak = (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) || (typeof autoSpeak !== 'undefined' && autoSpeak);
             
@@ -122,7 +128,7 @@ async function sendChatMessage() {
                             }, 300);
                         }
                     }
-                });
+                }, replyLang);
             } else {
                 if (typeof setEmotion === 'function') {
                     setEmotion(targetEmotion);

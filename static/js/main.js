@@ -406,11 +406,12 @@ function setEmotion(state) {
 
 
 // -----------------------------------------------------------------------------
-// Neural TTS Audio Engine
+// Neural TTS Audio Engine (รองรับ 3 ภาษา th, en, zh)
 // -----------------------------------------------------------------------------
-async function playTTS(text, btnElement = null, onEndedCallback = null) {
+async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLang = null) {
     const speechText = stripEmojiAndIcons(text);
     if (!speechText) return;
+    const activeLang = forcedLang || currentLang || 'th';
     try {
         const audioPlayer = document.getElementById('audioPlayer');
         if (isSpeakingTTS && audioPlayer && !audioPlayer.paused) {
@@ -423,7 +424,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
             return;
         }
 
-                const cacheKey = (currentLang || 'th') + '_' + text;
+        const cacheKey = activeLang + '_' + text;
         if (clientAudioCache.has(cacheKey)) {
             const cachedBase64 = clientAudioCache.get(cacheKey);
             audioPlayer.src = cachedBase64;
@@ -455,7 +456,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 text: speechText,
-                lang: currentLang,
+                lang: activeLang,
                 gender: currentVoiceGender
             })
         });
@@ -482,7 +483,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null) {
                 console.warn('Audio play prevented or blocked by browser autoplay:', err);
                 if ('speechSynthesis' in window) {
                     const u = new SpeechSynthesisUtterance(speechText);
-                    u.lang = currentLang === 'en' ? 'en-US' : 'th-TH';
+                    u.lang = activeLang === 'en' ? 'en-US' : (activeLang === 'zh' ? 'zh-CN' : 'th-TH');
                     u.onstart = () => {
                         isSpeakingTTS = true;
                         setEmotion('speaking');
@@ -564,6 +565,49 @@ function getRecognitionLang() {
     return 'th-TH';
 }
 
+/**
+ * ตรวจจับและสกัดคำปลุกเรียก (Wake Word) อัจฉริยะ 3 ภาษา (ไทย, อังกฤษ, จีน)
+ */
+function parseWakeWord(transcript) {
+    if (!transcript) return { isWakeWord: false, isWakeOnly: false, query: '', detectedLang: 'th' };
+
+    const raw = transcript.trim();
+    const lower = raw.toLowerCase();
+
+    // 1. ตรวจจับภาษาของเสียงพูดเบื้องต้น
+    let detectedLang = 'th';
+    if (/[\u4e00-\u9fa5]/.test(raw)) {
+        detectedLang = 'zh';
+    } else if (/[a-zA-Z]/.test(raw) && !/[\u0e00-\u0e7f]/.test(raw)) {
+        detectedLang = 'en';
+    }
+
+    // 2. Regular Expressions สำหรับ Wake Words
+    const thaiWakeRegex = /^(?:เฮ้|เฮ้ย|สวัสดี|ฮัลโหล|ดีครับ|ดีค่ะ)?\s*(?:น้องเพชร|น้องเพ็ด|น้องเพชรครับ|น้องเพชรคะ|น้องเพชรจ๋า|น้องเพชรจ๊ะ)\s*[,.!?~]*\s*(.*)$/i;
+    const engWakeRegex = /^(?:hey|hello|hi|ok)?\s*(?:nong\s*phet|nongphet|phet)\s*[,.!?~]*\s*(.*)$/i;
+    const zhWakeRegex = /^(?:你好|嗨)?\s*(?:小佩特|小碧|佩特)\s*[,.!?~]*\s*(.*)$/i;
+
+    let match = raw.match(thaiWakeRegex);
+    if (match) {
+        const query = match[1] ? match[1].trim() : '';
+        return { isWakeWord: true, isWakeOnly: query.length === 0, query: query, detectedLang: 'th' };
+    }
+
+    match = raw.match(engWakeRegex);
+    if (match) {
+        const query = match[1] ? match[1].trim() : '';
+        return { isWakeWord: true, isWakeOnly: query.length === 0, query: query, detectedLang: 'en' };
+    }
+
+    match = raw.match(zhWakeRegex);
+    if (match) {
+        const query = match[1] ? match[1].trim() : '';
+        return { isWakeWord: true, isWakeOnly: query.length === 0, query: query, detectedLang: 'zh' };
+    }
+
+    return { isWakeWord: false, isWakeOnly: false, query: raw, detectedLang: detectedLang };
+}
+
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
@@ -582,7 +626,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             micBtn.classList.remove('text-slate-300', 'border-slate-700');
         }
         if (isRealtimeVoiceActive) {
-            setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดได้เลยไม่ต้องกดปุ่ม)');
+            setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลย หรือพูด "น้องเพชร")');
         } else if (chatInput) {
             chatInput.placeholder = 'กำลังฟังเสียงพูดของคุณ...';
         }
@@ -612,15 +656,44 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 
         if (finalTranscript && finalTranscript.trim().length > 0) {
             resetRealtimeVoiceInactivityTimer();
-            if (chatInput) chatInput.value = finalTranscript.trim();
             if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
-            if (isRealtimeVoiceActive) {
-                setRealtimeVoiceStatus('thinking', '⚡ น้องเพชรกำลังประมวลผลคำตอบ...');
+
+            const parsed = parseWakeWord(finalTranscript);
+            if (parsed.isWakeWord) {
+                playQuickAudioFeedback();
+                if (parsed.isWakeOnly) {
+                    // เรียกเฉพาะชื่อ "น้องเพชร"
+                    toggleRealtimeVoiceMode(true);
+                    const wakeReplies = {
+                        th: 'ครับผม! น้องเพชรพร้อมแล้วครับ สอบถามได้เลยครับ ✨',
+                        en: "Hello! I'm Nong Phet. How can I help you? ✨",
+                        zh: '在呢！请问有什么我可以帮您的吗？ ✨'
+                    };
+                    const reply = wakeReplies[parsed.detectedLang] || wakeReplies.th;
+                    playTTS(reply, null, () => {
+                        startRecognitionSafe();
+                    }, parsed.detectedLang);
+                    return;
+                } else {
+                    // พูดคำสั่งพร้อมคำปลุกเรียก
+                    if (chatInput) chatInput.value = parsed.query;
+                    if (!isRealtimeVoiceActive) toggleRealtimeVoiceMode(true);
+                    stopRecognitionSafe();
+                    playQuickAudioFeedback();
+                    sendChatMessage(parsed.detectedLang);
+                    return;
+                }
+            } else {
+                // ไม่มี Wake word แต่โหมดคุยสดเปิดอยู่
+                if (isRealtimeVoiceActive) {
+                    if (chatInput) chatInput.value = finalTranscript.trim();
+                    setRealtimeVoiceStatus('thinking', '⚡ น้องเพชรกำลังประมวลผลคำตอบ...');
+                    stopRecognitionSafe();
+                    playQuickAudioFeedback();
+                    sendChatMessage(parsed.detectedLang);
+                    return;
+                }
             }
-            stopRecognitionSafe();
-            playQuickAudioFeedback();
-            sendChatMessage();
-            return;
         }
 
         // Automatic silence debounce (auto-submit if speaker pauses for ~750ms for ultra-fast response)

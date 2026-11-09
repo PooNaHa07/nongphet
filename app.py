@@ -408,9 +408,87 @@ def match_local_knowledge(user_message, intent, confidence, language='th'):
     return None
 
 def get_local_knowledge_reply(user_message, language='th', intent=None):
-    """ฟังก์ชันสำรองข้อมูลอัจฉริยะในเครื่อง (Offline Smart Fallback พร้อม Witty & Trap Guard)"""
+    """ฟังก์ชันสำรองข้อมูลอัจฉริยะในเครื่อง (Offline Smart Fallback พร้อมรองรับ 3 ภาษา th, en, zh)"""
     msg = (user_message or '').lower().strip()
 
+    # -------------------------------------------------------------------------
+    # 1. หมวดภาษาอังกฤษ (English Offline Smart Knowledge)
+    # -------------------------------------------------------------------------
+    if language == 'en':
+        if any(k in msg for k in ['khao wang', 'palace', 'mountain', 'hill', 'phra nakhon khiri', 'เขาวัง']):
+            return (
+                "🏰 **Phra Nakhon Khiri (Khao Wang)** is the iconic hilltop palace in Phetchaburi, built by King Rama IV in 1859.\n\n"
+                "• **East Peak**: Wat Phra Kaeo Noi and the sacred Red Chedi.\n"
+                "• **Middle Peak**: Phra That Chom Phet, a 40-meter white pagoda overlooking the entire city.\n"
+                "• **West Peak**: The Royal Palace and Chatchawan Wiang Chai Observatory.\n\n"
+                "⏰ **Hours**: 08:30 - 16:30 daily\n"
+                "🚡 **Cable Car**: Available for convenient hilltop access\n"
+                "⚠️ **Notice**: Friendly wild monkeys reside on the hill; please avoid holding plastic bags or open food!"
+            )
+        elif any(k in msg for k in ['cave', 'khao luang', 'เขาหลวง']):
+            return (
+                "🪨 **Tham Khao Luang (Khao Luang Cave)** is Phetchaburi's most revered cave shrine.\n\n"
+                "It features dramatic limestone chambers and an overhead skylight where natural sunbeams illuminate centuries-old Buddha images.\n"
+                "⏰ **Best Viewing**: 10:00 AM - 14:00 PM for optimal natural light beams!"
+            )
+        elif any(k in msg for k in ['beach', 'sea', 'cha-am', 'cha am', 'ชะอำ']):
+            return (
+                "🌊 **Cha-am Beach** is Phetchaburi's premier seaside getaway!\n\n"
+                "Enjoy wide sandy beaches, fresh Gulf of Thailand seafood, seaside bicycle paths, and family water sports."
+            )
+        elif any(k in msg for k in ['food', 'eat', 'dessert', 'delicious', 'custard', 'noodle', 'unesco', 'กิน', 'อร่อย']):
+            return (
+                "🍧 **UNESCO City of Gastronomy - Phetchaburi Signature Treats**:\n\n"
+                "• **Khanom Mor Kaeng**: Wood-fired baked egg, taro, and coconut custard.\n"
+                "• **Organic Toddy Palm**: Pure palm sugar, refreshing juice, and palm cakes.\n"
+                "• **Kuay Teow Nam Daeng**: Signature red soup noodles infused with palm sugar.\n"
+                "• **Royal Khao Chae**: Fragrant chilled rice served in iced jasmine water."
+            )
+        else:
+            return (
+                "Hello! 🙏 I am **Nong Phet AI Smart Guide**, your intelligent robotic mascot for Phetchaburi and PBVC College! 🤖✨\n\n"
+                "I am ready to help you with:\n"
+                "• 🏰 **Attractions**: Khao Wang, Khao Luang Cave, Cha-am Beach, Kaeng Krachan\n"
+                "• 🍜 **UNESCO Gastronomy**: Famous local desserts and authentic seafood\n"
+                "• 🎓 **College Info**: Future-ready vocational programs at PBVC\n\n"
+                "Feel free to ask me anything in English!"
+            )
+
+    # -------------------------------------------------------------------------
+    # 2. หมวดภาษาจีน (Chinese Offline Smart Knowledge)
+    # -------------------------------------------------------------------------
+    if language == 'zh':
+        if any(k in msg for k in ['考汪', '拷汪', '山中之城', '王宫', 'khao wang', 'เขาวัง']):
+            return (
+                "🏰 **拷汪宫 (Phra Nakhon Khiri / Khao Wang)** 是佛丕府最具代表性的历史名胜，由拉玛四世国王于1859年建造。\n\n"
+                "• **东峰**：小玉佛寺与红佛塔\n"
+                "• **中峰**：40米高的纯白巨型佛塔 (Phra That Chom Phet)\n"
+                "• **西峰**：皇家宫殿与天文观象台\n\n"
+                "⏰ **开放时间**：每日 08:30 - 16:30\n"
+                "🚡 **观光缆车**：设有缆车方便游客上下山\n"
+                "⚠️ **温馨提醒**：山上猴子较多，请注意保管好随身零食和塑料袋！"
+            )
+        elif any(k in msg for k in ['美食', '好吃的', '特产', '小吃', '甜点', 'food']):
+            return (
+                "🍧 **联合国教科文组织美食之都 —— 佛丕府特色美味**：\n\n"
+                "• **柴烧椰汁烤蛋糕 (Khanom Mor Kaeng)**：浓郁焦香的传统皇室御用甜点\n"
+                "• **天然棕榈糖食品**：清甜甘爽的棕榈汁与糖糕\n"
+                "• **佛丕特色红汤米粉**：加入棕榈糖秘制的高汤，香甜浓郁\n"
+                "• **宫廷冰镇花香泡饭 (Khao Chae)**：传统皇家消暑名点"
+            )
+        else:
+            return (
+                "您好！🙏 我是 **小佩特 AI Smart Guide**，佛丕府及佛丕职业技术学院的智能导览向导！🤖✨\n\n"
+                "很高兴为您服务，您可以向我咨询：\n"
+                "• 🏰 **精选景点**：拷汪宫、拷龙穴、七岩海滩、岗卡章国家公园\n"
+                "• 🍜 **地道美食**：联合国美食之都特色小吃、椰汁烤蛋糕、天然棕榈糖\n"
+                "• 🎓 **学院概况**：佛丕职业技术学院热门专业与双元制课程\n\n"
+                "请随时用中文与我交流！"
+            )
+
+    # -------------------------------------------------------------------------
+    # 3. หมวดภาษาไทย (Thai Witty Guard & Local Knowledge)
+    # -------------------------------------------------------------------------
     # 1. จัดการคำถามกวน/ลองภูมิในโหมด Offline อย่างชาญฉลาด (Offline Witty Guard)
     if any(k in msg for k in ['ยืมเงิน', 'ยืมตัง', 'ยืมตังค์', 'ขอตัง', 'ขอเงิน']):
         return (
@@ -597,6 +675,31 @@ def record_interaction(user_message, intent, confidence, engine, language):
     visitor_analytics['recent_logs'] = visitor_analytics['recent_logs'][:25]
     save_analytics()
 
+def detect_message_language(text, fallback_lang='th'):
+    """
+    ตรวจจับภาษาของข้อความอัตโนมัติ (th, en, zh) อย่างแม่นยำ
+    เพื่อรองรับนักท่องเที่ยวและผู้ใช้งานหลากหลายภาษา
+    """
+    if not text:
+        return fallback_lang
+    # ตรวจสอบตัวอักษรจีน (Han Ideographs)
+    if re.search(r'[\u4e00-\u9fa5]', text):
+        return 'zh'
+    # ตรวจสอบตัวอักษรไทย
+    has_thai = bool(re.search(r'[\u0e00-\u0e7f]', text))
+    # ตรวจสอบตัวอักษรภาษาอังกฤษ
+    has_english = bool(re.search(r'[a-zA-Z]', text))
+    
+    if has_thai:
+        return 'th'
+    elif has_english:
+        return 'en'
+    return fallback_lang
+
+# Circuit Breaker สำหรับ Cloud AI เพื่อป้องกัน Kiosk ค้างเมื่อเน็ตหลุดหรือ Quota เต็ม
+LAST_GEMINI_FAIL_TIME = 0
+GEMINI_CIRCUIT_COOLDOWN = 120  # พัก 120 วินาทีเพื่อ Fallback ทันทีใน <15ms
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """
@@ -612,7 +715,19 @@ def chat():
         return jsonify({'response': 'สวัสดีครับ มีอะไรให้น้องเพชรช่วยไหมครับ'}), 400
     if len(user_message) > 1000:
         user_message = user_message[:1000]
-    language = data.get('language', 'th')
+    
+    # ระบบตรวจจับภาษาอัตโนมัติ (Multilingual Auto-Language Detection)
+    raw_lang = data.get('language')
+    if not raw_lang or raw_lang == 'auto':
+        language = detect_message_language(user_message, 'th')
+    else:
+        # หากส่ง th มาแต่ข้อความไร้ภาษาไทยและเป็นอังกฤษ/จีนชัดเจน ให้ปรับตามจริง
+        detected = detect_message_language(user_message, raw_lang)
+        if detected in ['en', 'zh'] and not re.search(r'[\u0e00-\u0e7f]', user_message):
+            language = detected
+        else:
+            language = raw_lang
+
     force_llm = data.get('force_llm', False)
     
     if not user_message:
@@ -644,9 +759,10 @@ def chat():
     # -------------------------------------------------------------------------
     # ขั้นที่ 2: Semantic RAG & Local Knowledge Base (100% On-Device AI)
     # ค้นหาคำตอบจาก Local Knowledge Base ด้วย Semantic RAG (TF-IDF Cosine Similarity)
-    # ทำงานระดับ Ultra-Fast (<20ms) ตอบคำถามตรงจุดโดยไม่ต้องพึ่งพา Cloud หรือ API ภายนอก
+    # ทำงานระดับ Ultra-Fast (<20ms) สำหรับภาษาไทย
+    # หากเป็นภาษาต่างประเทศ (en/zh) จะส่งให้ Gemini ตอบในภาษานั้นๆ
     # -------------------------------------------------------------------------
-    if not force_llm:
+    if not force_llm and language == 'th':
         rag_match = semantic_retriever.retrieve(user_message, intent=detected_intent)
         if rag_match:
             reply_text = rag_match['reply']
@@ -657,6 +773,7 @@ def chat():
                 'reply': reply_text,
                 'suggestions': suggestions,
                 'status': 'success',
+                'language': language,
                 'engine': 'semantic_rag',
                 'detected_intent': detected_intent,
                 'intent': detected_intent,
@@ -667,30 +784,32 @@ def chat():
                 'emotion': target_emotion
             })
 
-        # หาก Semantic RAG ยังไม่เจอ ลอง Rule-based Local Knowledge เดิม
-        local_reply = match_local_knowledge(user_message, detected_intent, confidence, language)
-        if local_reply:
-            print(f"⚡ [Hybrid AI] Direct Local Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
-            record_interaction(user_message, detected_intent, confidence, 'local_model', language)
-            suggestions = extract_suggestions(local_reply)
-            return jsonify({
-                'reply': local_reply,
-                'suggestions': suggestions,
-                'status': 'success',
-                'engine': 'local_model',
-                'detected_intent': detected_intent,
-                'intent': detected_intent,
-                'intent_th': intent_th,
-                'confidence': round(confidence, 4),
-                'source': 'local_knowledge_base',
-                'emotion': target_emotion
-            })
+        # หาก Semantic RAG ยังไม่เจอ ลอง Rule-based Local Knowledge เดิม (เฉพาะภาษาไทย)
+        if language == 'th':
+            local_reply = match_local_knowledge(user_message, detected_intent, confidence, language)
+            if local_reply:
+                print(f"⚡ [Hybrid AI] Direct Local Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
+                record_interaction(user_message, detected_intent, confidence, 'local_model', language)
+                suggestions = extract_suggestions(local_reply)
+                return jsonify({
+                    'reply': local_reply,
+                    'suggestions': suggestions,
+                    'status': 'success',
+                    'language': language,
+                    'engine': 'local_model',
+                    'detected_intent': detected_intent,
+                    'intent': detected_intent,
+                    'intent_th': intent_th,
+                    'confidence': round(confidence, 4),
+                    'source': 'local_knowledge_base',
+                    'emotion': target_emotion
+                })
 
     # -------------------------------------------------------------------------
     # ขั้นที่ 3: Local SLM (Qwen 2.5 On-Device via Ollama) - 100% Offline AI
     # หากรัน Ollama ในเครื่อง ระบบจะประมวลผลคำตอบเชิงสนทนาในเครื่องทันทีโดยไม่พึ่ง Cloud
     # -------------------------------------------------------------------------
-    if not force_llm:
+    if not force_llm and language == 'th':
         from local_slm import generate_local_response, is_ollama_running
         if is_ollama_running():
             slm_result = generate_local_response(user_message)
@@ -703,6 +822,7 @@ def chat():
                     'reply': reply_text,
                     'suggestions': suggestions,
                     'status': 'success',
+                    'language': language,
                     'engine': 'local_slm',
                     'detected_intent': detected_intent,
                     'intent': detected_intent,
@@ -714,127 +834,105 @@ def chat():
 
     # -------------------------------------------------------------------------
     # ขั้นที่ 4: Hybrid Enhancement (อุปกรณ์เชื่อมต่อเน็ตและไม่ได้ปิดใช้งาน API)
-    # ส่งต่อไปยัง Google Gemini 2.5 Flash พร้อม Context Steering, Multi-turn Memory, และ Google Search Grounding
+    # ส่งต่อไปยัง Google Gemini 2.5 Flash พร้อม Context Steering และ Circuit Breaker
     # -------------------------------------------------------------------------
-    try:
-        intent_steering = (
-            f"[เจตนาของผู้ใช้ที่ตรวจพบโดย Local ML: {detected_intent} ({intent_th}) "
-            f"ความมั่นใจ: {confidence * 100:.1f}%]"
-        )
-        prompt = f"{intent_steering}\nข้อความของผู้ใช้: {user_message}"
+    global LAST_GEMINI_FAIL_TIME
+    can_try_gemini = (time.time() - LAST_GEMINI_FAIL_TIME > GEMINI_CIRCUIT_COOLDOWN)
 
-        if language == 'en':
-            prompt += " (Please respond in English politely and concisely)"
-        elif language == 'zh':
-            prompt += " (请用中文亲切地回答)"
-
-        # โหลดประวัติการสนทนาเพื่อรองรับ Multi-turn Conversation Memory
-        if session_id not in chat_histories:
-            chat_histories[session_id] = []
-        
-        session_history = chat_histories[session_id]
-
-        # เพิ่มความเร็ว: ค้นหาเว็บเฉพาะเมื่อผู้ใช้ถามเรื่องสดใหม่ (ข่าว/สภาพอากาศ/วันนี้/ราคา) เพื่อลด Latency เหลือ < 1 วินาที
-        needs_search = bool(re.search(r'(ข่าว|วันนี้|ล่าสุด|สภาพอากาศ|พยากรณ์|กี่โมง|ราคา|อัปเดต|news|today|latest|weather)', user_message, re.IGNORECASE))
-        tools = [{'google_search': {}}] if needs_search else None
-
-        config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0.7,
-            tools=tools
-        )
-
-        chat_session = client.chats.create(
-            model=PRIMARY_MODEL,
-            config=config,
-            history=session_history
-        )
-
-        response = chat_session.send_message(prompt)
-        reply_text = response.text or "น้องเพชรพร้อมให้บริการครับ"
-
-        # บันทึกประวัติการสนทนาล่าสุด (เก็บ 12 ข้อความเพื่อความฉลาดต่อเนื่องและประหยัด Token)
+    if can_try_gemini:
         try:
-            chat_histories[session_id] = chat_session.get_history()[-12:]
-        except Exception:
-            pass
+            intent_steering = (
+                f"[เจตนาของผู้ใช้ที่ตรวจพบโดย Local ML: {detected_intent} ({intent_th}) "
+                f"ความมั่นใจ: {confidence * 100:.1f}%]"
+            )
+            prompt = f"{intent_steering}\nข้อความของผู้ใช้: {user_message}"
 
-        # ตรวจสอบการค้นหาข้อมูลสดจาก Google Search Grounding
-        web_queries = []
-        try:
-            if response.candidates and response.candidates[0].grounding_metadata:
-                gm = response.candidates[0].grounding_metadata
-                web_queries = getattr(gm, 'web_search_queries', []) or []
-        except Exception:
-            pass
+            if language == 'en':
+                prompt += " (Please respond in English politely and concisely)"
+            elif language == 'zh':
+                prompt += " (请用中文亲切地回答)"
 
-        suggestions = extract_suggestions(reply_text)
+            # โหลดประวัติการสนทนาเพื่อรองรับ Multi-turn Conversation Memory
+            if session_id not in chat_histories:
+                chat_histories[session_id] = []
+            
+            session_history = chat_histories[session_id]
 
-        print(f"🤖 [Hybrid AI] Gemini 2.5 Flash Response (Intent: {detected_intent}, Conf: {confidence:.2f}, WebGrounding: {bool(web_queries)})")
-        record_interaction(user_message, detected_intent, confidence, 'gemini_hybrid', language)
-        return jsonify({
-            'reply': reply_text,
-            'suggestions': suggestions,
-            'web_search': web_queries,
-            'status': 'success',
-            'engine': 'gemini_hybrid',
-            'detected_intent': detected_intent,
-            'intent': detected_intent,
-            'intent_th': intent_th,
-            'confidence': round(confidence, 4),
-            'source': 'gemini-2.5-flash',
-            'emotion': target_emotion
-        })
-    except Exception as e:
-        print(f"Primary Gemini API error: {e} -> Attempting Fallback Model...")
-        try:
-            # -----------------------------------------------------------------
-            # ขั้นที่ 4: Fallback 1 - เรียกใช้โมเดลสำรอง (gemini-2.5-flash-lite)
-            # -----------------------------------------------------------------
+            # เพิ่มความเร็ว: ค้นหาเว็บเฉพาะเมื่อผู้ใช้ถามเรื่องสดใหม่ (ข่าว/สภาพอากาศ/วันนี้/ราคา) เพื่อลด Latency เหลือ < 1 วินาที
+            needs_search = bool(re.search(r'(ข่าว|วันนี้|ล่าสุด|สภาพอากาศ|พยากรณ์|กี่โมง|ราคา|อัปเดต|news|today|latest|weather)', user_message, re.IGNORECASE))
+            tools = [{'google_search': {}}] if needs_search else None
+
             config = types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.7,
+                tools=tools
             )
-            response = client.models.generate_content(
-                model=FALLBACK_MODEL,
-                contents=user_message,
-                config=config
+
+            chat_session = client.chats.create(
+                model=PRIMARY_MODEL,
+                config=config,
+                history=session_history
             )
-            fallback_text = response.text or "น้องเพชรพร้อมให้บริการครับ"
-            suggestions = extract_suggestions(fallback_text)
-            record_interaction(user_message, detected_intent, confidence, 'gemini_fallback', language)
-            return jsonify({
-                'reply': fallback_text,
-                'suggestions': suggestions,
-                'status': 'success',
-                'engine': 'gemini_fallback',
-                'detected_intent': detected_intent,
-                'intent': detected_intent,
-                'intent_th': intent_th,
-                'confidence': round(confidence, 4),
-                'source': 'gemini-2.5-flash-lite',
-                'emotion': target_emotion
-            })
-        except Exception as e2:
-            # -----------------------------------------------------------------
-            # ขั้นที่ 5: Fallback 2 - ออฟไลน์สมบูรณ์แบบด้วย Local Smart Knowledge
-            # -----------------------------------------------------------------
-            print(f"Fallback to local smart knowledge: {e2}")
-            reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
+
+            response = chat_session.send_message(prompt)
+            reply_text = response.text or "น้องเพชรพร้อมให้บริการครับ"
+
+            # บันทึกประวัติการสนทนาล่าสุด (เก็บ 12 ข้อความเพื่อความฉลาดต่อเนื่องและประหยัด Token)
+            try:
+                chat_histories[session_id] = chat_session.get_history()[-12:]
+            except Exception:
+                pass
+
+            # ตรวจสอบการค้นหาข้อมูลสดจาก Google Search Grounding
+            web_queries = []
+            try:
+                if response.candidates and response.candidates[0].grounding_metadata:
+                    gm = response.candidates[0].grounding_metadata
+                    web_queries = getattr(gm, 'web_search_queries', []) or []
+            except Exception:
+                pass
+
             suggestions = extract_suggestions(reply_text)
-            record_interaction(user_message, detected_intent, confidence, 'offline_fallback', language)
+
+            print(f"🤖 [Hybrid AI] Gemini 2.5 Flash Response (Intent: {detected_intent}, Conf: {confidence:.2f}, WebGrounding: {bool(web_queries)})")
+            record_interaction(user_message, detected_intent, confidence, 'gemini_hybrid', language)
             return jsonify({
                 'reply': reply_text,
                 'suggestions': suggestions,
+                'web_search': web_queries,
                 'status': 'success',
-                'engine': 'offline_fallback',
+                'language': language,
+                'engine': 'gemini_hybrid',
                 'detected_intent': detected_intent,
                 'intent': detected_intent,
                 'intent_th': intent_th,
                 'confidence': round(confidence, 4),
-                'source': 'local_smart_knowledge',
+                'source': 'gemini-2.5-flash',
                 'emotion': target_emotion
             })
+        except Exception as e:
+            LAST_GEMINI_FAIL_TIME = time.time()
+            print(f"⚠️ [Circuit Breaker] Gemini API error ({e}) -> Tripping circuit breaker for {GEMINI_CIRCUIT_COOLDOWN}s")
+
+    # -------------------------------------------------------------------------
+    # ขั้นที่ 5: Fallback - ออฟไลน์สมบูรณ์แบบด้วย Local Smart Knowledge (th, en, zh)
+    # -------------------------------------------------------------------------
+    reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
+    suggestions = extract_suggestions(reply_text)
+    record_interaction(user_message, detected_intent, confidence, 'offline_fallback', language)
+    return jsonify({
+        'reply': reply_text,
+        'suggestions': suggestions,
+        'status': 'success',
+        'language': language,
+        'engine': 'offline_fallback',
+        'detected_intent': detected_intent,
+        'intent': detected_intent,
+        'intent_th': intent_th,
+        'confidence': round(confidence, 4),
+        'source': 'local_smart_knowledge',
+        'emotion': target_emotion
+    })
 
 @app.route('/plan_trip', methods=['POST'])
 def plan_trip():
@@ -1134,12 +1232,12 @@ def sign_language():
 TTS_CACHE = OrderedDict()
 MAX_TTS_CACHE_SIZE = 128
 
-def clean_text_for_speech(text, max_len=350, voice_gender='female'):
+def clean_text_for_speech(text, max_len=350, voice_gender='female', lang='th'):
     """
-    ขัดเกลาและจัดวรรคตอนข้อความภาษาไทยเพื่อการสังเคราะห์เสียงที่เป็นธรรมชาติสูงสุด (Human-like Prosody & Phrasing)
+    ขัดเกลาและจัดวรรคตอนข้อความ (รองรับทั้งภาษาไทย อังกฤษ และจีน) เพื่อการสังเคราะห์เสียงที่เป็นธรรมชาติสูงสุด
     ตามหลักการวิจัย Voice Agent:
     1. เคลียร์ Markdown, Bullet points, URLs, และคำถามต่อยอด
-    2. กำหนดหางเสียง 'ค่ะ/นะคะ' สม่ำเสมอตามคาแรกเตอร์น้องเพชร
+    2. กำหนดหางเสียง 'ค่ะ/นะคะ' สม่ำเสมอตามคาแรกเตอร์น้องเพชร (สำหรับภาษาไทย)
     3. ถอดรหัสคำย่อ คำทับศัพท์ภาษาอังกฤษให้เป็นคำอ่านภาษาไทย (Phonetic Expansion)
     4. แทรกจังหวะวรรคตอนและการหายใจ (Prosodic Breath Pauses) ด้วยเครื่องหมายจุลภาคและเคาะวรรค
     """
@@ -1148,7 +1246,7 @@ def clean_text_for_speech(text, max_len=350, voice_gender='female'):
     t = text
 
     # 1. ตัดส่วนคำถามแนะนำต่อยอด (Follow-up suggestions)
-    for delim in ['---', '💡 ถามต่อยอด', 'ถามต่อยอดกับน้องเพชร', '💡 แนะนำคำถาม', 'คำถามที่น่าสนใจ']:
+    for delim in ['---', '💡 ถามต่อยอด', 'ถามต่อยอดกับน้องเพชร', '💡 แนะนำคำถาม', 'คำถามที่น่าสนใจ', '💡 Follow-up', '💡 推荐问题']:
         if delim in t:
             t = t.split(delim)[0].strip()
 
@@ -1156,46 +1254,47 @@ def clean_text_for_speech(text, max_len=350, voice_gender='female'):
     t = re.sub(r'https?://\S+|www\.\S+', '', t)
     t = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', t)
 
-    # 3. กำหนดอัตลักษณ์เสียงเดียวของน้องเพชร: สุภาพ น่ารัก อบอุ่น เป็นมิตร (ค่ะ / นะคะ)
-    t = re.sub(r'ครับ/ค่ะ', 'ค่ะ', t)
-    t = re.sub(r'ค่ะ/นะคะ', 'ค่ะ', t)
-    t = re.sub(r'สวัสดีครับ', 'สวัสดีค่ะ', t)
-    t = re.sub(r'ผมน้องเพชร', 'น้องเพชร', t)
-    t = re.sub(r'\bผม\b', 'น้องเพชร', t)
-    t = re.sub(r'นะครับ', 'นะคะ', t)
-    t = re.sub(r'ครับผม', 'ยินดีค่ะ', t)
-    t = re.sub(r'ครับ', 'ค่ะ', t)
+    # 3. กำหนดอัตลักษณ์เสียงเดียวของน้องเพชร (เฉพาะภาษาไทย)
+    if lang == 'th':
+        t = re.sub(r'ครับ/ค่ะ', 'ค่ะ', t)
+        t = re.sub(r'ค่ะ/นะคะ', 'ค่ะ', t)
+        t = re.sub(r'สวัสดีครับ', 'สวัสดีค่ะ', t)
+        t = re.sub(r'ผมน้องเพชร', 'น้องเพชร', t)
+        t = re.sub(r'\bผม\b', 'น้องเพชร', t)
+        t = re.sub(r'นะครับ', 'นะคะ', t)
+        t = re.sub(r'ครับผม', 'ยินดีค่ะ', t)
+        t = re.sub(r'ครับ', 'ค่ะ', t)
 
-    # 4. แปลงคำย่อและคำศัพท์เฉพาะให้เป็นคำอ่านภาษาไทยที่ออกเสียงเป็นธรรมชาติ (Phonetic Expansion)
-    abbrev_map = [
-        (r'\bร\.([๔-๙4-9])\b', r'รัชกาลที่ \1'),
-        (r'ร\.4', 'รัชกาลที่สี่'),
-        (r'ร\.5', 'รัชกาลที่ห้า'),
-        (r'ร\.6', 'รัชกาลที่หก'),
-        (r'\bกม\.', 'กิโลเมตร'),
-        (r'\bซม\.', 'เซนติเมตร'),
-        (r'\bม\.\s*(\d)', r'เมตร \1'),
-        (r'\bปวช\.', 'ระดับ ปวช.'),
-        (r'\bปวส\.', 'ระดับ ปวส.'),
-        (r'\bAI\b', 'เอไอ'),
-        (r'\bWi-?Fi\b', 'ไวไฟ'),
-        (r'\bGPS\b', 'จีพีเอส'),
-        (r'\bQR\s*Code\b', 'คิวอาร์โค้ด'),
-        (r'\bPBVC\b', 'พีบีวีซี วิทยาลัยอาชีวศึกษาเพชรบุรี'),
-        (r'\bUNESCO\b', 'ยูเนสโก'),
-        (r'\bGI\b', 'จีไอ สิ่งบ่งชี้ทางภูมิศาสตร์'),
-    ]
-    for pattern, repl in abbrev_map:
-        t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
+        # 4. แปลงคำย่อและคำศัพท์เฉพาะให้เป็นคำอ่านภาษาไทย (Phonetic Expansion)
+        abbrev_map = [
+            (r'\bร\.([๔-๙4-9])\b', r'รัชกาลที่ \1'),
+            (r'ร\.4', 'รัชกาลที่สี่'),
+            (r'ร\.5', 'รัชกาลที่ห้า'),
+            (r'ร\.6', 'รัชกาลที่หก'),
+            (r'\bกม\.', 'กิโลเมตร'),
+            (r'\bซม\.', 'เซนติเมตร'),
+            (r'\bม\.\s*(\d)', r'เมตร \1'),
+            (r'\bปวช\.', 'ระดับ ปวช.'),
+            (r'\bปวส\.', 'ระดับ ปวส.'),
+            (r'\bAI\b', 'เอไอ'),
+            (r'\bWi-?Fi\b', 'ไวไฟ'),
+            (r'\bGPS\b', 'จีพีเอส'),
+            (r'\bQR\s*Code\b', 'คิวอาร์โค้ด'),
+            (r'\bPBVC\b', 'พีบีวีซี วิทยาลัยอาชีวศึกษาเพชรบุรี'),
+            (r'\bUNESCO\b', 'ยูเนสโก'),
+            (r'\bGI\b', 'จีไอ สิ่งบ่งชี้ทางภูมิศาสตร์'),
+        ]
+        for pattern, repl in abbrev_map:
+            t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
 
     # 5. ลบสัญลักษณ์ตกแต่ง Markdown (เช่น **, ##, `, >, ~, •, -, |)
     t = re.sub(r'[*#_~>•\-=|]', ' ', t)
 
-    # 6. ลบวงเล็บและเนื้อหาข้างในที่เป็นเชิงอรรถยืดยาว เช่น (อังกฤษ: ...) หรือ (Tel: ...)
+    # 6. ลบวงเล็บและเนื้อหาข้างในที่เป็นเชิงอรรถยืดยาว
     t = re.sub(r'\((?:อังกฤษ|Tel|โทร|ค่าเข้า|ราคา)[^)]*\)', '', t, flags=re.IGNORECASE)
     t = re.sub(r'[()\[\]{}]', ' ', t)
 
-    # 7. ลบ Emoji และไอคอนสัญลักษณ์ทั้งหมดอย่างเด็ดขาด (ห้ามสังเคราะห์หรืออ่านออกเสียงชื่ออิโมจิ)
+    # 7. ลบ Emoji และไอคอนสัญลักษณ์ทั้งหมดอย่างเด็ดขาด
     emoji_clean_regex = re.compile(
         r'[\U00010000-\U0010FFFF]'
         r'|[\u2600-\u27BF]'
@@ -1203,21 +1302,23 @@ def clean_text_for_speech(text, max_len=350, voice_gender='female'):
         r'|[\u2B50\u2B55\u200D\uFE0E\uFE0F]'
     )
     t = emoji_clean_regex.sub('', t)
-    t = re.sub(r'[^a-zA-Z0-9\u0E00-\u0E7F\s.,!?\'"-]', ' ', t)
+    # อนุญาตอักษรไทย อังกฤษ ตัวเลข และตัวอักษรจีน (\u4E00-\u9FA5)
+    t = re.sub(r'[^a-zA-Z0-9\u0E00-\u0E7F\u4E00-\u9FA5\s.,!?\'"-]', ' ', t)
 
     # 8. ใส่จุดแบ่งจังหวะหายใจ (Prosodic Breath Pauses) ตามธรรมชาติของคนพูด
-    pause_phrases = [
-        (r'(\bสวัสดีค่ะ)\s*', r'\1, '),
-        (r'(\bยินดีต้อนรับค่ะ)\s*', r'\1, '),
-        (r'\s*(สำหรับ)\s*', r', สำหรับ '),
-        (r'\s*(นอกจากนี้)\s*', r', นอกจากนี้, '),
-        (r'\s*(บอกเลยว่า)\s*', r', บอกเลยว่า '),
-        (r'\s*(ไฮไลท์คือ)\s*', r', ไฮไลท์คือ '),
-        (r'\s*(ที่สำคัญคือ)\s*', r', ที่สำคัญคือ '),
-        (r'\s*(อย่างไรก็ตาม)\s*', r', อย่างไรก็ตาม, '),
-    ]
-    for pattern, repl in pause_phrases:
-        t = re.sub(pattern, repl, t)
+    if lang == 'th':
+        pause_phrases = [
+            (r'(\bสวัสดีค่ะ)\s*', r'\1, '),
+            (r'(\bยินดีต้อนรับค่ะ)\s*', r'\1, '),
+            (r'\s*(สำหรับ)\s*', r', สำหรับ '),
+            (r'\s*(นอกจากนี้)\s*', r', นอกจากนี้, '),
+            (r'\s*(บอกเลยว่า)\s*', r', บอกเลยว่า '),
+            (r'\s*(ไฮไลท์คือ)\s*', r', ไฮไลท์คือ '),
+            (r'\s*(ที่สำคัญคือ)\s*', r', ที่สำคัญคือ '),
+            (r'\s*(อย่างไรก็ตาม)\s*', r', อย่างไรก็ตาม, '),
+        ]
+        for pattern, repl in pause_phrases:
+            t = re.sub(pattern, repl, t)
 
     # 9. ยุบช่องว่างและจุลภาคซ้ำซ้อน
     t = re.sub(r'\s*,\s*', ', ', t)
@@ -1229,7 +1330,12 @@ def clean_text_for_speech(text, max_len=350, voice_gender='female'):
         cutoff = t.rfind(' ', 0, max_len)
         if cutoff == -1 or cutoff < int(max_len * 0.7):
             cutoff = max_len
-        closing = ' และยังมีรายละเอียดที่น่าสนใจอีกมากมายเลยนะคะ'
+        if lang == 'en':
+            closing = ' and there is much more to explore!'
+        elif lang == 'zh':
+            closing = ' 还有更多精彩内容期待您探索！'
+        else:
+            closing = ' และยังมีรายละเอียดที่น่าสนใจอีกมากมายเลยนะคะ'
         t = t[:cutoff].strip() + closing
 
     return t
@@ -1296,7 +1402,7 @@ def tts():
     if not text:
         return jsonify({'error': 'Text is empty'}), 400
 
-    clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female')
+    clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female', lang=lang)
 
     # -------------------------------------------------------------------------
     # ขั้นที่ 1: ตรวจสอบและใช้งาน PyThaiTTS สำหรับภาษาไทย (On-Device Offline TTS)
