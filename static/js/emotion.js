@@ -2059,28 +2059,38 @@ function fallbackBrowserSpeech(text, lang = 'th') {
             u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
             u.rate = 1.05;
             u.pitch = 1.25;
-            u.onstart = () => applyEmotion('speaking');
-            u.onend = () => { applyEmotion('idle'); };
-            u.onerror = () => { applyEmotion('idle'); };
+            u.onstart = () => {
+                isEmotionSpeaking = true;
+                applyEmotion('speaking');
+                startLocalLipSyncPulse();
+            };
+            u.onend = () => { 
+                isEmotionSpeaking = false;
+                applyEmotion('idle');
+                setLipSyncAmplitude(0);
+                if (autoVoiceMode) {
+                    setTimeout(() => startAutoListening(), 600);
+                }
+            };
+            u.onerror = () => { 
+                isEmotionSpeaking = false;
+                applyEmotion('idle');
+                setLipSyncAmplitude(0);
+                if (autoVoiceMode) {
+                    setTimeout(() => startAutoListening(), 600);
+                }
+            };
             window.speechSynthesis.speak(u);
             return;
         } catch (e) {
             console.warn('SpeechSynthesis error:', e);
         }
     }
+    isEmotionSpeaking = false;
     applyEmotion('idle');
-}
-            u.pitch = 1.25;
-            u.onstart = () => applyEmotion('speaking');
-            u.onend = () => { applyEmotion('idle'); };
-            u.onerror = () => { applyEmotion('idle'); };
-            window.speechSynthesis.speak(u);
-            return;
-        } catch (e) {
-            console.warn('SpeechSynthesis error:', e);
-        }
+    if (autoVoiceMode) {
+        setTimeout(() => startAutoListening(), 600);
     }
-    applyEmotion('idle');
 }
 
 function playBase64ViaWebAudio(base64Data, onEndedCallback) {
@@ -2184,17 +2194,17 @@ async function playDirectVoiceTTS(text, lang = 'th') {
                 isEmotionSpeaking = false;
                 const webAudioPlayed = playBase64ViaWebAudio(ttsData.audio_base64);
                 if (!webAudioPlayed) {
-                    fallbackBrowserSpeech(speakText);
+                    fallbackBrowserSpeech(speakText, lang);
                 }
             }
         } else {
             isEmotionSpeaking = false;
-            fallbackBrowserSpeech(speakText);
+            fallbackBrowserSpeech(speakText, lang);
         }
     } catch (e) {
         isEmotionSpeaking = false;
         console.warn('TTS request failed/aborted:', e);
-        fallbackBrowserSpeech(speakText);
+        fallbackBrowserSpeech(speakText, lang);
     }
 }
 

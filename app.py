@@ -16,6 +16,7 @@ import io
 import json
 import threading
 import base64
+import hashlib
 import uuid
 import PIL.Image
 from gtts import gTTS
@@ -1228,9 +1229,94 @@ def sign_language():
         })
 
 
-# In-memory Cache for Ultra-Fast Instant Voice Synthesis (<1ms on hit)
+# In-memory & Persistent Disk Cache for Ultra-Fast Instant Voice Synthesis (<1ms on hit)
 TTS_CACHE = OrderedDict()
-MAX_TTS_CACHE_SIZE = 128
+MAX_TTS_CACHE_SIZE = 256
+AUDIO_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'audio', 'cache')
+try:
+    os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
+except Exception:
+    pass
+
+def get_cached_tts(cache_key):
+    """ดึงเสียงสังเคราะห์จาก RAM Cache หรือ Disk Cache ถาวร (0-5ms response)"""
+    # 1. ตรวจสอบ RAM Cache
+    if cache_key in TTS_CACHE:
+        return TTS_CACHE[cache_key], 'memory-cache'
+    
+    # 2. ตรวจสอบ Persistent Disk Cache
+    disk_hash = hashlib.md5(cache_key.encode('utf-8')).hexdigest()
+    disk_file = os.path.join(AUDIO_CACHE_DIR, f"{disk_hash}.mp3")
+    if os.path.exists(disk_file):
+        try:
+            with open(disk_file, 'rb') as f:
+                raw_bytes = f.read()
+            b64_str = base64.b64encode(raw_bytes).decode('utf-8')
+            if len(TTS_CACHE) >= MAX_TTS_CACHE_SIZE:
+                TTS_CACHE.popitem(last=False)
+            TTS_CACHE[cache_key] = b64_str
+            return b64_str, 'disk-cache'
+        except Exception:
+            pass
+    return None, None
+
+def save_cached_tts(cache_key, raw_bytes, b64_str=None):
+    """บันทึกเสียงสังเคราะห์ลงทั้ง RAM Cache และ Disk Cache ถาวรเพื่อการใช้งานซ้ำแบบ 0ms"""
+    if not b64_str:
+        b64_str = base64.b64encode(raw_bytes).decode('utf-8')
+    if len(TTS_CACHE) >= MAX_TTS_CACHE_SIZE:
+        TTS_CACHE.popitem(last=False)
+    TTS_CACHE[cache_key] = b64_str
+
+    try:
+        disk_hash = hashlib.md5(cache_key.encode('utf-8')).hexdigest()
+        disk_file = os.path.join(AUDIO_CACHE_DIR, f"{disk_hash}.mp3")
+        if not os.path.exists(disk_file):
+            with open(disk_file, 'wb') as f:
+                f.write(raw_bytes)
+    except Exception as e:
+        print(f"⚠️ [Disk Cache Write Error]: {e}")
+
+def extract_first_sentence_for_speech(text, lang='th', max_len=140):
+    """
+    ตัดประโยคแรกหรือท่อนแรกที่กระชับและสมบูรณ์ เพื่อการตอบสนองที่รวดเร็วระดับ <300ms
+    (First-Sentence Chunking for Real-Time TTFA)
+    """
+    if not text:
+        return ""
+    # ตัดส่วนคำถามแนะนำต่อยอดและเครื่องหมายแบ่งบรรทัด
+    for delim in ['---', '💡', '❓', '\n']:
+        if delim in text:
+            text = text.split(delim)[0].strip()
+
+    if lang == 'en':
+        parts = re.split(r'([.!?]+(?:\s+|$))', text)
+        if len(parts) >= 2:
+            first = (parts[0] + parts[1]).strip()
+        else:
+            first = text
+    elif lang == 'zh':
+        parts = re.split(r'([。！？]+)', text)
+        if len(parts) >= 2:
+            first = (parts[0] + parts[1]).strip()
+        else:
+            first = text
+    else:
+        # ภาษาไทย: แบ่งตามเครื่องหมายวรรคตอน หรือคำลงท้าย ค่ะ/นะคะ/ครับ
+        m = re.search(r'^(.*?)(?:ค่ะ|นะคะ|ครับ|เลยค่ะ|จ้า|นะจ๊ะ|[.!?]+)(?:\s+|$)', text)
+        if m:
+            first = text[:m.end()].strip()
+        else:
+            parts = text.split(' ')
+            first = parts[0] if parts else text
+
+    if len(first) > max_len:
+        cutoff = first.rfind(' ', 0, max_len)
+        if cutoff > int(max_len * 0.6):
+            first = first[:cutoff].strip()
+        else:
+            first = first[:max_len].strip()
+    return first
 
 def clean_text_for_speech(text, max_len=350, voice_gender='female', lang='th'):
     """
@@ -1340,16 +1426,28 @@ def clean_text_for_speech(text, max_len=350, voice_gender='female', lang='th'):
 
     return t
 
-async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pitch="+1Hz", volume="+0%", timeout=9.5):
-    """สร้างเสียงพูด Neural Audio Studio Quality ผ่าน Edge-TTS สตรีมตรงผ่าน Memory ไม่ต้องเขียนลง Disk"""
-    communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch, volume=volume)
-    chunks = []
-    async def collect():
-        async for chunk in communicate.stream():
-            if chunk['type'] == 'audio':
-                chunks.append(chunk['data'])
-    await asyncio.wait_for(collect(), timeout=timeout)
-    return b''.join(chunks)
+async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pitch="+0Hz", volume="+0%", timeout=9.5):
+    """สร้างเสียงพูด Neural Audio Studio Quality ผ่าน Edge-TTS พร้อม Dual Voice Fallback ป้องกัน Edge API Token Glitch"""
+    voices_to_try = [voice]
+    if voice == 'th-TH-PremwadeeNeural':
+        voices_to_try.append('th-TH-NiwatNeural')
+
+    for v in voices_to_try:
+        try:
+            communicate = edge_tts.Communicate(text, voice=v, rate=rate, pitch=pitch, volume=volume)
+            chunks = []
+            async def collect():
+                async for chunk in communicate.stream():
+                    if chunk['type'] == 'audio':
+                        chunks.append(chunk['data'])
+            await asyncio.wait_for(collect(), timeout=timeout)
+            if chunks:
+                return b''.join(chunks)
+        except Exception as ve:
+            if v != voices_to_try[-1]:
+                continue
+            raise ve
+    raise RuntimeError("No audio received from Edge-TTS")
 
 class PersistentTTSWorker:
     """บริหารจัดการ Background Event Loop ถาวร เพื่อรักษา TCP/TLS Connection Pool ไปยัง TTS Service ลด Latency เหลือ <600ms"""
@@ -1398,11 +1496,17 @@ def tts():
     text = data.get('text', '').strip()
     lang = data.get('lang', data.get('language', 'th'))
     voice_gender = data.get('gender', 'female') # 'female' (Premwadee) or 'male' (Niwat)
+    fast_mode = data.get('fast_mode', False) or data.get('first_sentence', False)
     
     if not text:
         return jsonify({'error': 'Text is empty'}), 400
 
-    clean_text = clean_text_for_speech(text, max_len=350, voice_gender='female', lang=lang)
+    if fast_mode:
+        target_text = extract_first_sentence_for_speech(text, lang=lang, max_len=140)
+    else:
+        target_text = text
+
+    clean_text = clean_text_for_speech(target_text, max_len=350, voice_gender='female', lang=lang)
 
     # -------------------------------------------------------------------------
     # ขั้นที่ 1: ตรวจสอบและใช้งาน PyThaiTTS สำหรับภาษาไทย (On-Device Offline TTS)
@@ -1411,11 +1515,12 @@ def tts():
         pytts = get_pythaitts_engine()
         if pytts:
             pytts_cache_key = f"pythaitts_{clean_text}"
-            if pytts_cache_key in TTS_CACHE:
+            cached_pytts, pytts_cache_type = get_cached_tts(pytts_cache_key)
+            if cached_pytts:
                 return jsonify({
-                    'audio_base64': TTS_CACHE[pytts_cache_key],
+                    'audio_base64': cached_pytts,
                     'audio_format': 'wav',
-                    'engine': 'pythaitts-cache',
+                    'engine': f'pythaitts-{pytts_cache_type}',
                     'voice': 'fastthaig2p',
                     'status': 'success'
                 })
@@ -1428,9 +1533,7 @@ def tts():
                     with open(tmp_wav_path, 'rb') as f:
                         wav_bytes = f.read()
                     audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
-                    if len(TTS_CACHE) >= MAX_TTS_CACHE_SIZE:
-                        TTS_CACHE.popitem(last=False)
-                    TTS_CACHE[pytts_cache_key] = audio_base64
+                    save_cached_tts(pytts_cache_key, wav_bytes, audio_base64)
                     return jsonify({
                         'audio_base64': audio_base64,
                         'audio_format': 'wav',
@@ -1453,22 +1556,23 @@ def tts():
     if lang == 'en':
         voice = 'en-US-AriaNeural'
         rate = '+3%'
-        pitch = '+1Hz'
+        pitch = '+0Hz'
     elif lang == 'zh':
         voice = 'zh-CN-XiaoxiaoNeural'
         rate = '+3%'
-        pitch = '+1Hz'
+        pitch = '+0Hz'
     else:
-        # ภาษาไทย: เสียงทางการเดียวของน้องเพชร (เปรมวดี Neural) ด้วยจังหวะความเร็ว +2% และคีย์เสียง +1Hz
+        # ภาษาไทย: เสียงทางการเดียวของน้องเพชร (เปรมวดี Neural) ด้วยจังหวะความเร็ว +2%
         voice = 'th-TH-PremwadeeNeural'
         rate = '+2%'
-        pitch = '+1Hz'
+        pitch = '+0Hz'
 
     cache_key = f"{voice}_{pitch}_{rate}_{clean_text}"
-    if cache_key in TTS_CACHE:
+    cached_b64, cache_type = get_cached_tts(cache_key)
+    if cached_b64:
         return jsonify({
-            'audio_base64': TTS_CACHE[cache_key],
-            'engine': 'edge-neural-cache',
+            'audio_base64': cached_b64,
+            'engine': f'edge-neural-{cache_type}',
             'voice': voice,
             'rate': rate,
             'pitch': pitch,
@@ -1480,10 +1584,8 @@ def tts():
         audio_bytes = run_coroutine(generate_edge_tts(clean_text, voice=voice, rate=rate, pitch=pitch, volume=volume, timeout=8.5))
         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
 
-        # บันทึกลง Memory Cache
-        if len(TTS_CACHE) >= MAX_TTS_CACHE_SIZE:
-            TTS_CACHE.popitem(last=False)
-        TTS_CACHE[cache_key] = audio_base64
+        # บันทึกลง RAM และ Persistent Disk Cache
+        save_cached_tts(cache_key, audio_bytes, audio_base64)
 
         return jsonify({
             'audio_base64': audio_base64,
@@ -1500,8 +1602,9 @@ def tts():
             tts_obj = gTTS(text=clean_text, lang=lang if lang in ['th', 'en', 'zh'] else 'th')
             fp = io.BytesIO()
             tts_obj.write_to_fp(fp)
-            fp.seek(0)
-            audio_base64 = base64.b64encode(fp.read()).decode('utf-8')
+            raw_bytes = fp.getvalue()
+            audio_base64 = base64.b64encode(raw_bytes).decode('utf-8')
+            save_cached_tts(cache_key, raw_bytes, audio_base64)
             return jsonify({
                 'audio_base64': audio_base64,
                 'engine': 'gtts-fallback',

@@ -408,6 +408,46 @@ function setEmotion(state) {
 // -----------------------------------------------------------------------------
 // Neural TTS Audio Engine (รองรับ 3 ภาษา th, en, zh)
 // -----------------------------------------------------------------------------
+// Voice Synthesis Engine (Edge Neural TTS & Browser Fallback)
+// -----------------------------------------------------------------------------
+function fallbackBrowserSpeechMain(text, lang, btnElement, onEndedCallback) {
+    if ('speechSynthesis' in window) {
+        try {
+            window.speechSynthesis.cancel();
+            const clean = stripEmojiAndIcons(text).split(/\n|---|💡|❓/)[0].trim();
+            const u = new SpeechSynthesisUtterance(clean || text);
+            u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
+            u.rate = 1.05;
+            u.pitch = 1.15;
+            u.onstart = () => {
+                isSpeakingTTS = true;
+                setEmotion('speaking');
+                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+            };
+            u.onend = () => {
+                isSpeakingTTS = false;
+                setEmotion('idle');
+                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+                if (typeof onEndedCallback === 'function') onEndedCallback();
+            };
+            u.onerror = () => {
+                isSpeakingTTS = false;
+                setEmotion('idle');
+                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+                if (typeof onEndedCallback === 'function') onEndedCallback();
+            };
+            window.speechSynthesis.speak(u);
+            return;
+        } catch (err) {
+            console.warn('speechSynthesis fallback error:', err);
+        }
+    }
+    isSpeakingTTS = false;
+    setEmotion('idle');
+    if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+    if (typeof onEndedCallback === 'function') onEndedCallback();
+}
+
 async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLang = null) {
     const speechText = stripEmojiAndIcons(text);
     if (!speechText) return;
@@ -435,7 +475,9 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
                 setEmotion('speaking');
                 if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
                 startLipSyncAnalysis();
-            }).catch(() => {});
+            }).catch(() => {
+                fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
+            });
             audioPlayer.onended = () => {
                 isSpeakingTTS = false;
                 setEmotion('idle');
@@ -451,18 +493,24 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
         }
         setEmotion('thinking');
 
+        const abortCtrl = new AbortController();
+        const timeoutId = setTimeout(() => abortCtrl.abort(), 6500);
+
         const response = await fetch('/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 text: speechText,
                 lang: activeLang,
-                gender: currentVoiceGender
-            })
+                gender: currentVoiceGender,
+                fast_mode: speechText.length > 140
+            }),
+            signal: abortCtrl.signal
         });
+        clearTimeout(timeoutId);
         const data = await response.json();
         
-                if (data.audio_base64) {
+        if (data.audio_base64) {
             const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
             const audioDataUri = `data:${mime};base64,` + data.audio_base64;
             if (clientAudioCache.size < 64) {
@@ -481,32 +529,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
                 startLipSyncAnalysis();
             }).catch((err) => {
                 console.warn('Audio play prevented or blocked by browser autoplay:', err);
-                if ('speechSynthesis' in window) {
-                    const u = new SpeechSynthesisUtterance(speechText);
-                    u.lang = activeLang === 'en' ? 'en-US' : (activeLang === 'zh' ? 'zh-CN' : 'th-TH');
-                    u.onstart = () => {
-                        isSpeakingTTS = true;
-                        setEmotion('speaking');
-                    };
-                    u.onend = () => {
-                        isSpeakingTTS = false;
-                        setEmotion('idle');
-                        if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                        if (typeof onEndedCallback === 'function') onEndedCallback();
-                    };
-                    u.onerror = () => {
-                        isSpeakingTTS = false;
-                        setEmotion('idle');
-                        if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                        if (typeof onEndedCallback === 'function') onEndedCallback();
-                    };
-                    window.speechSynthesis.speak(u);
-                } else {
-                    isSpeakingTTS = false;
-                    setEmotion('idle');
-                    if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                    if (typeof onEndedCallback === 'function') onEndedCallback();
-                }
+                fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
             });
             audioPlayer.onended = () => {
                 isSpeakingTTS = false;
@@ -516,24 +539,15 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
                 if (typeof onEndedCallback === 'function') onEndedCallback();
             };
             audioPlayer.onerror = () => {
-                isSpeakingTTS = false;
-                setEmotion('idle');
-                if (lipSyncBroadcast) lipSyncBroadcast.postMessage({ type: 'lipsync', amp: 0 });
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                if (typeof onEndedCallback === 'function') onEndedCallback();
+                console.warn('audioPlayer error -> fallback to browser speech');
+                fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
             };
         } else {
-            isSpeakingTTS = false;
-            setEmotion('idle');
-            if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-            if (typeof onEndedCallback === 'function') onEndedCallback();
+            fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
         }
     } catch (e) {
-        console.error('TTS error:', e);
-        isSpeakingTTS = false;
-        setEmotion('idle');
-        if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-        if (typeof onEndedCallback === 'function') onEndedCallback();
+        console.warn('TTS fetch error/timeout -> fallback to browser speech:', e);
+        fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
     }
 }
 
