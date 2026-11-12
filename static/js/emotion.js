@@ -1031,9 +1031,9 @@ function triggerAutonomousGreeting() {
 
     // รายการประโยคทักทายที่อบอุ่นและเป็นมิตร
     const greetingQuotes = [
-        "สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำ สอบถามได้เลยนะครับ",
-        "สวัสดีครับ! ยินดีต้อนรับสู่น้องเพชร AI ครับ มีข้อมูลสถานที่ท่องเที่ยวและวิทยาลัยอาชีวะเพชรบุรี สอบถามได้เลยนะครับ",
-        "สวัสดีครับ ยินดีต้อนรับครับ น้องเพชรพร้อมให้บริการแล้ว แตะที่หน้าจอเพื่อสอบถามหรือคุยกับน้องเพชรได้เลยนะครับ"
+        "สวัสดีค่ะ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำ สอบถามได้เลยนะคะ",
+        "สวัสดีค่ะ! ยินดีต้อนรับสู่น้องเพชร AI ค่ะ มีข้อมูลสถานที่ท่องเที่ยวและวิทยาลัยอาชีวะเพชรบุรี สอบถามได้เลยนะคะ",
+        "สวัสดีค่ะ ยินดีต้อนรับค่ะ น้องเพชรพร้อมให้บริการแล้ว แตะที่หน้าจอเพื่อสอบถามหรือคุยกับน้องเพชรได้เลยนะคะ"
     ];
     const quote = greetingQuotes[Math.floor(Math.random() * greetingQuotes.length)];
 
@@ -1872,7 +1872,7 @@ function handleEmotionVoiceInput(finalRaw) {
             // เรียกเฉพาะคำว่า "น้องเพชร"
             startAutoVoiceMode();
             const wakeReplies = {
-                th: 'ครับผม! น้องเพชรพร้อมแล้วครับ สอบถามได้เลยครับ ✨',
+                th: 'ค่ะ! น้องเพชรพร้อมแล้วค่ะ สอบถามได้เลยนะคะ ✨',
                 en: "Yes! I'm Nong Phet. How can I help you today? ✨",
                 zh: '在呢！请问有什么我可以帮您的吗？ ✨'
             };
@@ -1894,9 +1894,11 @@ function handleEmotionVoiceInput(finalRaw) {
         processDirectVoiceQuery(parsed.query, parsed.detectedLang);
     } else {
         // หากอยู่นอกโหมดสนทนา แนะนำคำปลุกเรียก
-        showVoiceSubtitle('💡 เรียก "น้องเพชร" หรือ "Hey Nong Phet" เพื่อเริ่มคุยได้เลยครับ', 3000);
+        showVoiceSubtitle('💡 เรียก "น้องเพชร" หรือ "Hey Nong Phet" เพื่อเริ่มคุยได้เลยค่ะ', 3000);
     }
 }
+
+function initDirectVoiceEngine() {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         emotionRecognition = new SpeechRec();
@@ -1908,7 +1910,7 @@ function handleEmotionVoiceInput(finalRaw) {
             isEmotionListening = true;
             wakeUpFromSleep();
             applyEmotion('listening');
-            showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... พูดได้เลยครับ');
+            showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... พูดได้เลยค่ะ');
             resetAutoVoiceSilenceTimer(); // reset timer ทุกครั้งที่เริ่มฟัง
             const micBtn = document.getElementById('btnEmotionVoice');
             if (micBtn) {

@@ -5,6 +5,9 @@
 
 let iotEventSource = null;
 let lastAutoGreetTime = 0;
+let lastPresenceTriggerTime = 0;
+let lastPresenceToastTime = 0;
+const PRESENCE_TRIGGER_COOLDOWN_MS = 30000;
 let isCameraSensorActive = false;
 let cameraSensorStream = null;
 let cameraDetectionInterval = null;
@@ -52,7 +55,7 @@ function showIoTToast(distance, timestamp, source = 'esp32_hardware', customText
 
     if (source === 'camera_eye_contact' || source === 'camera_ai') {
         if (titleText) titleText.textContent = '👀 กล้อง AI: มีคนมาหยุดมองระบบ!';
-        if (msgEl) msgEl.textContent = customText || 'สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI Smart Guide';
+        if (msgEl) msgEl.textContent = customText || 'สวัสดีค่ะ ยินดีต้อนรับสู่น้องเพชร AI Smart Guide';
         if (iconEl) iconEl.innerHTML = '<i class="fa-solid fa-face-smile text-cyan-300"></i>';
         if (distDisp) distDisp.textContent = 'พบคนหยุดมอง 📷';
     } else if (source === 'manual_simulation') {
@@ -133,9 +136,9 @@ function triggerAutoGreeting(distance, source = 'esp32_hardware', customText = n
 
     // รายการประโยคทักทายที่อบอุ่นและเป็นมิตรของน้องเพชร
     const greetingQuotes = [
-        "สวัสดีครับ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำ สอบถามได้เลยนะครับ",
-        "สวัสดีครับ! ยินดีต้อนรับสู่น้องเพชร AI ครับ แตะที่หน้าจอเพื่อเลือกดูหลักสูตร ที่เที่ยว หรือพูดคุยกับน้องเพชรได้เลยครับ",
-        "สวัสดีครับ ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีครับ น้องเพชรพร้อมแนะนำข้อมูลการศึกษาและสถานที่ท่องเที่ยวเพชรบุรีแล้วครับ"
+        "สวัสดีค่ะ ยินดีต้อนรับสู่น้องเพชร AI ผู้ช่วยอัจฉริยะประจำวิทยาลัยอาชีวศึกษาเพชรบุรี มีอะไรให้น้องเพชรช่วยแนะนำ สอบถามได้เลยนะคะ",
+        "สวัสดีค่ะ! ยินดีต้อนรับสู่น้องเพชร AI ค่ะ แตะที่หน้าจอเพื่อเลือกดูหลักสูตร ที่เที่ยว หรือพูดคุยกับน้องเพชรได้เลยนะคะ",
+        "สวัสดีค่ะ ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ น้องเพชรพร้อมแนะนำข้อมูลการศึกษาและสถานที่ท่องเที่ยวเพชรบุรีแล้วค่ะ"
     ];
     const welcomeText = customText || greetingQuotes[Math.floor(Math.random() * greetingQuotes.length)];
 
@@ -362,23 +365,28 @@ function startCameraDetectionLoop() {
             const centerSkinRatio = centerSkinCount / (32 * 40);
             const avgDiff = diffScore / (total * 3);
 
-            // เมื่อมีคนหยุดยืนมองตรงกลาง (center skin ratio > 0.05) หรือมีคนเข้ามาตรงหน้า
-            if (centerSkinRatio > 0.05 || skinRatio > 0.07 || (avgDiff > 9 && skinRatio > 0.03)) {
+            // เมื่อมีคนหยุดยืนมองตรงกลางหรือขยับเข้าใกล้ในเฟรม (ลดโอกาสทริกเกอร์ผิดพลาดจากฉากหลังโทนอุ่น)
+            if (centerSkinRatio > 0.09 || (skinRatio > 0.12 && avgDiff > 4)) {
                 personDetected = true;
             }
         }
 
+        const nowMs = Date.now();
+        const inCooldown = (nowMs - lastPresenceTriggerTime) < PRESENCE_TRIGGER_COOLDOWN_MS;
+
         if (personDetected) {
             cameraConsecutiveDetections++;
             if (indicator) {
-                indicator.textContent = '👀 มีคนหยุดมองระบบ!';
+                indicator.textContent = inCooldown ? '👀 กำลังรอคูลดาวน์...' : '👀 มีคนหยุดมองระบบ!';
                 indicator.className = 'text-[9px] font-bold text-cyan-300 bg-cyan-950/90 px-2 py-0.5 rounded-full border border-cyan-500/50 animate-pulse';
             }
 
-            // ถ้ามีคนหยุดมองต่อเนื่อง 2 รอบ (~1.1 วินาที)
-            if (cameraConsecutiveDetections >= 2) {
+            // ต้องมีคนหยุดมองต่อเนื่อง 3 รอบ (~1.65 วินาที) และพ้นระยะคูลดาวน์ 30 วินาทีก่อนส่งทริกเกอร์ใหม่
+            if (cameraConsecutiveDetections >= 3) {
                 cameraConsecutiveDetections = 0;
-                sendPresenceTrigger('camera_eye_contact', 45);
+                if (!inCooldown && !document.hidden) {
+                    sendPresenceTrigger('camera_eye_contact', 45);
+                }
             }
         } else {
             cameraConsecutiveDetections = Math.max(0, cameraConsecutiveDetections - 1);
@@ -391,6 +399,15 @@ function startCameraDetectionLoop() {
 }
 
 function sendPresenceTrigger(source = 'manual_simulation', distance = 45, greetingText = null) {
+    const nowMs = Date.now();
+    // ป้องกันการยิง /api/iot/trigger รัวเกินไปสำหรับทริกเกอร์อัตโนมัติ (ยอมให้กดจำลองเองได้ตลอด)
+    if (source !== 'manual_simulation' && (nowMs - lastPresenceTriggerTime) < PRESENCE_TRIGGER_COOLDOWN_MS) {
+        return;
+    }
+    if (source !== 'manual_simulation') {
+        lastPresenceTriggerTime = nowMs;
+    }
+
     fetch('/api/iot/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -423,7 +440,11 @@ function initIoTEventStream() {
                 try {
                     const data = JSON.parse(e.data);
                     if (data.event === 'user_detected') {
-                        showIoTToast(data.distance, data.timestamp, data.source, data.greeting_text);
+                        const nowMs = Date.now();
+                        if (data.source === 'manual_simulation' || (nowMs - lastPresenceToastTime) >= 15000) {
+                            lastPresenceToastTime = nowMs;
+                            showIoTToast(data.distance, data.timestamp, data.source, data.greeting_text);
+                        }
                         triggerAutoGreeting(data.distance, data.source, data.greeting_text);
                     }
                 } catch (err) {}

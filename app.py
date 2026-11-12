@@ -413,7 +413,7 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
     msg = (user_message or '').lower().strip()
 
     # -------------------------------------------------------------------------
-    # 1. หมวดภาษาอังกฤษ (English Offline Smart Knowledge)
+    # 1. หมวดภาษาอังกฤษ (English Offline Smart Knowledge + Intent Routing)
     # -------------------------------------------------------------------------
     if language == 'en':
         if any(k in msg for k in ['khao wang', 'palace', 'mountain', 'hill', 'phra nakhon khiri', 'เขาวัง']):
@@ -422,8 +422,8 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
                 "• **East Peak**: Wat Phra Kaeo Noi and the sacred Red Chedi.\n"
                 "• **Middle Peak**: Phra That Chom Phet, a 40-meter white pagoda overlooking the entire city.\n"
                 "• **West Peak**: The Royal Palace and Chatchawan Wiang Chai Observatory.\n\n"
-                "⏰ **Hours**: 08:30 - 16:30 daily\n"
-                "🚡 **Cable Car**: Available for convenient hilltop access\n"
+                "⏰ **Hours**: 08:30 - 16:30 daily | 🎫 **Tickets**: Thai 20 THB / Foreigners 150 THB\n"
+                "🚡 **Cable Car**: Round-trip Adult 50 THB, Child 15 THB\n"
                 "⚠️ **Notice**: Friendly wild monkeys reside on the hill; please avoid holding plastic bags or open food!"
             )
         elif any(k in msg for k in ['cave', 'khao luang', 'เขาหลวง']):
@@ -435,28 +435,62 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
         elif any(k in msg for k in ['beach', 'sea', 'cha-am', 'cha am', 'ชะอำ']):
             return (
                 "🌊 **Cha-am Beach** is Phetchaburi's premier seaside getaway!\n\n"
-                "Enjoy wide sandy beaches, fresh Gulf of Thailand seafood, seaside bicycle paths, and family water sports."
+                "Enjoy 5 km of wide sandy beaches, fresh Gulf of Thailand seafood at Cha-am Fishing Pier, seaside cycling, and horseback riding."
             )
-        elif any(k in msg for k in ['food', 'eat', 'dessert', 'delicious', 'custard', 'noodle', 'unesco', 'กิน', 'อร่อย']):
+        elif any(k in msg for k in ['kaeng krachan', 'national park', 'panoen thung', 'sea of mist']):
+            return (
+                "🏕️ **Kaeng Krachan National Park** (UNESCO World Heritage) is Thailand's largest national park.\n\n"
+                "Highlights include Khao Panoen Thung sea of mist, Kaeng Krachan Dam suspension bridge, and seasonal butterfly watching at Ban Krang."
+            )
+        elif any(k in msg for k in ['trip', 'itinerary', 'plan', 'day']):
+            return (
+                "🗺️ **Recommended Phetchaburi 1-Day Itinerary**:\n\n"
+                "• **Morning**: Take the cable car up **Khao Wang**, then visit **Wat Mahathat Worawihan**.\n"
+                "• **Lunch**: Try **Kuay Teow Nam Daeng** (red-soup noodles) & **Khao Chae**.\n"
+                "• **Afternoon**: See sunbeams inside **Khao Luang Cave**, snap golden-hour photos at **Ban Lad Sugar Palm Groves**, and grab baked **Khanom Mor Kaeng**!"
+            )
+        elif any(k in msg for k in ['pbvc', 'college', 'vocational', 'enroll', 'admission', 'major', 'tuition', 'computer', 'digital']) or intent == 'admission':
+            return (
+                "🎓 **Phetchaburi Vocational College (PBVC)** offers career-ready vocational & high-vocational (Por Wor Chor / Por Wor Sor) programs:\n\n"
+                "• **Digital Business Technology (DBT)** — creator of Nong Phet AI!\n"
+                "• **Accounting, Marketing, Retail, Tourism & Hotel, Food & Nutrition, Fine Arts, Fashion Design, Business Computer**\n"
+                "📞 **Admissions**: Call +66 32-425-391 or visit campus opposite Khao Wang."
+            )
+        elif any(k in msg for k in ['restroom', 'toilet', 'emergency', 'police', 'hospital', 'weather', 'train', 'bus', 'bangkok']) or intent == 'general_faq':
+            return (
+                "ℹ️ **Phetchaburi Travel Essentials & Emergency Contacts**:\n\n"
+                "• **Travel from Bangkok**: ~1.5-2 hrs via Route 35 (Rama II) or SRT Southern Railway (Phetchaburi Station).\n"
+                "• **Emergency Numbers**: Police `191` | Tourist Police `1155` | Medical Emergency `1669`.\n"
+                "• **Restrooms**: Available inside public museum gates, Khao Wang cable car station, and campus visitor buildings."
+            )
+        elif any(k in msg for k in ['food', 'eat', 'dessert', 'delicious', 'custard', 'noodle', 'unesco', 'fruit', 'durian', 'กิน', 'อร่อย']) or intent == 'food':
             return (
                 "🍧 **UNESCO City of Gastronomy - Phetchaburi Signature Treats**:\n\n"
-                "• **Khanom Mor Kaeng**: Wood-fired baked egg, taro, and coconut custard.\n"
-                "• **Organic Toddy Palm**: Pure palm sugar, refreshing juice, and palm cakes.\n"
+                "• **Khanom Mor Kaeng**: Wood-fired baked egg, taro, and coconut custard with pure palm sugar.\n"
                 "• **Kuay Teow Nam Daeng**: Signature red soup noodles infused with palm sugar.\n"
-                "• **Royal Khao Chae**: Fragrant chilled rice served in iced jasmine water."
+                "• **Royal Khao Chae**: Fragrant chilled rice served in iced jasmine water.\n"
+                "• **GI Fruits**: Phet Sai Rung Rose Apple, Pala-U Durian, and Tha Yang Lime!"
+            )
+        elif intent == 'travel':
+            return (
+                "🏰 **Top Attractions across Phetchaburi's 8 Districts**:\n\n"
+                "• **Mueang**: Phra Nakhon Khiri (Khao Wang), Khao Luang Cave, Phra Ram Ratchaniwet.\n"
+                "• **Cha-am**: Cha-am Beach, Maruekhathaiyawan Palace.\n"
+                "• **Kaeng Krachan & Nong Ya Plong**: National Park, Hot Springs.\n"
+                "• **Ban Lad & Tha Yang**: Sugar Palm Groves, Chang Hua Man Royal Project, Phet Dam."
             )
         else:
             return (
                 "Hello! 🙏 I am **Nong Phet AI Smart Guide**, your intelligent robotic mascot for Phetchaburi and PBVC College! 🤖✨\n\n"
                 "I am ready to help you with:\n"
                 "• 🏰 **Attractions**: Khao Wang, Khao Luang Cave, Cha-am Beach, Kaeng Krachan\n"
-                "• 🍜 **UNESCO Gastronomy**: Famous local desserts and authentic seafood\n"
+                "• 🍜 **UNESCO Gastronomy**: Famous local desserts, GI fruits, and authentic seafood\n"
                 "• 🎓 **College Info**: Future-ready vocational programs at PBVC\n\n"
                 "Feel free to ask me anything in English!"
             )
 
     # -------------------------------------------------------------------------
-    # 2. หมวดภาษาจีน (Chinese Offline Smart Knowledge)
+    # 2. หมวดภาษาจีน (Chinese Offline Smart Knowledge + Intent Routing)
     # -------------------------------------------------------------------------
     if language == 'zh':
         if any(k in msg for k in ['考汪', '拷汪', '山中之城', '王宫', 'khao wang', 'เขาวัง']):
@@ -465,17 +499,54 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
                 "• **东峰**：小玉佛寺与红佛塔\n"
                 "• **中峰**：40米高的纯白巨型佛塔 (Phra That Chom Phet)\n"
                 "• **西峰**：皇家宫殿与天文观象台\n\n"
-                "⏰ **开放时间**：每日 08:30 - 16:30\n"
-                "🚡 **观光缆车**：设有缆车方便游客上下山\n"
+                "⏰ **开放时间**：每日 08:30 - 16:30 | 🎫 **门票**：外国人 150 泰铢\n"
+                "🚡 **观光缆车**：往返成人 50 泰铢、儿童 15 泰铢\n"
                 "⚠️ **温馨提醒**：山上猴子较多，请注意保管好随身零食和塑料袋！"
             )
-        elif any(k in msg for k in ['美食', '好吃的', '特产', '小吃', '甜点', 'food']):
+        elif any(k in msg for k in ['考龙', '山洞', '洞穴', 'khao luang']):
+            return (
+                "🪨 **考龙穴 (Tham Khao Luang)** 是佛丕府最壮观的天然石窟佛寺。\n\n"
+                "洞顶天然天井透出的阳光被称为“天堂之光”，每天 **10:00 - 14:00** 光线照射佛像最为震撼！"
+            )
+        elif any(k in msg for k in ['七岩', '海滩', '海鲜', 'cha-am']):
+            return (
+                "🌊 **七岩海滩 (Cha-am Beach)** 拥有超过5公里的洁白沙滩，适合骑马、环海骑行，还能在七岩渔码头品尝平价新鲜海鲜！"
+            )
+        elif any(k in msg for k in ['行程', '一日游', '两日游', '攻略']):
+            return (
+                "🗺️ **佛丕府经典一日游推荐行程**：\n\n"
+                "• **上午**：乘缆车游览 **拷汪宫** → 参拜 **玛哈泰寺五顶佛塔**\n"
+                "• **中午**：品尝 **佛丕特色红汤米粉** 与 **宫廷冰镇花香泡饭**\n"
+                "• **下午**：观赏 **考龙穴** 天窗阳光 → **班拉县棕榈林** 拍照并购买柴烧椰汁烤蛋糕作为伴手礼！"
+            )
+        elif any(k in msg for k in ['学院', '报名', '专业', '学费', '招生', 'pbvc']) or intent == 'admission':
+            return (
+                "🎓 **佛丕职业技术学院 (PBVC)** 开设面向未来产业的多种优势专业（中职/高职）：\n\n"
+                "• **数字商业技术 (DBT)**（小佩特AI研发团队所在专业！）\n"
+                "• **会计、市场营销、零售管理、酒店与旅游、食品与营养、美术设计、服装设计、商业计算机**\n"
+                "📞 **咨询电话**：+66 32-425-391"
+            )
+        elif any(k in msg for k in ['洗手间', '厕所', '医院', '警察', '急', '天气', '曼谷', '交通', '坐车']) or intent == 'general_faq':
+            return (
+                "ℹ️ **佛丕府出行与紧急实用信息**：\n\n"
+                "• **交通**：距离曼谷约2小时车程，可乘坐长途巴士、迷你小巴或南线火车直达佛丕站。\n"
+                "• **紧急电话**：报警 `191` | 旅游警察 `1155` | 医疗急救 `1669`。\n"
+                "• **公共洗手间**：景区入口、拷汪宫缆车站及校内服务点均有提供。"
+            )
+        elif any(k in msg for k in ['美食', '好吃的', '特产', '小吃', '甜点', '水果', '榴莲', 'food']) or intent == 'food':
             return (
                 "🍧 **联合国教科文组织美食之都 —— 佛丕府特色美味**：\n\n"
-                "• **柴烧椰汁烤蛋糕 (Khanom Mor Kaeng)**：浓郁焦香的传统皇室御用甜点\n"
-                "• **天然棕榈糖食品**：清甜甘爽的棕榈汁与糖糕\n"
-                "• **佛丕特色红汤米粉**：加入棕榈糖秘制的高汤，香甜浓郁\n"
-                "• **宫廷冰镇花香泡饭 (Khao Chae)**：传统皇家消暑名点"
+                "• **柴烧椰汁烤蛋糕 (Khanom Mor Kaeng)**：加入纯正棕榈糖的传统皇室甜点\n"
+                "• **佛丕特色红汤米粉**：加入棕榈糖秘制的高汤，风味独特\n"
+                "• **宫廷冰镇花香泡饭 (Khao Chae)**：清凉解暑的非遗美食\n"
+                "• **地理标志水果 (GI)**：佛丕彩虹莲雾、巴拉乌榴莲、差阳青柠"
+            )
+        elif intent == 'travel':
+            return (
+                "🏰 **佛丕府必游亮点精选**：\n\n"
+                "• **历史文化**：拷汪宫、考龙穴、帕拉玛拉查尼威行宫\n"
+                "• **海滨度假**：七岩海滩、爱与希望之宫\n"
+                "• **自然生态**：岗卡章国家公园（世界自然遗产）、农雅蓬温泉、班拉棕榈园"
             )
         else:
             return (
@@ -493,9 +564,9 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
     # 1. จัดการคำถามกวน/ลองภูมิในโหมด Offline อย่างชาญฉลาด (Offline Witty Guard)
     if any(k in msg for k in ['ยืมเงิน', 'ยืมตัง', 'ยืมตังค์', 'ขอตัง', 'ขอเงิน']):
         return (
-            "น้องเพชรเป็น AI ไม่มีกระเป๋าตังค์และไม่มีเงินสดครับ 😄\n\n"
-            "แต่มีคลังข้อมูลท่องเที่ยว 8 อำเภอ และหลักสูตรวิทยาลัยอาชีวศึกษาเพชรบุรีแน่นๆ แทนครับ "
-            "ยืมข้อมูลเที่ยวน้องเพชรได้ฟรีไม่อั้นตลอด 24 ชั่วโมงเลยครับ! ✨\n\n"
+            "น้องเพชรเป็น AI ไม่มีกระเป๋าตังค์และไม่มีเงินสดค่ะ 😄\n\n"
+            "แต่มีคลังข้อมูลท่องเที่ยว 8 อำเภอ และหลักสูตรวิทยาลัยอาชีวศึกษาเพชรบุรีแน่นๆ แทนค่ะ "
+            "ยืมข้อมูลเที่ยวน้องเพชรได้ฟรีไม่อั้นตลอด 24 ชั่วโมงเลยค่ะ! ✨\n\n"
             "---\n"
             "💡 **ถามต่อยอดกับน้องเพชร:**\n"
             "• แนะนำที่เที่ยวไฮไลท์ 1 วันในเพชรบุรี\n"
@@ -504,7 +575,7 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
         )
     if any(k in msg for k in ['แฟน', 'จีบ', 'รักไหม', 'รักผมไหม', 'รักหนูไหม']):
         return (
-            "หัวใจดิจิทัลของน้องเพชร ถูกโปรแกรมไว้ให้รักและทุ่มเทบริการชาวเพชรบุรีและนักท่องเที่ยวทุกคนครับผม! 😊💙\n\n"
+            "หัวใจดิจิทัลของน้องเพชร ถูกโปรแกรมไว้ให้รักและทุ่มเทบริการชาวเพชรบุรีและนักท่องเที่ยวทุกคนค่ะ! 😊💙\n\n"
             "---\n"
             "💡 **ถามต่อยอดกับน้องเพชร:**\n"
             "• สถานที่โรแมนติกถ่ายรูปสวยในเพชรบุรี\n"
@@ -513,8 +584,8 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
         )
     if any(k in msg for k in ['โง่', 'บ้า', 'หน้าตาแปลก', 'ห่วย', 'กระจอก']):
         return (
-            "ถึงภายนอกน้องเพชรจะเป็นหุ่นยนต์ แต่ความตั้งใจและคลังข้อมูลเพชรบุรีของน้องเพชรเต็มร้อยนะครับ! 🤖💪\n\n"
-            "ลองทดสอบถามเรื่องสถานที่ท่องเที่ยว 8 อำเภอ หรือของกินขึ้นชื่อเมืองเพชรดูได้เลยครับ รับรองว่าแม่นยำแน่นอน!\n\n"
+            "ถึงภายนอกน้องเพชรจะเป็นหุ่นยนต์ แต่ความตั้งใจและคลังข้อมูลเพชรบุรีของน้องเพชรเต็มร้อยนะคะ! 🤖💪\n\n"
+            "ลองทดสอบถามเรื่องสถานที่ท่องเที่ยว 8 อำเภอ หรือของกินขึ้นชื่อเมืองเพชรดูได้เลยค่ะ รับรองว่าแม่นยำแน่นอน!\n\n"
             "---\n"
             "💡 **ถามต่อยอดกับน้องเพชร:**\n"
             "• ประวัติพระนครคีรี เขาวัง\n"
@@ -523,8 +594,8 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
         )
     if any(k in msg for k in ['หล่อไหม', 'คนสร้าง']):
         return (
-            "พี่ๆ คณะผู้พัฒนาจากวิทยาลัยอาชีวศึกษาเพชรบุรี ทั้งเก่ง มีความสามารถ และใจดีทุกคนเลยครับ! "
-            "ที่ร่วมแรงร่วมใจพัฒนาน้องเพชร AI Smart Guide ขึ้นมาเพื่อรับใช้สังคมครับ ✨\n\n"
+            "พี่ๆ คณะผู้พัฒนาจากวิทยาลัยอาชีวศึกษาเพชรบุรี ทั้งเก่ง มีความสามารถ และใจดีทุกคนเลยค่ะ! "
+            "ที่ร่วมแรงร่วมใจพัฒนาน้องเพชร AI Smart Guide ขึ้นมาเพื่อรับใช้สังคมค่ะ ✨\n\n"
             "---\n"
             "💡 **ถามต่อยอดกับน้องเพชร:**\n"
             "• สาขาเทคโนโลยีธุรกิจดิจิทัลเรียนอะไรบ้าง\n"
@@ -533,9 +604,9 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
         )
     if 'เขาวัง' in msg and any(k in msg for k in ['เชียงใหม่', 'ภูเก็ต', 'ที่อื่น', 'ไม่ใช่']):
         return (
-            "🏰 **พระนครคีรี (เขาวัง)** อยู่ที่อำเภอเมือง จังหวัดเพชรบุรี ไม่ได้อยู่ที่เชียงใหม่นะครับ!\n\n"
+            "🏰 **พระนครคีรี (เขาวัง)** อยู่ที่อำเภอเมือง จังหวัดเพชรบุรี ไม่ได้อยู่ที่เชียงใหม่นะคะ!\n\n"
             "เป็นพระราชวังบนยอดเขาแห่งแรกของสยาม สร้างขึ้นในสมัยรัชกาลที่ 4 โดดเด่นด้วยพระธาตุจอมเพชรสีขาวสง่างาม "
-            "และมีรถรางไฟฟ้าเคเบิลคาร์พาขึ้นชมวิวเมืองเพชร 360 องศาครับ\n\n"
+            "และมีรถรางไฟฟ้าเคเบิลคาร์พาขึ้นชมวิวเมืองเพชร 360 องศาค่ะ\n\n"
             "---\n"
             "💡 **ถามต่อยอดกับน้องเพชร:**\n"
             "• เขาวังเปิดให้เข้าชมกี่โมง\n"
@@ -544,8 +615,8 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
         )
     if 'หอไอเฟล' in msg:
         return (
-            "เพชรบุรีไม่มีหอไอเฟลครับผม! แต่เพชรบุรีมีแลนด์มาร์คประวัติศาสตร์ระดับโลกอย่าง 'พระนครคีรี (เขาวัง)' "
-            "และ 'พระปรางค์ 5 ยอด วัดมหาธาตุวรวิหาร' ที่วิจิตรงดงามและมีมนต์เสน่ห์ไม่แพ้กันเลยครับ ✨\n\n"
+            "เพชรบุรีไม่มีหอไอเฟลค่ะ! แต่เพชรบุรีมีแลนด์มาร์คประวัติศาสตร์ระดับโลกอย่าง 'พระนครคีรี (เขาวัง)' "
+            "และ 'พระปรางค์ 5 ยอด วัดมหาธาตุวรวิหาร' ที่วิจิตรงดงามและมีมนต์เสน่ห์ไม่แพ้กันเลยค่ะ ✨\n\n"
             "---\n"
             "💡 **ถามต่อยอดกับน้องเพชร:**\n"
             "• แนะนำที่เที่ยวประวัติศาสตร์ในเมืองเพชร\n"
@@ -701,6 +772,17 @@ def detect_message_language(text, fallback_lang='th'):
 LAST_GEMINI_FAIL_TIME = 0
 GEMINI_CIRCUIT_COOLDOWN = 120  # พัก 120 วินาทีเพื่อ Fallback ทันทีใน <15ms
 
+# เก็บหัวข้อล่าสุดของแต่ละ Session เพื่อรองรับคำถามสั้นต่อเนื่องในโหมด RAG Offline
+SESSION_LAST_TOPIC = OrderedDict()
+MAX_SESSION_TOPICS = 200
+
+SELF_ECHO_MARKERS = (
+    "ยินดีต้อนรับสู่น้องเพชร",
+    "ผู้ช่วยอัจฉริยะประจำวิทยาลัย",
+    "ผู้ช่วยอัจฉริยะประจำจังหวัดเพชรบุรี",
+    "น้องเพชรยินดีต้อนรับสู่วิทยาลัย",
+)
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """
@@ -713,9 +795,23 @@ def chat():
     data = request.json or {}
     user_message = data.get('message', '').strip()
     if not user_message:
-        return jsonify({'response': 'สวัสดีครับ มีอะไรให้น้องเพชรช่วยไหมครับ'}), 400
+        return jsonify({'response': 'สวัสดีค่ะ มีอะไรให้น้องเพชรช่วยไหมคะ'}), 400
     if len(user_message) > 1000:
         user_message = user_message[:1000]
+
+    # กรองเสียงสะท้อนของหุ่นยนต์เอง (Anti-Echo Guardrail) เพื่อป้องกันไมโครโฟนรับเสียงตัวเองวนซ้ำ
+    if any(marker in user_message for marker in SELF_ECHO_MARKERS):
+        return jsonify({
+            'reply': 'น้องเพชรพร้อมฟังคำถามจากคุณแล้วค่ะ สอบถามได้เลยนะคะ 😊',
+            'suggestions': ['แนะนำสถานที่ท่องเที่ยวให้หน่อย', 'แนะนำของกินหน่อย', 'วิทยาลัยเปิดสอนสาขาอะไรบ้าง'],
+            'status': 'success',
+            'language': 'th',
+            'engine': 'anti_echo_guard',
+            'detected_intent': 'greeting',
+            'intent': 'greeting',
+            'confidence': 1.0,
+            'emotion': 'happy'
+        })
     
     # ระบบตรวจจับภาษาอัตโนมัติ (Multilingual Auto-Language Detection)
     raw_lang = data.get('language')
@@ -764,8 +860,16 @@ def chat():
     # หากเป็นภาษาต่างประเทศ (en/zh) จะส่งให้ Gemini ตอบในภาษานั้นๆ
     # -------------------------------------------------------------------------
     if not force_llm and language == 'th':
-        rag_match = semantic_retriever.retrieve(user_message, intent=detected_intent)
+        last_topic_id = SESSION_LAST_TOPIC.get(session_id)
+        rag_match = semantic_retriever.retrieve(
+            user_message,
+            intent=detected_intent,
+            context_entry_id=last_topic_id
+        )
         if rag_match:
+            if len(SESSION_LAST_TOPIC) >= MAX_SESSION_TOPICS:
+                SESSION_LAST_TOPIC.popitem(last=False)
+            SESSION_LAST_TOPIC[session_id] = rag_match['id']
             reply_text = rag_match['reply']
             suggestions = rag_match.get('suggestions') or extract_suggestions(reply_text)
             print(f"⚡ [Semantic RAG] Local Hit [{rag_match['id']}] (Score: {rag_match['score']:.4f}, Intent: {detected_intent})")
@@ -807,17 +911,23 @@ def chat():
                 })
 
     # -------------------------------------------------------------------------
-    # ขั้นที่ 3: Local SLM (Qwen 2.5 On-Device via Ollama) - 100% Offline AI
-    # หากรัน Ollama ในเครื่อง ระบบจะประมวลผลคำตอบเชิงสนทนาในเครื่องทันทีโดยไม่พึ่ง Cloud
+    # ขั้นที่ 3: RAG-Augmented Local SLM (Ollama) - 100% Offline AI (รองรับ th, en, zh)
+    # หากรัน Ollama ในเครื่อง จะดึงข้อมูลเพชรบุรีที่เกี่ยวข้องแนบเข้า Prompt แล้วให้โมเดลตอบอย่างแม่นยำ
     # -------------------------------------------------------------------------
-    if not force_llm and language == 'th':
+    if not force_llm:
         from local_slm import generate_local_response, is_ollama_running
         if is_ollama_running():
-            slm_result = generate_local_response(user_message)
+            rag_contexts = semantic_retriever.retrieve_top_k(user_message, k=2, intent=detected_intent)
+            slm_result = generate_local_response(
+                user_message,
+                rag_contexts=rag_contexts,
+                language=language,
+                intent=intent_th
+            )
             if slm_result:
                 reply_text = slm_result['reply']
                 suggestions = extract_suggestions(reply_text)
-                print(f"🦙 [Local SLM] Qwen 2.5 Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
+                print(f"🦙 [Local SLM+RAG] {slm_result.get('model')} Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
                 record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
                 return jsonify({
                     'reply': reply_text,
@@ -829,7 +939,7 @@ def chat():
                     'intent': detected_intent,
                     'intent_th': intent_th,
                     'confidence': round(confidence, 4),
-                    'source': slm_result.get('source', 'local_slm_qwen2.5'),
+                    'source': slm_result.get('source', 'local_slm'),
                     'emotion': target_emotion
                 })
 
@@ -1719,15 +1829,28 @@ def broadcast_iot_event(event_data):
         if dq in iot_event_subscribers:
             iot_event_subscribers.remove(dq)
 
+IOT_TRIGGER_COOLDOWN_SEC = 20.0
+
 @app.route('/api/iot/trigger', methods=['POST'])
 def iot_trigger():
-    """รับสัญญาณ Trigger เมื่อเซนเซอร์ Ultrasonic (HC-SR04) หรือกล้อง AI ตรวจพบคนมาหยุดมอง"""
+    """รับสัญญาณ Trigger เมื่อเซนเซอร์ Ultrasonic (HC-SR04) หรือกล้อง AI ตรวจพบคนมาหยุดมอง (พร้อม Debounce กันสแปม)"""
     data = request.json or {}
     event_type = data.get('event', 'user_detected')
     distance = data.get('distance')
     source = data.get('source', 'esp32_hardware')
     greeting_text = data.get('greeting_text')
-    
+
+    now_ts = time.time()
+    last_ts = float(iot_state.get('_last_trigger_ts', 0.0) or 0.0)
+    if source != 'manual_simulation' and (now_ts - last_ts) < IOT_TRIGGER_COOLDOWN_SEC:
+        remaining = round(IOT_TRIGGER_COOLDOWN_SEC - (now_ts - last_ts), 1)
+        return jsonify({
+            'status': 'throttled',
+            'cooldown_remaining': remaining,
+            'source': source
+        })
+
+    iot_state['_last_trigger_ts'] = now_ts
     now_str = datetime.datetime.now().strftime("%H:%M:%S")
     iot_state['connected'] = True
     iot_state['last_seen'] = now_str

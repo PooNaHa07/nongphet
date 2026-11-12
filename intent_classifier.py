@@ -17,6 +17,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
+import re
 import joblib
 import numpy as np
 from pythainlp.tokenize import word_tokenize
@@ -25,13 +26,30 @@ from pythainlp.util import normalize
 
 def thai_text_tokenizer(text):
     """
-    ฟังก์ชันตัดคำภาษาไทย (ต้องมีชื่อและโครงสร้างเดียวกับตอนฝึกสอนโมเดลใน train_intent.py)
+    ฟังก์ชันตัดคำไทย (newmm) + แยกอักษรจีน CJK (unigram/bigram)
+    (ต้องมีชื่อและโครงสร้างเดียวกับตอนฝึกสอนโมเดลใน train_intent.py)
     """
     if not isinstance(text, str):
         return []
     cleaned = normalize(text.strip().lower())
-    tokens = word_tokenize(cleaned, engine="newmm", keep_whitespace=False)
-    return [t for t in tokens if len(t.strip()) > 0]
+    raw_tokens = word_tokenize(cleaned, engine="newmm", keep_whitespace=False)
+    tokens = []
+    for tok in raw_tokens:
+        tok = tok.strip()
+        if not tok:
+            continue
+        if re.search(r'[\u4E00-\u9FFF]', tok):
+            for seg in re.findall(r'[\u4E00-\u9FFF]+|[^\u4E00-\u9FFF]+', tok):
+                if re.search(r'[\u4E00-\u9FFF]', seg):
+                    chars = list(seg)
+                    tokens.extend(chars)
+                    for i in range(len(chars) - 1):
+                        tokens.append(chars[i] + chars[i + 1])
+                else:
+                    tokens.append(seg)
+        else:
+            tokens.append(tok)
+    return tokens
 
 
 class NongPhetIntentClassifier:
@@ -148,15 +166,15 @@ class NongPhetIntentClassifier:
         return self._rule_based_fallback(text)
 
     def _rule_based_fallback(self, text: str) -> dict:
-        """ระบบสำรองโดยใช้คีย์เวิร์ดหากโมเดล ML มีปัญหา"""
+        """ระบบสำรองโดยใช้คีย์เวิร์ด (TH/EN/ZH) หากโมเดล ML มีปัญหา"""
         msg = text.lower()
-        if any(k in msg for k in ["เรียน", "สาขา", "สมัคร", "อาชีวะ", "ปวช", "ปวส", "ค่าเทอม", "ดิจิทัล", "บัญชี"]):
+        if any(k in msg for k in ["เรียน", "สาขา", "สมัคร", "อาชีวะ", "ปวช", "ปวส", "ค่าเทอม", "ดิจิทัล", "บัญชี", "pbvc", "vocational", "enroll", "tuition", "major", "职业学院", "报名", "专业", "学费"]):
             intent = "admission"
-        elif any(k in msg for k in ["กิน", "อาหาร", "ขนม", "หม้อแกง", "ข้าวแช่", "ก๋วยเตี๋ยว", "โตนด", "อร่อย", "ของฝาก"]):
+        elif any(k in msg for k in ["กิน", "อาหาร", "ขนม", "หม้อแกง", "ข้าวแช่", "ก๋วยเตี๋ยว", "โตนด", "อร่อย", "ของฝาก", "ผลไม้", "food", "eat", "restaurant", "delicious", "fruit", "美食", "好吃", "小吃", "餐厅", "水果"]):
             intent = "food"
-        elif any(k in msg for k in ["เที่ยว", "เขาวัง", "พระนครคีรี", "ถ้ำ", "หาด", "ชะอำ", "วัด", "แก่งกระจาน", "ทริป"]):
+        elif any(k in msg for k in ["เที่ยว", "เขาวัง", "พระนครคีรี", "ถ้ำ", "หาด", "ชะอำ", "วัด", "แก่งกระจาน", "ทริป", "บ้านลาด", "ท่ายาง", "หนองหญ้าปล้อง", "visit", "travel", "khao wang", "cha-am", "beach", "itinerary", "trip", "景点", "好玩", "拷汪", "七岩", "行程"]):
             intent = "travel"
-        elif any(k in msg for k in ["อากาศ", "ฝน", "เดินทาง", "กี่กิโล", "รถตู้", "รถไฟ", "โรงพยาบาล", "แผนที่"]):
+        elif any(k in msg for k in ["อากาศ", "ฝน", "เดินทาง", "กี่กิโล", "รถตู้", "รถไฟ", "โรงพยาบาล", "แผนที่", "ห้องน้ำ", "emergency", "restroom", "toilet", "weather", "hospital", "bus", "train", "洗手间", "厕所", "天气", "医院", "交通"]):
             intent = "general_faq"
         else:
             intent = "greeting"
