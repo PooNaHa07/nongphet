@@ -411,6 +411,10 @@ function setEmotion(state) {
 // Voice Synthesis Engine (Edge Neural TTS & Browser Fallback)
 // -----------------------------------------------------------------------------
 function fallbackBrowserSpeechMain(text, lang, btnElement, onEndedCallback) {
+    // ล็อกไมค์ทันทีเมื่อเริ่มการสังเคราะห์เสียง
+    stopRecognitionSafe();
+    isSpeakingTTS = true;
+
     if ('speechSynthesis' in window) {
         try {
             window.speechSynthesis.cancel();
@@ -424,45 +428,71 @@ function fallbackBrowserSpeechMain(text, lang, btnElement, onEndedCallback) {
                 setEmotion('speaking');
                 if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
             };
-            u.onend = () => {
-                isSpeakingTTS = false;
-                setEmotion('idle');
+            const finishSpeech = () => {
                 if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                if (typeof onEndedCallback === 'function') onEndedCallback();
+                setTimeout(() => {
+                    isSpeakingTTS = false;
+                    setEmotion('idle');
+                    if (typeof onEndedCallback === 'function') onEndedCallback();
+                }, 350);
             };
-            u.onerror = () => {
-                isSpeakingTTS = false;
-                setEmotion('idle');
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                if (typeof onEndedCallback === 'function') onEndedCallback();
-            };
+            u.onend = finishSpeech;
+            u.onerror = finishSpeech;
             window.speechSynthesis.speak(u);
             return;
         } catch (err) {
             console.warn('speechSynthesis fallback error:', err);
         }
     }
+    setTimeout(() => {
+        isSpeakingTTS = false;
+        setEmotion('idle');
+        if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+        if (typeof onEndedCallback === 'function') onEndedCallback();
+    }, 350);
+}
+
+function stopAllSpeech() {
+    const audioPlayer = document.getElementById('audioPlayer');
+    if (audioPlayer) {
+        audioPlayer.pause();
+        audioPlayer.currentTime = 0;
+    }
+    if ('speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     isSpeakingTTS = false;
+    isWaitingChatResponse = false;
     setEmotion('idle');
-    if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-    if (typeof onEndedCallback === 'function') onEndedCallback();
+    if (lipSyncBroadcast) lipSyncBroadcast.postMessage({ type: 'lipsync', amp: 0 });
 }
 
 async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLang = null) {
     const speechText = stripEmojiAndIcons(text);
     if (!speechText) return;
     const activeLang = forcedLang || currentLang || 'th';
+
+    // 1. ตัดไมค์ทันทีเมื่อเริ่มกระบวนการตอบ (Duplex Half-duplex Control เหมือน Gemini Live)
+    stopRecognitionSafe();
+    isSpeakingTTS = true;
+
     try {
         const audioPlayer = document.getElementById('audioPlayer');
-        if (isSpeakingTTS && audioPlayer && !audioPlayer.paused) {
+        if (audioPlayer && !audioPlayer.paused) {
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
-            isSpeakingTTS = false;
-            setEmotion('idle');
-            if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-            if (typeof onEndedCallback === 'function') onEndedCallback();
-            return;
         }
+
+        const handlePlaybackFinished = () => {
+            if (lipSyncBroadcast) lipSyncBroadcast.postMessage({ type: 'lipsync', amp: 0 });
+            if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
+            // เว้นจังหวะ 350ms ให้เสียงสะท้อนในห้องและลำโพงดับสนิทก่อนเปิดไมค์รอบใหม่
+            setTimeout(() => {
+                isSpeakingTTS = false;
+                setEmotion('idle');
+                if (typeof onEndedCallback === 'function') onEndedCallback();
+            }, 350);
+        };
 
         const cacheKey = activeLang + '_' + text;
         if (clientAudioCache.has(cacheKey)) {
@@ -478,12 +508,9 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
             }).catch(() => {
                 fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
             });
-            audioPlayer.onended = () => {
-                isSpeakingTTS = false;
-                setEmotion('idle');
-                if (lipSyncBroadcast) lipSyncBroadcast.postMessage({ type: 'lipsync', amp: 0 });
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                if (typeof onEndedCallback === 'function') onEndedCallback();
+            audioPlayer.onended = handlePlaybackFinished;
+            audioPlayer.onerror = () => {
+                fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
             };
             return;
         }
@@ -531,13 +558,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
                 console.warn('Audio play prevented or blocked by browser autoplay:', err);
                 fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
             });
-            audioPlayer.onended = () => {
-                isSpeakingTTS = false;
-                setEmotion('idle');
-                if (lipSyncBroadcast) lipSyncBroadcast.postMessage({ type: 'lipsync', amp: 0 });
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                if (typeof onEndedCallback === 'function') onEndedCallback();
-            };
+            audioPlayer.onended = handlePlaybackFinished;
             audioPlayer.onerror = () => {
                 console.warn('audioPlayer error -> fallback to browser speech');
                 fallbackBrowserSpeechMain(speechText, activeLang, btnElement, onEndedCallback);
@@ -679,11 +700,12 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                     // เรียกเฉพาะชื่อ "น้องเพชร"
                     toggleRealtimeVoiceMode(true);
                     const wakeReplies = {
-                        th: 'ครับผม! น้องเพชรพร้อมแล้วครับ สอบถามได้เลยครับ ✨',
+                        th: 'ค่ะ! น้องเพชรพร้อมแล้วค่ะ สอบถามได้เลยนะคะ ✨',
                         en: "Hello! I'm Nong Phet. How can I help you? ✨",
                         zh: '在呢！请问有什么我可以帮您的吗？ ✨'
                     };
                     const reply = wakeReplies[parsed.detectedLang] || wakeReplies.th;
+                    stopRecognitionSafe();
                     playTTS(reply, null, () => {
                         startRecognitionSafe();
                     }, parsed.detectedLang);
@@ -786,19 +808,34 @@ function startRecognitionSafe() {
 }
 
 function stopRecognitionSafe() {
-    if (!recognition) return;
     if (speechSilenceTimer) clearTimeout(speechSilenceTimer);
+    if (!recognition) return;
     try {
-        recognition.stop();
-    } catch (e) {}
+        // ตัดไมโครโฟนทันที (Cut mic immediately เหมือน Gemini Live)
+        recognition.abort();
+    } catch (e) {
+        try { recognition.stop(); } catch (e2) {}
+    }
+    isRecording = false;
 }
-
 
 function toggleSpeechRecognition() {
     if (!recognition) {
         showAppToast('เบราว์เซอร์ของคุณไม่รองรับการสั่งการด้วยเสียง (แนะนำ Chrome หรือ Edge)', 'warning');
         return;
     }
+    // หากบอทกำลังคิดหรือกำลังพูดอยู่ -> แตะไมค์เพื่อขัดจังหวะทันที (Barge-in เหมือน Gemini Live) แล้วสลับไปฟังทันที
+    if (isSpeakingTTS || isWaitingChatResponse) {
+        stopAllSpeech();
+        if (typeof setRealtimeVoiceStatus === 'function') {
+            setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... พูดได้เลยค่ะ');
+        }
+        setTimeout(() => {
+            startRecognitionSafe();
+        }, 150);
+        return;
+    }
+
     if (isRecording) {
         stopRecognitionSafe();
     } else {

@@ -88,7 +88,6 @@ async function sendChatMessage(forcedLang = null) {
             })
         });
         const data = await response.json();
-        isWaitingChatResponse = false;
         if (typingIndicator) typingIndicator.classList.add('hidden');
 
         if (data.reply) {
@@ -108,15 +107,21 @@ async function sendChatMessage(forcedLang = null) {
                     setRealtimeVoiceStatus('speaking', '🔊 น้องเพชรกำลังตอบกลับ...');
                 }
                 
+                // ล็อกไมโครโฟนปิดสนิทระหว่างที่กำลังเล่นเสียงตอบกลับ (Half-duplex เหมือน Gemini Live)
+                if (typeof stopRecognitionSafe === 'function') {
+                    stopRecognitionSafe();
+                }
+
                 playTTS(data.reply, null, () => {
-                    // When speech playback finishes
+                    // เมื่อเสียงเล่นจบสมบูรณ์ (Audio onended + buffer delay)
+                    isWaitingChatResponse = false;
                     if (typeof setEmotion === 'function') {
                         setEmotion(targetEmotion);
                         setTimeout(() => {
                             if (!isSpeakingTTS && !isWaitingChatResponse && !isRecording) {
                                 setEmotion('idle');
                             }
-                        }, 3500);
+                        }, 3000);
                     }
                     if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) {
                         if (typeof setRealtimeVoiceStatus === 'function') {
@@ -125,11 +130,12 @@ async function sendChatMessage(forcedLang = null) {
                         if (typeof startRecognitionSafe === 'function') {
                             setTimeout(() => {
                                 startRecognitionSafe();
-                            }, 300);
+                            }, 250);
                         }
                     }
                 }, replyLang);
             } else {
+                isWaitingChatResponse = false;
                 if (typeof setEmotion === 'function') {
                     setEmotion(targetEmotion);
                     setTimeout(() => {
@@ -143,24 +149,28 @@ async function sendChatMessage(forcedLang = null) {
                         setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยไม่ต้องกดปุ่ม)');
                     }
                     if (typeof startRecognitionSafe === 'function') {
-                        setTimeout(() => startRecognitionSafe(), 300);
+                        setTimeout(() => {
+                            startRecognitionSafe();
+                        }, 300);
                     }
                 }
             }
         } else {
-            if (typeof setEmotion === 'function') setEmotion('idle');
-            appendChatBubble('ai', data.error || 'ขออภัยครับ เกิดข้อผิดพลาดในการประมวลผล');
-            if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive && typeof startRecognitionSafe === 'function') {
-                setTimeout(() => startRecognitionSafe(), 1000);
-            }
+            isWaitingChatResponse = false;
         }
-    } catch (err) {
-        if (typeof setEmotion === 'function') setEmotion('idle');
+    } catch (error) {
+        console.error('Chat API error:', error);
         isWaitingChatResponse = false;
+        if (typeof isSpeakingTTS !== 'undefined') isSpeakingTTS = false;
         if (typingIndicator) typingIndicator.classList.add('hidden');
-        appendChatBubble('ai', 'ไม่สามารถเชื่อมต่อระบบ AI ได้ในขณะนี้');
-        if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive && typeof startRecognitionSafe === 'function') {
-            setTimeout(() => startRecognitionSafe(), 1000);
+        appendChatBubble('ai', 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง');
+        if (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) {
+            if (typeof setRealtimeVoiceStatus === 'function') {
+                setRealtimeVoiceStatus('listening', '🎙️ พร้อมฟังเสียงคุณใหม่แล้วค่ะ');
+            }
+            if (typeof startRecognitionSafe === 'function') {
+                setTimeout(() => startRecognitionSafe(), 800);
+            }
         }
     }
 }

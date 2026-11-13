@@ -1968,6 +1968,21 @@ function toggleDirectVoice() {
         a.play().then(() => { a.pause(); }).catch(() => {});
     }
 
+    // หากบอทกำลังคิดหรือกำลังพูดอยู่ -> แตะไมค์เพื่อขัดจังหวะทันที (Barge-in เหมือน Gemini Live) แล้วเริ่มฟังทันที
+    if (isEmotionSpeaking) {
+        if (a) { a.pause(); a.currentTime = 0; }
+        if ('speechSynthesis' in window) {
+            try { window.speechSynthesis.cancel(); } catch(e) {}
+        }
+        isEmotionSpeaking = false;
+        setLipSyncAmplitude(0);
+        showVoiceSubtitle('🎙️ หยุดพูดแล้วค่ะ พร้อมฟังคุณต่อทันที');
+        setTimeout(() => {
+            startAutoListening();
+        }, 150);
+        return;
+    }
+
     if (!emotionRecognition) {
         initDirectVoiceEngine();
         if (!emotionRecognition) {
@@ -1977,7 +1992,9 @@ function toggleDirectVoice() {
     }
 
     if (isEmotionListening) {
-        emotionRecognition.stop();
+        try { emotionRecognition.abort(); } catch(e) {
+            try { emotionRecognition.stop(); } catch(e2) {}
+        }
         isEmotionListening = false;
         resetMicButton();
         if (currentEmotion === 'listening') applyEmotion('idle');
@@ -1985,8 +2002,10 @@ function toggleDirectVoice() {
         try {
             emotionRecognition.start();
         } catch (e) {
-            emotionRecognition.stop();
-            setTimeout(() => emotionRecognition.start(), 200);
+            try { emotionRecognition.stop(); } catch(e2) {}
+            setTimeout(() => {
+                try { emotionRecognition.start(); } catch(e3) {}
+            }, 200);
         }
     }
 }
@@ -2015,8 +2034,15 @@ function showVoiceSubtitle(text, autoHideMs = 0) {
 }
 
 async function processDirectVoiceQuery(queryText, forcedLang = null) {
-    // ป้องกัน feedback: ไม่ฟังระหว่าง thinking + speaking
+    // 1. ตัดไมค์หยุดฟังทันทีเมื่อผู้ใช้พูดจบ (Duplex Half-duplex Control เหมือน Gemini Live)
+    if (emotionRecognition) {
+        try { emotionRecognition.abort(); } catch(e) {
+            try { emotionRecognition.stop(); } catch(e2) {}
+        }
+    }
+    isEmotionListening = false;
     isEmotionSpeaking = true;
+    resetMicButton();
     applyEmotion('thinking');
     showVoiceSubtitle(`⚡ น้องเพชรกำลังคิด: "${queryText}"`);
 
@@ -2033,14 +2059,14 @@ async function processDirectVoiceQuery(queryText, forcedLang = null) {
             body: JSON.stringify({ message: queryText, language: forcedLang || 'auto', session_id: sessionId })
         });
         const chatData = await chatRes.json();
-        const reply = chatData.reply || 'น้องเพชรพร้อมให้บริการครับ';
+        const reply = chatData.reply || 'น้องเพชรพร้อมให้บริการค่ะ';
         const replyLang = chatData.language || forcedLang || 'th';
 
         showVoiceSubtitle(reply);
         playDirectVoiceTTS(reply, replyLang);
     } catch (e) {
         isEmotionSpeaking = false;
-        showVoiceSubtitle('ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ AI', 3000);
+        showVoiceSubtitle('ขออภัยค่ะ เกิดข้อผิดพลาดในการเชื่อมต่อ AI', 3000);
         applyEmotion('idle');
         // ถ้า error ให้ฟังต่อใน auto mode
         if (autoVoiceMode) {
@@ -2066,33 +2092,33 @@ function fallbackBrowserSpeech(text, lang = 'th') {
                 applyEmotion('speaking');
                 startLocalLipSyncPulse();
             };
-            u.onend = () => { 
-                isEmotionSpeaking = false;
-                applyEmotion('idle');
+            const finishSpeechFallback = () => {
                 setLipSyncAmplitude(0);
-                if (autoVoiceMode) {
-                    setTimeout(() => startAutoListening(), 600);
-                }
+                setTimeout(() => {
+                    isEmotionSpeaking = false;
+                    applyEmotion('idle');
+                    if (autoVoiceMode) {
+                        showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยค่ะ)');
+                        setTimeout(() => startAutoListening(), 200);
+                    }
+                }, 350);
             };
-            u.onerror = () => { 
-                isEmotionSpeaking = false;
-                applyEmotion('idle');
-                setLipSyncAmplitude(0);
-                if (autoVoiceMode) {
-                    setTimeout(() => startAutoListening(), 600);
-                }
-            };
+            u.onend = finishSpeechFallback;
+            u.onerror = finishSpeechFallback;
             window.speechSynthesis.speak(u);
             return;
         } catch (e) {
             console.warn('SpeechSynthesis error:', e);
         }
     }
-    isEmotionSpeaking = false;
-    applyEmotion('idle');
-    if (autoVoiceMode) {
-        setTimeout(() => startAutoListening(), 600);
-    }
+    setTimeout(() => {
+        isEmotionSpeaking = false;
+        applyEmotion('idle');
+        if (autoVoiceMode) {
+            showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยค่ะ)');
+            setTimeout(() => startAutoListening(), 200);
+        }
+    }, 350);
 }
 
 function playBase64ViaWebAudio(base64Data, onEndedCallback) {
@@ -2115,9 +2141,11 @@ function playBase64ViaWebAudio(base64Data, onEndedCallback) {
             startLocalLipSyncPulse();
             source.onended = () => {
                 clearTimeout(emotionSafetyWatchdog);
-                applyEmotion('idle');
                 setLipSyncAmplitude(0);
-                if (typeof onEndedCallback === 'function') onEndedCallback();
+                setTimeout(() => {
+                    applyEmotion('idle');
+                    if (typeof onEndedCallback === 'function') onEndedCallback();
+                }, 350);
             };
             source.start(0);
         }, (err) => {
@@ -2133,6 +2161,15 @@ function playBase64ViaWebAudio(base64Data, onEndedCallback) {
 }
 
 async function playDirectVoiceTTS(text, lang = 'th') {
+    // 1. ตัดไมค์หยุดฟังทันทีเมื่อเริ่มพูด (Duplex Control เหมือน Gemini Live)
+    if (emotionRecognition) {
+        try { emotionRecognition.abort(); } catch(e) {
+            try { emotionRecognition.stop(); } catch(e2) {}
+        }
+    }
+    isEmotionListening = false;
+    isEmotionSpeaking = true;
+
     // ตัดข้อความให้กระชับก่อนพูด: เอาแค่ประโยคแรก ไม่เกิน 150 ตัวอักษร
     let speakText = text
         .split(/\n|---|💡|❓/)[0]          // เอาแค่ย่อหน้าแรก
@@ -2168,43 +2205,52 @@ async function playDirectVoiceTTS(text, lang = 'th') {
 
             audioEl.onended = () => {
                 clearTimeout(emotionSafetyWatchdog);
-                isEmotionSpeaking = false;
-                applyEmotion('idle');
                 setLipSyncAmplitude(0);
-                // Auto-start listening หลัง TTS จบ ถ้าอยู่ใน auto mode
-                if (autoVoiceMode) {
-                    setTimeout(() => startAutoListening(), 600);
-                }
+                // เว้นจังหวะ 400ms ให้เสียงในห้องเงียบสนิทก่อนเริ่มเปิดไมค์ฟังคำถามถัดไป
+                setTimeout(() => {
+                    isEmotionSpeaking = false;
+                    applyEmotion('idle');
+                    if (autoVoiceMode) {
+                        showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยค่ะ)');
+                        setTimeout(() => startAutoListening(), 200);
+                    }
+                }, 400);
             };
 
             audioEl.onerror = () => {
                 console.warn('audioEl error, falling back to Web Audio');
-                isEmotionSpeaking = false;
                 playBase64ViaWebAudio(ttsData.audio_base64, () => {
-                    if (autoVoiceMode) setTimeout(() => startAutoListening(), 600);
+                    setTimeout(() => {
+                        isEmotionSpeaking = false;
+                        applyEmotion('idle');
+                        if (autoVoiceMode) setTimeout(() => startAutoListening(), 350);
+                    }, 350);
                 });
             };
 
             // เริ่มเล่นเสียง: เมื่อเสียงดังจริงค่อยเริ่มขยับปากพูด!
             try {
                 await audioEl.play();
-                isEmotionSpeaking = true; // mark ว่ากำลังพูด เพื่อกัน feedback
+                isEmotionSpeaking = true;
                 applyEmotion('speaking');
                 startLocalLipSyncPulse();
             } catch (playErr) {
                 console.warn('Audio play blocked by browser, attempting Web Audio API:', playErr);
-                isEmotionSpeaking = false;
-                const webAudioPlayed = playBase64ViaWebAudio(ttsData.audio_base64);
+                const webAudioPlayed = playBase64ViaWebAudio(ttsData.audio_base64, () => {
+                    setTimeout(() => {
+                        isEmotionSpeaking = false;
+                        applyEmotion('idle');
+                        if (autoVoiceMode) setTimeout(() => startAutoListening(), 350);
+                    }, 350);
+                });
                 if (!webAudioPlayed) {
                     fallbackBrowserSpeech(speakText, lang);
                 }
             }
         } else {
-            isEmotionSpeaking = false;
             fallbackBrowserSpeech(speakText, lang);
         }
     } catch (e) {
-        isEmotionSpeaking = false;
         console.warn('TTS request failed/aborted:', e);
         fallbackBrowserSpeech(speakText, lang);
     }

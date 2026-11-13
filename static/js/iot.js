@@ -171,7 +171,7 @@ function triggerAutoGreeting(distance, source = 'esp32_hardware', customText = n
                     }
                 }
             } else if (typeof updateLiveAISubtitle === 'function') {
-                updateLiveAISubtitle(`ตรวจพบบุคคลยืนอยู่หน้ากล้อง (ระยะ ${distance || 45} ซม.) น้องเพชรพร้อมคุยและมองเห็นคุณแล้วครับ! 😊`);
+                updateLiveAISubtitle(`ตรวจพบบุคคลยืนอยู่หน้ากล้อง (ระยะ ${distance || 45} ซม.) น้องเพชรพร้อมคุยและมองเห็นคุณแล้วค่ะ! 😊`);
             }
         }, 400);
     } else {
