@@ -155,6 +155,11 @@ def sign_language():
         'source': 'sign_language_local'
     })
     record_interaction(f"[ภาษามือ] {result_data.get('gesture_name')}", 'sign_language', 0.95, 'local_rule_tsl', language)
+    try:
+        from services import arm_service
+        arm_service.react_to_sign(gesture_hint)
+    except Exception:
+        pass
 
     return jsonify({
         'status': 'success',

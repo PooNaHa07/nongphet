@@ -83,7 +83,9 @@ from routes.iot import iot_bp
 from routes.admin import admin_bp
 from routes.display import display_bp
 from routes.knowledge import knowledge_bp
+from routes.arm import arm_bp
 
+app.register_blueprint(arm_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(vision_bp)
 app.register_blueprint(media_bp)

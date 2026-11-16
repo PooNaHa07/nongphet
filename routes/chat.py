@@ -17,6 +17,7 @@ from services.knowledge_service import (
     semantic_retriever, match_local_knowledge, get_local_knowledge_reply
 )
 from services.analytics_service import record_interaction
+from services.arm_service import extract_gesture_tag
 import state
 
 logger = logging.getLogger("nongphet.chat")
@@ -78,7 +79,7 @@ def resolve_living_emotion(user_message: str, reply_text: str, default_emotion: 
         
     return default_emotion if default_emotion in ['smile', 'happy', 'excited', 'love', 'wink', 'surprised', 'thinking'] else 'smile'
 
-def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None):
+def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None, gesture=None):
     """ส่งต่อคำตอบพร้อมซิงค์อารมณ์ใบหน้าน้องเพชร (Screen 2) และบันทึกลง State"""
     final_emotion = resolve_living_emotion(user_message, reply_text, base_emotion)
     state.emotion_state['current'] = final_emotion
@@ -93,7 +94,18 @@ def send_chat_response(user_message, reply_text, suggestions, engine, detected_i
         })
     except Exception as e:
         logger.debug(f"Emotion broadcast note: {e}")
-        
+
+    # ท่าทางแขนประกอบอารมณ์/เจตนา (ไม่ขัดขวางการตอบแชทหากระบบแขนมีปัญหา)
+    try:
+        from services import arm_service
+        if gesture:
+            # ท่าที่ LLM เลือกเองผ่านแท็ก [gesture:x] มาก่อนการเดาจากอารมณ์
+            arm_service.trigger_gesture(gesture, source='llm_tag')
+        else:
+            arm_service.react_to_chat(detected_intent, final_emotion)
+    except Exception as e:
+        logger.debug(f"Arm gesture note: {e}")
+
     resp = {
         'reply': reply_text,
         'suggestions': suggestions,
@@ -243,7 +255,7 @@ def chat():
                     intent=intent_th
                 )
                 if slm_result:
-                    reply_text = slm_result['reply']
+                    reply_text, llm_gesture = extract_gesture_tag(slm_result['reply'])
                     suggestions = extract_suggestions(reply_text)
                     logger.info(f"🦙 [Local SLM+RAG] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
                     record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
@@ -257,7 +269,8 @@ def chat():
                         confidence=confidence,
                         source=slm_result.get('source', 'local_slm'),
                         language=language,
-                        base_emotion=target_emotion
+                        base_emotion=target_emotion,
+                        gesture=llm_gesture
                     )
         except ImportError:
             pass
@@ -274,6 +287,7 @@ def chat():
                 language=language
             )
             if gemini_reply:
+                gemini_reply, llm_gesture = extract_gesture_tag(gemini_reply)
                 suggestions = extract_suggestions(gemini_reply)
                 logger.info(f"✨ [Gemini 2.5 Flash] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
                 record_interaction(user_message, detected_intent, confidence, 'gemini_flash', language)
@@ -295,7 +309,8 @@ def chat():
                     confidence=confidence,
                     source='gemini_2.5_flash',
                     language=language,
-                    base_emotion=target_emotion
+                    base_emotion=target_emotion,
+                    gesture=llm_gesture
                 )
         except Exception as ge:
             logger.warning(f"⚠️ Gemini chat processing error ({ge}) -> fallback to offline")

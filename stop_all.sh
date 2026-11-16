@@ -12,6 +12,9 @@ killall -9 chromium chromium-browser google-chrome 2>/dev/null || true
 # 2. ปิด Vision Daemon
 pkill -f "python.*vision_daemon.py" 2>/dev/null || true
 
+# 2.1 ปิดบริดจ์ ESP32
+pkill -f "python.*esp32_listener.py" 2>/dev/null || true
+
 # 3. ปิด Flask Web Application
 pkill -f "python.*app.*\.py" 2>/dev/null || true
 
