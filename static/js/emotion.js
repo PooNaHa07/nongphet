@@ -347,15 +347,22 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', primeAudioPlayback, { once: true });
 
     // ตรวจสอบสถานะ Vision Daemon เพื่อซิงค์กล้องอัตโนมัติ โดยไม่แย่งสิทธิ์กล้อง
-    checkVisionDaemonStatus().then(isActive => {
-        if (!isActive && !isDualScreenSlave && !isCameraTracking && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            setTimeout(() => {
-                startCameraTracking(true).catch(err => {
-                    console.log('Standby camera tracking:', err);
-                });
-            }, 1200);
+    // ตอนบูตเครื่อง Chromium อาจขึ้นก่อน vision_daemon: ถ้าเปิดกล้องฝั่งเบราว์เซอร์เลย daemon จะเปิดกล้องไม่ได้
+    // จึงเช็กซ้ำหลายครั้ง (รวมประมาณ 20 วินาที) ก่อนจะยอมใช้กล้องในเบราว์เซอร์เป็นทางสำรอง
+    (async () => {
+        const MAX_CHECKS = 10;
+        const CHECK_INTERVAL_MS = 2000;
+        for (let i = 0; i < MAX_CHECKS; i++) {
+            if (await checkVisionDaemonStatus()) return;
+            if (isDualScreenSlave || isCameraTracking) return;
+            await new Promise(r => setTimeout(r, CHECK_INTERVAL_MS));
         }
-    });
+        if (!isDualScreenSlave && !isCameraTracking && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            startCameraTracking(true).catch(err => {
+                console.log('Standby camera tracking:', err);
+            });
+        }
+    })();
 });
 
 let emotionSafetyWatchdog = null;

@@ -7,6 +7,7 @@ import io
 import re
 import base64
 import hashlib
+import time
 import asyncio
 import threading
 import logging
@@ -230,6 +231,47 @@ def clean_text_for_speech(text, max_len=2500, voice_gender='female', lang='th'):
 
     return t
 
+# ------------------------------------------------------------------------------
+# Edge-TTS ต้องใช้อินเทอร์เน็ต: เมื่อเน็ตล่ม ให้พักไว้ชั่วคราว (circuit breaker)
+# แทนที่จะรอ timeout ทุกประโยคจนเสียงเงียบนาน
+# ------------------------------------------------------------------------------
+EDGE_BACKOFF_SEC = float(os.environ.get('TTS_EDGE_BACKOFF_SEC', '60'))
+_edge_state = {'offline_until': 0.0}
+_NETWORK_ERROR_NAMES = (
+    'ClientConnectorError', 'ClientConnectionError', 'ClientOSError', 'ServerDisconnectedError',
+    'ServerTimeoutError', 'WSServerHandshakeError', 'ClientConnectorDNSError', 'gaierror',
+)
+
+
+class EdgeTTSOffline(RuntimeError):
+    """Edge-TTS ใช้ไม่ได้เพราะเครือข่าย (ให้ผู้เรียกข้ามไปใช้เสียงในเครื่องทันที)"""
+
+
+def _is_network_error(err):
+    if isinstance(err, (asyncio.TimeoutError, TimeoutError, ConnectionError, OSError)):
+        return True
+    if type(err).__name__ in _NETWORK_ERROR_NAMES:
+        return True
+    msg = str(err)
+    return 'Cannot connect' in msg or 'getaddrinfo' in msg
+
+
+def _mark_edge_offline():
+    _edge_state['offline_until'] = time.time() + EDGE_BACKOFF_SEC
+
+
+def _mark_edge_ok():
+    _edge_state['offline_until'] = 0.0
+
+
+def edge_tts_available():
+    return time.time() >= _edge_state['offline_until']
+
+
+def edge_tts_backoff_remaining():
+    return max(0.0, _edge_state['offline_until'] - time.time())
+
+
 async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pitch="+0Hz", volume="+0%", timeout=6.0, retries=2):
     """
     สร้างเสียงสังเคราะห์ Studio Neural Quality ผ่าน Edge-TTS
@@ -238,6 +280,10 @@ async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pit
     """
     if not voice or 'Niwat' in voice or 'Pattara' in voice:
         voice = 'th-TH-PremwadeeNeural'
+
+    # เน็ตเพิ่งล่มไป -> ไม่ต้องรอ timeout ซ้ำ ให้ผู้เรียกไปใช้เสียงสำรองในเครื่องทันที
+    if not edge_tts_available():
+        raise EdgeTTSOffline(f"Edge-TTS skipped: network down, retry in {edge_tts_backoff_remaining():.0f}s")
 
     last_error = None
     for attempt in range(retries):
@@ -252,65 +298,21 @@ async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pit
             attempt_timeout = min(timeout, 6.0)
             await asyncio.wait_for(collect(), timeout=attempt_timeout)
             if chunks:
+                _mark_edge_ok()
                 return b''.join(chunks)
         except Exception as ve:
             last_error = ve or "Connection Timeout"
             err_msg = str(ve) if str(ve) else type(ve).__name__
             logger.warning(f"Edge-TTS [{voice}] attempt {attempt + 1}/{retries} failed ({err_msg})")
+            if _is_network_error(ve):
+                # ต่อเน็ตไม่ได้/หมดเวลา: ลองซ้ำก็เสียเวลาเปล่า -> พัก Edge-TTS ชั่วคราว
+                _mark_edge_offline()
+                raise EdgeTTSOffline(f"Edge-TTS network error: {err_msg}") from ve
             if attempt < retries - 1:
                 await asyncio.sleep(0.3 * (attempt + 1))
             continue
 
     raise RuntimeError(f"Edge-TTS failed after {retries} retries: {last_error}")
-
-def generate_gemini_audio(clean_text, voice_name="Aoede", timeout=7.0):
-    """
-    สร้างเสียงสังเคราะห์ผ่าน Gemini 3.8 / Multimodal Audio Engine (gemini-3.8-flash)
-    พร้อมระบบตรวจสอบ Quota และ Auto-Fallback
-    """
-    from config import Config
-    if not Config.GEMINI_API_KEY or Config.GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
-        return None
-
-    try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(
-            api_key=Config.GEMINI_API_KEY,
-            http_options=types.HttpOptions(api_version='v1beta')
-        )
-
-        candidate_models = ['gemini-3.8-flash', 'gemini-omni-flash-preview', 'gemini-3.1-flash-lite']
-        for model_name in candidate_models:
-            try:
-                res = client.models.generate_content(
-                    model=model_name,
-                    contents=f"ออกเสียงข้อความภาษาไทยนี้ให้ชัดเจนและเป็นธรรมชาติ: {clean_text}",
-                    config=types.GenerateContentConfig(
-                        response_modalities=['AUDIO'],
-                        speech_config=types.SpeechConfig(
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
-                            )
-                        )
-                    )
-                )
-                if res and res.candidates and len(res.candidates) > 0:
-                    for part in res.candidates[0].content.parts:
-                        if getattr(part, 'inline_data', None) and part.inline_data.data:
-                            logger.info(f"✨ [Gemini TTS] สังเคราะห์เสียงสำเร็จด้วยโมเดล {model_name} (Voice: {voice_name})")
-                            return part.inline_data.data, part.inline_data.mime_type
-            except Exception as me:
-                err_str = str(me)
-                if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
-                    logger.debug(f"Gemini Audio [{model_name}] Quota exhausted: {err_str[:80]}")
-                else:
-                    logger.debug(f"Gemini Audio [{model_name}] attempt note: {err_str[:80]}")
-                continue
-    except Exception as e:
-        logger.warning(f"⚠️ [Gemini Audio Engine] ไม่สามารถสร้างเสียง: {e}")
-    return None
 
 def iter_audio_stream(text, voice="th-TH-PremwadeeNeural", rate="+2%", pitch="+0Hz", volume="+0%"):
     """

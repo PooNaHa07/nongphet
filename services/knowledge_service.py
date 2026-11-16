@@ -4,7 +4,7 @@ services/knowledge_service.py — Local Knowledge Base & Offline Fallback Engine
 (Nong Phet 2026 Living Persona Edition)
 """
 import re
-from services.gemini_service import is_complex_or_trap_query
+from services.text_utils import is_complex_or_trap_query
 from semantic_retriever import get_semantic_retriever
 
 semantic_retriever = get_semantic_retriever()

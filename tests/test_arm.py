@@ -242,7 +242,7 @@ class TestSpeechAndTags(unittest.TestCase):
     def test_chat_response_prefers_llm_gesture(self):
         import routes.chat as chat_routes
         with app.test_request_context():
-            chat_routes.send_chat_response('ทดสอบ', 'ตอบ', [], 'gemini_flash', 'general', 'ทั่วไป',
+            chat_routes.send_chat_response('ทดสอบ', 'ตอบ', [], 'local_slm', 'general', 'ทั่วไป',
                                            0.9, 'test', 'th', 'smile', gesture='surprise')
         arm_events = [e for e in self.events if e['event'] == 'arm_gesture']
         self.assertEqual(arm_events[0]['gesture'], 'surprise')

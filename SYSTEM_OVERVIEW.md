@@ -4,7 +4,7 @@
 
 **"น้องเพชร AI Smart Guide"** คือหุ่นยนต์ประชาสัมพันธ์และไกด์นำเที่ยวอัจฉริยะ (AI Robot Kiosk) ผลงานนวัตกรรมสิ่งประดิษฐ์ของ**วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC)** ออกแบบตามมาตรฐานเกณฑ์การประเมินสิ่งประดิษฐ์คนรุ่นใหม่ สอศ. ประเภทหุ่นยนต์และปัญญาประดิษฐ์
 
-ระบบผสมผสานระหว่าง **Edge Computing บน Raspberry Pi 5** สำหรับงานที่ต้องการความเร็วสูงและทำงานแบบออฟไลน์ได้ (Local ML Intent Classification, Semantic Retrieval, Face & Gaze Tracking, Universal Design Thai Sign Language) ร่วมกับ **Cloud Multimodal AI (Google Gemini 2.5 Flash)** สำหรับการวิเคราะห์ภาพสถานที่ท่องเที่ยวเชิงลึกและการสนทนาแบบเปิด (Open-domain conversational AI)
+ระบบผสมผสานระหว่าง **Edge Computing บน Raspberry Pi 5** สำหรับงานที่ต้องการความเร็วสูงและทำงานแบบออฟไลน์ได้ (Local ML Intent Classification, Semantic Retrieval, Face & Gaze Tracking, Universal Design Thai Sign Language) และ **Local SLM ผ่าน Ollama** สำหรับการสนทนาแบบเปิด (Open-domain conversational AI) ทำงานในเครื่องทั้งหมดโดยไม่พึ่ง Cloud AI
 
 ---
 
@@ -36,13 +36,13 @@
 |   └── MJPEG Live Video Server (/video_feed, /snapshot.jpg, /status)               |
 +-----------------------------------------------------------------------------------+
             │                                             │
-            ▼ (Offline Edge)                              ▼ (Cloud AI)
+            ▼ (Offline Edge)                              ▼ (Offline LLM, ไม่บังคับ)
 +---------------------------------------+   +---------------------------------------+
-|          LOCAL EDGE AI ENGINE         |   |         CLOUD MULTIMODAL ENGINE       |
-|  - Semantic Retriever (TF-IDF + Cosine|   |  - Google Gemini 2.5 Flash            |
-|    Similarity with Hot Reloading)     |   |  - Fallback: Gemini 2.0 Flash         |
-|  - Local Rule Engine (< 50ms latency) |   |  - Deep Cultural & Travel Knowledge   |
-|  - TSL 21-Joint Geometric Classifier  |   |  - Multimodal Photo Verification      |
+|          LOCAL EDGE AI ENGINE         |   |        LOCAL SLM (OLLAMA)             |
+|  - Semantic Retriever (TF-IDF + Cosine|   |  - Qwen 2.5 1.5B / nongphet-custom    |
+|    Similarity with Hot Reloading)     |   |  - RAG Context Injection              |
+|  - Local Rule Engine (< 50ms latency) |   |  - Open-domain Conversation           |
+|  - TSL 21-Joint Geometric Classifier  |   |                                       |
 |  - Edge-TTS / PyThaiTTS Audio Stream  |   |                                       |
 +---------------------------------------+   +---------------------------------------+
                                          │
@@ -103,7 +103,8 @@
 - `app_new.py`: ไฟล์ Entrypoint ขนาดกะทัดรัด ลงทะเบียน Blueprints ทั้งหมด
 - `state.py`: จุดรวม Shared State ป้องกัน Circular Import
 - `services/`:
-  - `gemini_service.py`: บริการเชื่อมต่อ Google GenAI SDK (Primary & Fallback)
+  - `text_utils.py`: ดึงคำถามต่อยอด ตรวจจับภาษา และคำถามลองภูมิ
+  - `arm_service.py`: ท่าทางแขนหุ่นยนต์ (เซอร์โวไหล่)
   - `knowledge_service.py`: บริการคลังความรู้แบบออฟไลน์
   - `knowledge_manager.py`: บริการจัดการข้อมูลความรู้แบบ Safe CRUD & Persistence
   - `analytics_service.py`: บริการบันทึกสถิติและวิเคราะห์พฤติกรรมผู้เข้าชม

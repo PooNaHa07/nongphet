@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-routes/media.py — Text-to-Speech (TTS), Live Multimodal WebSocket & Weather Blueprint
+routes/media.py — Text-to-Speech (TTS) & Weather Blueprint
 """
 import io
 import os
@@ -14,8 +14,7 @@ from config import Config
 from services.tts_service import (
     get_pythaitts_engine, get_cached_tts, save_cached_tts,
     extract_first_sentence_for_speech, clean_text_for_speech,
-    generate_edge_tts, run_coroutine, iter_audio_stream,
-    generate_gemini_audio
+    generate_edge_tts, run_coroutine, iter_audio_stream, edge_tts_available
 )
 
 logger = logging.getLogger("nongphet.media")
@@ -82,27 +81,6 @@ def tts():
         })
 
     # -------------------------------------------------------------------------
-    # ลำดับพิเศษ: Google Gemini 3.8 / Multimodal Audio Engine (เมื่อเลือกระบุ Engine)
-    # -------------------------------------------------------------------------
-    engine_requested = data.get('engine', '').lower()
-    if engine_requested in ('gemini', 'gemini-3.8', 'gemini_tts', 'gemini-tts') or voice.lower().startswith('gemini'):
-        gemini_voice = data.get('gemini_voice', 'Aoede')
-        gemini_res = generate_gemini_audio(clean_text, voice_name=gemini_voice)
-        if gemini_res:
-            raw_audio, mime = gemini_res
-            fmt = 'wav' if 'wav' in mime else ('pcm' if 'pcm' in mime else 'mp3')
-            audio_base64 = base64.b64encode(raw_audio).decode('utf-8')
-            save_cached_tts(f"gemini_{gemini_voice}_{clean_text}", raw_audio, audio_base64)
-            return jsonify({
-                'audio_base64': audio_base64,
-                'audio_format': fmt,
-                'engine': 'gemini-3.8-tts',
-                'voice': gemini_voice,
-                'status': 'success'
-            })
-        logger.info("ℹ️ [Gemini TTS] ไม่สามารถสังเคราะห์เสียงหรือโควตาเต็ม -> สลับมาใช้ Neural Voice อัตโนมัติ")
-
-    # -------------------------------------------------------------------------
     # ลำดับที่ 2: Edge Neural TTS (พร้อม Fast-Fail Auto-Reconnect และ Timeout 6.0s)
     # -------------------------------------------------------------------------
     try:
@@ -155,9 +133,12 @@ def tts():
 
     # -------------------------------------------------------------------------
     # ลำดับที่ 4: สำรองขั้นสุดท้ายด้วย gTTS (ไม่บันทึกลงแคช เพื่อรักษาความถูกต้องของเสียงเปรมวดี)
+    # gTTS ก็ต้องใช้อินเทอร์เน็ต: ถ้าเพิ่งรู้ว่าเน็ตล่ม ให้ตอบกลับทันทีแทนการรอจนหมดเวลา
     # -------------------------------------------------------------------------
+    if not edge_tts_available():
+        return jsonify({'error': 'offline: ไม่มีเสียงในแคชและไม่มีอินเทอร์เน็ต', 'status': 'offline'}), 503
     try:
-        tts_obj = gTTS(text=clean_text, lang=lang if lang in ['th', 'en', 'zh'] else 'th')
+        tts_obj = gTTS(text=clean_text, lang=lang if lang in ['th', 'en', 'zh'] else 'th', timeout=5)
         fp = io.BytesIO()
         tts_obj.write_to_fp(fp)
         raw_bytes = fp.getvalue()
@@ -307,17 +288,4 @@ def get_weather():
         'engine': 'offline_local_weather'
     })
 
-@media_bp.route('/api/live-token', methods=['GET', 'POST'])
-def get_live_token():
-    return jsonify({
-        'status': 'offline',
-        'message': 'ระบบทำงานในโหมด Offline 100%'
-    })
-
-@media_bp.route('/api/live-prompt', methods=['GET'])
-def get_live_prompt():
-    return jsonify({
-        'status': 'offline',
-        'message': 'ระบบทำงานในโหมด Offline 100%'
-    })
 

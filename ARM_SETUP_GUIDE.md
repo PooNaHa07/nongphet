@@ -24,7 +24,7 @@ services/arm_service.py ── SSE /api/iot/events ──► esp32_listener.py �
 | มีคนเข้าใกล้ (เซนเซอร์/กล้อง) | `wave` | `routes/iot.py` |
 | แชท intent ทักทาย | `wave` | `routes/chat.py` → `gesture_for_chat` |
 | แชทอารมณ์ love / excited / surprised / wink | `raise_both` / `cheer` / `surprise` / `wave` | เช่นเดียวกัน |
-| Gemini/SLM ใส่แท็ก `[gesture:x]` ในคำตอบ | ท่า x (ตัดแท็กออกก่อนแสดงและพูด) | `extract_gesture_tag` |
+| Local SLM ใส่แท็ก `[gesture:x]` ในคำตอบ (ถ้ามี) | ท่า x (ตัดแท็กออกก่อนแสดงและพูด) | `extract_gesture_tag` |
 | ผู้ใช้ทำภาษามือ | ตาม `SIGN_GESTURE_MAP` | `routes/vision.py` |
 | หน้าเว็บเริ่ม/จบการพูด (`/api/iot/led` speaking → อื่นๆ) | `talk` → `rest` | `speech_changed` |
 | แดชบอร์ด `/admin` (หัวข้อ 3) | ท่าที่กด / มุมจาก slider | `routes/arm.py` |

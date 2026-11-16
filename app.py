@@ -8,13 +8,14 @@
 - routes/:
     * chat.py      — Conversational AI, Semantic RAG & Itinerary Planning
     * vision.py    — Vision Analysis & Thai Sign Language (TSL)
-    * media.py     — Neural Voice TTS, Weather & Gemini Live Multimodal
+    * media.py     — Neural Voice TTS & Weather
     * iot.py       — ESP32 Hardware Integration & Sensor SSE Stream
     * admin.py     — Telemetry Dashboard & Mission Control
     * display.py   — Dual-Screen Emotion Display & QR Mobile Handoff
     * knowledge.py — Dynamic RAG Knowledge Base CRUD & Retrain APIs
 - services/:
-    * gemini_service.py    — GenAI SDK & Comprehensive System Knowledge
+    * text_utils.py        — Suggestion / Language / Trap-query Helpers
+    * arm_service.py       — Shoulder Servo Arm Gestures
     * knowledge_service.py — Local Knowledge & Fast Offline Fallback
     * analytics_service.py — Visitor Analytics Engine
     * tts_service.py       — Edge-TTS & PyThaiTTS Neural Engine

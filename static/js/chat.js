@@ -267,9 +267,6 @@ function appendChatBubble(sender, text, meta = null) {
             } else if (meta.engine === 'local_slm') {
                 engineLabel = '🦙 Local SLM (Qwen 2.5)';
                 iconClass = 'fa-solid fa-brain text-teal-600';
-            } else if (meta.engine === 'gemini_fallback') {
-                engineLabel = '🛡️ Local Smart Fallback';
-                iconClass = 'fa-solid fa-arrows-rotate text-purple-600';
             }
             
             const badge = document.createElement('div');

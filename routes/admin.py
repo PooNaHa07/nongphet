@@ -157,7 +157,7 @@ def get_analytics_api():
             {'time': '14:20:10', 'message': 'แนะนำที่เที่ยวชะอำและเขาวังหน่อย', 'intent': 'travel', 'confidence': 96.5, 'engine': 'local_model', 'language': 'th'},
             {'time': '14:22:45', 'message': 'มีสาขาอะไรบ้างและเปิดรับสมัครเมื่อไหร่', 'intent': 'admission', 'confidence': 98.2, 'engine': 'local_model', 'language': 'th'},
             {'time': '14:24:12', 'message': '[ภาษามือ] ฉันรักเธอ (I Love You 🤟)', 'intent': 'sign_language', 'confidence': 98.0, 'engine': 'mediapipe_tsl', 'language': 'tsl'},
-            {'time': '14:25:30', 'message': 'What are popular food in Phetchaburi?', 'intent': 'food', 'confidence': 94.0, 'engine': 'gemini_hybrid', 'language': 'en'}
+            {'time': '14:25:30', 'message': 'What are popular food in Phetchaburi?', 'intent': 'food', 'confidence': 94.0, 'engine': 'local_slm', 'language': 'en'}
         ]
 
     telemetry_data = get_system_telemetry()
@@ -208,7 +208,7 @@ def admin_command():
         visitor_analytics['intents'] = {'travel': 0, 'food': 0, 'admission': 0, 'history': 0, 'greeting': 0, 'sign_language': 0, 'general': 0}
         visitor_analytics['hourly_traffic'] = [0] * 24
         visitor_analytics['recent_logs'] = []
-        save_analytics()
+        save_analytics(immediate=True)
         return jsonify({'status': 'success', 'message': 'รีเซ็ตสถิติผู้เข้าชมเรียบร้อยแล้ว'})
 
     return jsonify({'status': 'error', 'message': 'คำสั่งไม่ถูกต้อง'}), 400

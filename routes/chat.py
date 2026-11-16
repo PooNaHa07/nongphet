@@ -9,10 +9,7 @@ import datetime
 import logging
 from flask import Blueprint, request, jsonify, session
 from intent_classifier import NongPhetIntentClassifier
-from services.gemini_service import (
-    SYSTEM_PROMPT, extract_suggestions, detect_message_language,
-    generate_gemini_response, is_gemini_available
-)
+from services.text_utils import extract_suggestions, detect_message_language
 from services.knowledge_service import (
     semantic_retriever, match_local_knowledge, get_local_knowledge_reply
 )
@@ -126,11 +123,11 @@ def send_chat_response(user_message, reply_text, suggestions, engine, detected_i
 @chat_bp.route('/chat', methods=['POST'])
 def chat():
     """
-    Route สำหรับประมวลผลข้อความแชทด้วย Hybrid AI Architecture:
+    Route สำหรับประมวลผลข้อความแชท ทำงานในเครื่องทั้งหมด (ไม่พึ่ง Cloud AI):
     1. Local Machine Learning Model: จำแนก Intent และคำนวณ Confidence ในเครื่อง
-    2. Local Knowledge Base: ตอบคำถามเฉพาะทางทันทีเมื่อพบความมั่นใจสูงเพื่อความเร็วระดับมิลลิวินาที
-    3. Google Gemini 2.5 Flash: ส่งต่อเพื่อตอบบทสนทนาเชิงลึก พร้อมทำ Context Steering ด้วย Intent จาก ML
-    4. Two-tier Fallbacks: มีระบบสำรองทั้ง Gemini Flash-Lite และ Local Knowledge เมื่อออฟไลน์
+    2. Semantic RAG / Local Knowledge Base: ตอบคำถามเฉพาะทางทันทีเมื่อพบความมั่นใจสูง
+    3. Local SLM (Ollama): ตอบบทสนทนาเปิดพร้อมบริบทจากฐานความรู้ (ถ้าติดตั้งและเปิดใช้งาน)
+    4. Offline Fallback: คำตอบจากฐานความรู้ในเครื่องเมื่อทุกชั้นข้างต้นตอบไม่ได้
     """
     data = request.json or {}
     user_message = data.get('message', '').strip()
@@ -194,14 +191,6 @@ def chat():
             suggestions = rag_match.get('suggestions') or extract_suggestions(reply_text)
             logger.info(f"⚡ [Semantic RAG] Local Hit [{rag_match['id']}] (Score: {rag_match['score']:.4f}, Intent: {detected_intent})")
             record_interaction(user_message, detected_intent, confidence, 'semantic_rag', language)
-
-            # บันทึกประวัติสนทนาเพื่อความต่อเนื่องของบริบทข้ามรอบ (Multi-turn Context Buffer)
-            if session_id not in state.chat_histories:
-                state.chat_histories[session_id] = []
-            state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-            state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': reply_text}]})
-            if len(state.chat_histories[session_id]) > 12:
-                state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
             return send_chat_response(
                 user_message=user_message,
                 reply_text=reply_text,
@@ -221,14 +210,6 @@ def chat():
             logger.info(f"⚡ [Hybrid AI] Direct Local Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
             record_interaction(user_message, detected_intent, confidence, 'local_model', language)
             suggestions = extract_suggestions(local_reply)
-
-            # บันทึกประวัติสนทนาเพื่อความต่อเนื่องของบริบทข้ามรอบ (Multi-turn Context Buffer)
-            if session_id not in state.chat_histories:
-                state.chat_histories[session_id] = []
-            state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-            state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': local_reply}]})
-            if len(state.chat_histories[session_id]) > 12:
-                state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
             return send_chat_response(
                 user_message=user_message,
                 reply_text=local_reply,
@@ -242,90 +223,42 @@ def chat():
                 base_emotion=target_emotion
             )
 
-    # 3. RAG-Augmented Local SLM (Ollama)
-    if not force_llm:
-        try:
-            from local_slm import generate_local_response, is_ollama_running
-            if is_ollama_running():
-                rag_contexts = [] if is_creative else semantic_retriever.retrieve_top_k(user_message, k=2, intent=detected_intent, min_score=0.38)
-                slm_result = generate_local_response(
-                    user_message,
-                    rag_contexts=rag_contexts,
-                    language=language,
-                    intent=intent_th
-                )
-                if slm_result:
-                    reply_text, llm_gesture = extract_gesture_tag(slm_result['reply'])
-                    suggestions = extract_suggestions(reply_text)
-                    logger.info(f"🦙 [Local SLM+RAG] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
-                    record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
-                    return send_chat_response(
-                        user_message=user_message,
-                        reply_text=reply_text,
-                        suggestions=suggestions,
-                        engine='local_slm',
-                        detected_intent=detected_intent,
-                        intent_th=intent_th,
-                        confidence=confidence,
-                        source=slm_result.get('source', 'local_slm'),
-                        language=language,
-                        base_emotion=target_emotion,
-                        gesture=llm_gesture
-                    )
-        except ImportError:
-            pass
-
-    # 4. Google Gemini 2.5 Flash Cloud AI (ประมวลผลคำตอบและการสนทนาขั้นสูง)
-    if is_gemini_available():
-        try:
-            rag_top = semantic_retriever.retrieve(user_message, intent=detected_intent)
-            rag_ctx = rag_top['reply'] if rag_top else None
-            gemini_reply = generate_gemini_response(
-                user_message=user_message,
-                history=state.chat_histories.get(session_id),
-                rag_context=rag_ctx,
-                language=language
+    # 3. RAG-Augmented Local SLM (Ollama) — force_llm ข้ามฐานความรู้มาที่นี่โดยตรง
+    try:
+        from local_slm import generate_local_response, is_ollama_running
+        if is_ollama_running():
+            rag_contexts = [] if is_creative else semantic_retriever.retrieve_top_k(user_message, k=2, intent=detected_intent, min_score=0.38)
+            slm_result = generate_local_response(
+                user_message,
+                rag_contexts=rag_contexts,
+                language=language,
+                intent=intent_th
             )
-            if gemini_reply:
-                gemini_reply, llm_gesture = extract_gesture_tag(gemini_reply)
-                suggestions = extract_suggestions(gemini_reply)
-                logger.info(f"✨ [Gemini 2.5 Flash] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
-                record_interaction(user_message, detected_intent, confidence, 'gemini_flash', language)
-
-                if session_id not in state.chat_histories:
-                    state.chat_histories[session_id] = []
-                state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-                state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': gemini_reply}]})
-                if len(state.chat_histories[session_id]) > 12:
-                    state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
-
+            if slm_result:
+                reply_text, llm_gesture = extract_gesture_tag(slm_result['reply'])
+                suggestions = extract_suggestions(reply_text)
+                logger.info(f"🦙 [Local SLM+RAG] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
+                record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
                 return send_chat_response(
                     user_message=user_message,
-                    reply_text=gemini_reply,
+                    reply_text=reply_text,
                     suggestions=suggestions,
-                    engine='gemini_flash',
+                    engine='local_slm',
                     detected_intent=detected_intent,
                     intent_th=intent_th,
                     confidence=confidence,
-                    source='gemini_2.5_flash',
+                    source=slm_result.get('source', 'local_slm'),
                     language=language,
                     base_emotion=target_emotion,
                     gesture=llm_gesture
                 )
-        except Exception as ge:
-            logger.warning(f"⚠️ Gemini chat processing error ({ge}) -> fallback to offline")
+    except ImportError:
+        pass
 
-    # 5. Pure Offline Intelligent Knowledge & Semantic RAG Response
+    # 4. Pure Offline Intelligent Knowledge & Semantic RAG Response
     reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
     suggestions = extract_suggestions(reply_text)
     record_interaction(user_message, detected_intent, confidence, 'offline_local_ai', language)
-
-    if session_id not in state.chat_histories:
-        state.chat_histories[session_id] = []
-    state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-    state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': reply_text}]})
-    if len(state.chat_histories[session_id]) > 12:
-        state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
 
     return send_chat_response(
         user_message=user_message,
@@ -442,8 +375,8 @@ def match_course():
 @chat_bp.route('/reset', methods=['POST'])
 def reset():
     session_id = session.get('session_id')
-    if session_id and session_id in state.chat_histories:
-        del state.chat_histories[session_id]
+    if session_id:
+        state.SESSION_LAST_TOPIC.pop(session_id, None)
     session['session_id'] = str(uuid.uuid4())
     return jsonify({'status': 'reset_complete'})
 

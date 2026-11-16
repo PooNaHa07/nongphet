@@ -17,7 +17,6 @@ if os.path.exists(_env_file):
 
 class Config:
     # อ่านจาก Environment Variable ถ้ามี หรือกำหนดผ่านไฟล์ .env
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'YOUR_GEMINI_API_KEY_HERE')
     SECRET_KEY = os.environ.get('SECRET_KEY', 'nongphet_smart_guide_secure_key_2026_pbvc')
     ADMIN_PIN = os.environ.get('ADMIN_PIN', '9999')
 

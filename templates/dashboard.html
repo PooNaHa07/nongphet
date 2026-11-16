@@ -1021,7 +1021,8 @@
                 data.recent_logs.forEach(log => {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-slate-800/30 transition';
-                    const isLocal = log.engine === 'local_model' || log.engine === 'mediapipe_tsl' || log.engine === 'local_rules';
+                    // ทุก engine ทำงานในเครื่องแล้ว แยกเฉพาะคำตอบจาก Local SLM (Ollama) กับกฎ/ฐานความรู้ในเครื่อง
+                    const isLocal = log.engine !== 'local_slm';
                     const isTsl = log.language === 'tsl' || log.intent === 'sign_language';
                     tr.innerHTML = `
                         <td class="py-2 px-3 font-mono-code text-slate-400">${log.time}</td>
@@ -1034,7 +1035,7 @@
                         <td class="py-2 px-3 font-mono-code text-cyan-300 font-bold">${log.confidence}%</td>
                         <td class="py-2 px-3">
                             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isLocal ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-purple-950 text-purple-300 border border-purple-800'}">
-                                ${isLocal ? '⚡ Edge AI' : '🤖 Cloud GenAI'}
+                                ${isLocal ? '⚡ Edge AI' : '🦙 Local SLM'}
                             </span>
                         </td>
                         <td class="py-2 px-3 uppercase font-mono-code ${isTsl ? 'text-pink-400 font-bold' : 'text-slate-400'}">${log.language}</td>

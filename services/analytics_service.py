@@ -4,8 +4,10 @@ services/analytics_service.py — Visitor Analytics & Interaction Logging Engine
 """
 import os
 import json
+import atexit
 import datetime
 import logging
+import threading
 
 logger = logging.getLogger("nongphet.analytics")
 
@@ -43,12 +45,60 @@ def load_analytics():
         except Exception as e:
             logger.warning(f"Could not load analytics file: {e}")
 
-def save_analytics():
-    try:
-        with open(ANALYTICS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(visitor_analytics, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save analytics file: {e}")
+# รวมการบันทึกไฟล์เป็นช่วงๆ แทนการเขียนทุกครั้งที่มีการโต้ตอบ (ลดการเขียน SD card บน Raspberry Pi)
+SAVE_DEBOUNCE_SEC = float(os.environ.get('ANALYTICS_SAVE_DELAY', '5'))
+_save_lock = threading.Lock()
+_save_timer = None
+
+
+def _write_now():
+    """เขียนไฟล์แบบ atomic: เขียนไฟล์ชั่วคราวแล้ว rename ทับ ไฟล์เดิมจึงไม่พังถ้าไฟดับระหว่างเขียน"""
+    global _save_timer
+    with _save_lock:
+        _save_timer = None
+        tmp_path = ANALYTICS_FILE + '.tmp'
+        try:
+            data = json.dumps(visitor_analytics, ensure_ascii=False, indent=2)
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, ANALYTICS_FILE)
+        except Exception as e:
+            logger.warning(f"Could not save analytics file: {e}")
+
+
+def save_analytics(immediate=False):
+    """
+    บันทึกสถิติลงไฟล์
+    immediate=False (ค่าเริ่มต้น): รวมการบันทึกที่เกิดถี่ๆ ภายใน SAVE_DEBOUNCE_SEC เป็นการเขียนครั้งเดียว
+    immediate=True: เขียนทันที (ใช้ตอนรีเซ็ตสถิติหรือปิดโปรแกรม)
+    """
+    global _save_timer
+    if immediate or SAVE_DEBOUNCE_SEC <= 0:
+        with _save_lock:
+            if _save_timer is not None:
+                _save_timer.cancel()
+                _save_timer = None
+        _write_now()
+        return
+    with _save_lock:
+        if _save_timer is not None:
+            return  # มีการบันทึกที่รอเขียนอยู่แล้ว ข้อมูลล่าสุดจะถูกเขียนรวมไปในครั้งนั้น
+        _save_timer = threading.Timer(SAVE_DEBOUNCE_SEC, _write_now)
+        _save_timer.daemon = True
+        _save_timer.start()
+
+
+def flush_analytics():
+    """เขียนข้อมูลที่ค้างอยู่ทันที (เรียกอัตโนมัติตอนปิดโปรแกรม)"""
+    with _save_lock:
+        pending = _save_timer is not None
+    if pending:
+        save_analytics(immediate=True)
+
+
+atexit.register(flush_analytics)
 
 def record_interaction(user_message, intent, confidence, engine, language):
     """บันทึกสถิติการใช้งานสำหรับแดชบอร์ด"""
@@ -58,11 +108,8 @@ def record_interaction(user_message, intent, confidence, engine, language):
     lang_key = language if language in visitor_analytics['languages'] else 'th'
     visitor_analytics['languages'][lang_key] += 1
     
-    # บันทึก Engine
-    if engine == 'local_model':
-        visitor_analytics['local_ai_count'] += 1
-    else:
-        visitor_analytics['cloud_ai_count'] += 1
+    # บันทึก Engine (ระบบทำงานในเครื่องทั้งหมดแล้ว ไม่มี Cloud AI; คงคีย์ cloud_ai_count ไว้เพื่อให้ไฟล์สถิติเดิมยังอ่านได้)
+    visitor_analytics['local_ai_count'] += 1
         
     # บันทึก Intent
     clean_intent = intent if intent in visitor_analytics['intents'] else 'general'

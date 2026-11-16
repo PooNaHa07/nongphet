@@ -24,7 +24,7 @@
 |   |  - รันระบบปฏิบัติการ: Raspberry Pi OS 64-bit                      |   |
 |   |  - เซิร์ฟเวอร์หลัก: Flask Web Application (app.py)                |   |
 |   |  - สื่อสาร Realtime: Server-Sent Events (SSE)                    |   |
-|   |  - โมเดล AI: Local Intent Classifier (ML) + Gemini 2.5 Flash     |   |
+|   |  - โมเดล AI: Local Intent Classifier (ML) + Local SLM (Ollama)   |   |
 |   +----+---------------+-----------------+------------------+--------+   |
 |        |               |                 |                  |            |
 |    Micro-HDMI 0   USB Port (Touch)   USB Port (Mic)     USB Port (Spk)   |
@@ -84,10 +84,11 @@
    ./setup_pi5.sh
    ```
 
-3. **ตั้งค่า API Key ของ Google Gemini:**
-   เปิดไฟล์ `config.py` แล้วใส่คีย์ของคุณ หรือตั้งผ่าน Environment:
+3. **ตั้งค่าความปลอดภัย (ไม่ต้องใช้ API Key):**
+   สร้างไฟล์ `.env` ในโฟลเดอร์โปรเจกต์:
    ```bash
-   export GEMINI_API_KEY="AIzaSy..."
+   SECRET_KEY=<สุ่มข้อความยาวๆ>
+   ADMIN_PIN=<รหัสผู้ดูแล>
    ```
 
 4. **ทดสอบรันโหมด Kiosk:**
@@ -185,4 +186,42 @@ sudo systemctl stop nongphet nongphet-vision
 python run_tests.py
 ```
 ครอบคลุมการทดสอบทั้ง Local Intent Classifier, Semantic Retriever, Knowledge Base CRUD, API Endpoints, และ IoT Vision Integration
+
+---
+
+## 9. ปรับให้ลื่นบน Raspberry Pi 5 (กันกระตุก/ค้าง)
+
+### 9.1 ค่าที่ปรับได้ในไฟล์ `.env`
+
+| ตัวแปร | ค่าเริ่มต้น | ผล |
+|---|---|---|
+| `VISION_DETECT_FPS` | `10` | ตรวจจับใบหน้ากี่ครั้ง/วินาที (ลดเป็น 6–8 ถ้า CPU ยังสูง) |
+| `VISION_STREAM_FPS` | `10` | เข้ารหัสภาพสตรีมสูงสุด/วินาที (เข้ารหัสเฉพาะตอนมีคนเปิดดูสตรีมหรือขอ snapshot) |
+| `VISION_CV_THREADS` | `2` | จำนวนเธรดของ OpenCV |
+| `LOCAL_SLM_ENABLED` | `1` | ตั้ง `0` เพื่อปิด Ollama: แชทตอบจากฐานความรู้อย่างเดียว เร็วและลื่นที่สุด |
+| `LOCAL_SLM_MODEL` | (อัตโนมัติ) | ระบุโมเดลเอง ถ้าไม่ระบุจะใช้แค่ `nongphet-custom` หรือ `qwen2.5:1.5b` ไม่หยิบโมเดลใหญ่มาใช้เอง |
+| `LOCAL_SLM_MAX_TOKENS` | `160` | ความยาวคำตอบสูงสุดของ Ollama |
+| `LOCAL_SLM_TIMEOUT` | `20` | รอ Ollama นานสุดกี่วินาที ถ้าเกินจะพักใช้ 60 วินาทีแล้วตอบจากฐานความรู้ |
+| `LOCAL_SLM_THREADS` | `0` (อัตโนมัติ) | แนะนำ `3` เพื่อเหลือ 1 คอร์ให้หน้าจอและกล้อง |
+| `LOCAL_SLM_KEEP_ALIVE` | `30m` | ค้างโมเดลไว้ใน RAM ไม่ต้องโหลดใหม่ทุกคำถาม |
+| `TTS_EDGE_BACKOFF_SEC` | `60` | เมื่อเน็ตล่ม จะไม่เรียก Edge-TTS ซ้ำในช่วงนี้ (ตอบเสียงจากแคช/ในเครื่องทันที) |
+| `ANALYTICS_SAVE_DELAY` | `5` | รวมการบันทึกสถิติลงไฟล์เป็นช่วงๆ ลดการเขียน SD card |
+
+### 9.2 ก่อนนำไปใช้งานจริง
+- **Pre-bake เสียง:** รัน `python prebake_tts.py` ตอนมีเน็ต เพื่อเก็บเสียงประโยคที่ใช้บ่อยไว้ในเครื่อง (เล่นได้ทันทีแม้ออฟไลน์)
+- **ถ้าต้องการเสียงตอนออฟไลน์ทุกประโยค:** ต้องติดตั้ง TTS ในเครื่อง (`pythaitts`) ไม่งั้นประโยคที่ไม่อยู่ในแคชจะไม่มีเสียงเมื่อไม่มีเน็ต
+- **ถ้าใช้ gunicorn:** ใช้ `gunicorn.conf.py` ที่ให้มา (1 worker, 32 threads) ห้ามเพิ่ม worker เพราะหน้าจอจะไม่ซิงก์กัน
+
+### 9.3 ฮาร์ดแวร์
+- ใส่ **Active Cooler** (Pi 5 ลดความเร็วตัวเองเมื่อร้อนเกินประมาณ 80–85°C)
+- ใช้อะแดปเตอร์ **27W (5V/5A)** และจ่ายไฟเซอร์โวแขนแยก
+- ใช้ **NVMe SSD** หรือ SD card แบบ A2 และเปิด zram ถ้าใช้ Ollama บนรุ่น 4GB
+
+### 9.4 วัดผล
+```bash
+vcgencmd measure_temp
+vcgencmd get_throttled          # ควรได้ throttled=0x0
+curl http://127.0.0.1:5002/status   # ดูค่า fps ของกล้อง
+htop
+```
 
