@@ -1,16 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-services/gemini_service.py — Offline Local AI System Knowledge & Prompt Utilities
+services/gemini_service.py — Cloud Multimodal AI & Offline System Knowledge Engine
 """
 import os
 import re
+import logging
 from config import Config
 
-PRIMARY_MODEL = "offline-local-ai"
-FALLBACK_MODEL = "offline-local-ai"
+logger = logging.getLogger("nongphet.gemini")
 
-# Offline Mode: ปิดการใช้งาน Cloud Client ภายนอก ทำงานในเครื่อง 100%
+PRIMARY_MODEL = "gemini-2.5-flash"
+FALLBACK_MODEL = "gemini-2.5-flash-lite"
+
+# Cloud Client Initialization
 client = None
+if Config.GEMINI_API_KEY and Config.GEMINI_API_KEY != 'YOUR_GEMINI_API_KEY_HERE':
+    try:
+        from google import genai
+        client = genai.Client(api_key=Config.GEMINI_API_KEY)
+        logger.info("✨ [Gemini AI Engine] เชื่อมต่อ Google Gemini 2.5 Flash สำเร็จพร้อมใช้งาน")
+    except Exception as e:
+        logger.warning(f"⚠️ [Gemini AI Engine] ไม่สามารถเชื่อมต่อ Gemini Client: {e}")
+        client = None
 
 # ==============================================================================
 # Comprehensive World-Class System Knowledge (Encyclopedic Nong Phet AI)
@@ -195,4 +206,119 @@ def detect_message_language(text, fallback_lang='th'):
     elif has_english:
         return 'en'
     return fallback_lang
+
+def is_gemini_available():
+    """ตรวจสอบว่า Gemini AI Client พร้อมใช้งานหรือไม่"""
+    return client is not None
+
+def generate_gemini_response(user_message, history=None, rag_context=None, language='th'):
+    """
+    สร้างคำตอบการสนทนาโต้ตอบอย่างชาญฉลาดและเป็นธรรมชาติด้วย Google Gemini 2.5 Flash
+    พร้อม Context Steering จาก Knowledge Base และระบบ Auto-fallback
+    """
+    if not client:
+        return None
+
+    try:
+        from google.genai import types
+
+        # ผสานประวัติและบริบท RAG เสริมความแม่นยำ
+        context_prompt = ""
+        if rag_context:
+            context_prompt = f"\n[ข้อมูลอ้างอิงข้อเท็จจริงท้องถิ่น: {rag_context}]\n"
+
+        lang_instruction = ""
+        if language == 'en':
+            lang_instruction = "\n(Please respond in fluent, cheerful, and welcoming English as Nong Phet.)\n"
+        elif language == 'zh':
+            lang_instruction = "\n(请用流利、热情、生动的中文作为小碧 Nong Phet 回答。)\n"
+
+        full_prompt = f"{user_message}{context_prompt}{lang_instruction}"
+
+        # ส่งคำร้องไปยังโมเดลหลัก
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.75,
+            top_p=0.9,
+            max_output_tokens=600
+        )
+
+        # จัดเตรียม Contents จากประวัติ (ถ้ามี)
+        contents = []
+        if history and isinstance(history, list):
+            for h in history[-6:]:
+                role = h.get('role', 'user')
+                text = ""
+                if 'parts' in h and isinstance(h['parts'], list) and len(h['parts']) > 0:
+                    text = h['parts'][0].get('text', '')
+                elif 'text' in h:
+                    text = h['text']
+                if text:
+                    contents.append(types.Content(
+                        role="user" if role == "user" else "model",
+                        parts=[types.Part.from_text(text=text)]
+                    ))
+        contents.append(full_prompt)
+
+        try:
+            res = client.models.generate_content(
+                model=PRIMARY_MODEL,
+                contents=contents,
+                config=config
+            )
+            if res and res.text:
+                return res.text.strip()
+        except Exception as e_primary:
+            logger.warning(f"⚠️ [Gemini AI] Primary model ({PRIMARY_MODEL}) error: {e_primary} -> trying fallback...")
+            res = client.models.generate_content(
+                model=FALLBACK_MODEL,
+                contents=contents,
+                config=config
+            )
+            if res and res.text:
+                return res.text.strip()
+    except Exception as e:
+        logger.warning(f"⚠️ [Gemini AI Engine] Generate error: {e}")
+    return None
+
+def analyze_image_with_gemini(image_bytes, mime_type="image/jpeg", user_prompt=None):
+    """
+    วิเคราะห์รูปภาพแลนด์มาร์ก ท่องเที่ยว อาหาร หรือสถานที่ด้วย Gemini Multimodal Vision
+    """
+    if not client or not image_bytes:
+        return None
+
+    try:
+        from google.genai import types
+
+        prompt = user_prompt or (
+            "วิเคราะห์รูปภาพนี้ในฐานะ 'น้องเพชร' ไกด์ AI ประจำจังหวัดเพชรบุรีและวิทยาลัยอาชีวศึกษาเพชรบุรี:\n"
+            "1. ระบุชื่อสถานที่ วัตถุ หรืออาหารที่ปรากฏ พร้อมระดับความมั่นใจ\n"
+            "2. เล่าประวัติ ความสำคัญ หรือจุดเด่นของสถานที่นี้น่าสนใจ 1-2 ย่อหน้าแบบเป็นกันเอง\n"
+            "3. แนะนำจุดถ่ายรูป (Best Photo Angle) และของกินขึ้นชื่อใกล้เคียง\n"
+            "ตอบเป็นภาษาพูดที่อบอุ่น สดใส และน่าฟัง สไตล์น้องเพชรค่ะ"
+        )
+
+        image_part = types.Part.from_bytes(
+            data=image_bytes,
+            mime_type=mime_type
+        )
+
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.6,
+            max_output_tokens=700
+        )
+
+        res = client.models.generate_content(
+            model=PRIMARY_MODEL,
+            contents=[image_part, prompt],
+            config=config
+        )
+        if res and res.text:
+            return res.text.strip()
+    except Exception as e:
+        logger.warning(f"⚠️ [Gemini Vision] Image analysis error: {e}")
+    return None
+
 

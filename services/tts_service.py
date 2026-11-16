@@ -263,6 +263,55 @@ async def generate_edge_tts(text, voice="th-TH-PremwadeeNeural", rate="+2%", pit
 
     raise RuntimeError(f"Edge-TTS failed after {retries} retries: {last_error}")
 
+def generate_gemini_audio(clean_text, voice_name="Aoede", timeout=7.0):
+    """
+    สร้างเสียงสังเคราะห์ผ่าน Gemini 3.8 / Multimodal Audio Engine (gemini-3.8-flash)
+    พร้อมระบบตรวจสอบ Quota และ Auto-Fallback
+    """
+    from config import Config
+    if not Config.GEMINI_API_KEY or Config.GEMINI_API_KEY == 'YOUR_GEMINI_API_KEY_HERE':
+        return None
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(
+            api_key=Config.GEMINI_API_KEY,
+            http_options=types.HttpOptions(api_version='v1beta')
+        )
+
+        candidate_models = ['gemini-3.8-flash', 'gemini-omni-flash-preview', 'gemini-3.1-flash-lite']
+        for model_name in candidate_models:
+            try:
+                res = client.models.generate_content(
+                    model=model_name,
+                    contents=f"ออกเสียงข้อความภาษาไทยนี้ให้ชัดเจนและเป็นธรรมชาติ: {clean_text}",
+                    config=types.GenerateContentConfig(
+                        response_modalities=['AUDIO'],
+                        speech_config=types.SpeechConfig(
+                            voice_config=types.VoiceConfig(
+                                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
+                            )
+                        )
+                    )
+                )
+                if res and res.candidates and len(res.candidates) > 0:
+                    for part in res.candidates[0].content.parts:
+                        if getattr(part, 'inline_data', None) and part.inline_data.data:
+                            logger.info(f"✨ [Gemini TTS] สังเคราะห์เสียงสำเร็จด้วยโมเดล {model_name} (Voice: {voice_name})")
+                            return part.inline_data.data, part.inline_data.mime_type
+            except Exception as me:
+                err_str = str(me)
+                if '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
+                    logger.debug(f"Gemini Audio [{model_name}] Quota exhausted: {err_str[:80]}")
+                else:
+                    logger.debug(f"Gemini Audio [{model_name}] attempt note: {err_str[:80]}")
+                continue
+    except Exception as e:
+        logger.warning(f"⚠️ [Gemini Audio Engine] ไม่สามารถสร้างเสียง: {e}")
+    return None
+
 def iter_audio_stream(text, voice="th-TH-PremwadeeNeural", rate="+2%", pitch="+0Hz", volume="+0%"):
     """
     Generator สำหรับส่งสตรีมข้อมูลเสียงแบบ Chunked HTTP Audio Stream (<200ms TTFB)

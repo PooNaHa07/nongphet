@@ -12,7 +12,7 @@ import urllib.request
 import urllib.error
 import PIL.Image
 
-from services.gemini_service import SYSTEM_PROMPT
+from services.gemini_service import SYSTEM_PROMPT, analyze_image_with_gemini, is_gemini_available
 from services.analytics_service import record_interaction
 from routes.iot import broadcast_iot_event
 from state import emotion_state
@@ -92,6 +92,20 @@ def vision():
     if file.filename == '':
         return jsonify({'error': 'ไม่ได้เลือกไฟล์'}), 400
 
+    # 1. ใช้อัจฉริยภาพของ Google Gemini Multimodal Vision เมื่อเชื่อมต่อออนไลน์
+    if is_gemini_available():
+        try:
+            image_bytes = file.read()
+            file.seek(0)
+            mime = file.mimetype or 'image/jpeg'
+            gemini_desc = analyze_image_with_gemini(image_bytes, mime_type=mime)
+            if gemini_desc:
+                record_interaction(f"[วิเคราะห์ภาพ] {file.filename}", 'landmark_vision', 0.98, 'gemini_multimodal_vision', 'th')
+                return jsonify({'description': gemini_desc, 'status': 'success', 'engine': 'gemini_vision'})
+        except Exception as e:
+            logger.warning(f"⚠️ Gemini Vision Error ({e}) -> falling back to local vision rules")
+
+    # 2. Local Vision Rules & Offline Landmark Recognition
     filename = (file.filename or '').lower()
     if any(k in filename for k in ['khao_wang', 'khaowang', 'wang', 'พระนครคีรี', 'เขาวัง']):
         desc = (

@@ -10,7 +10,8 @@ import logging
 from flask import Blueprint, request, jsonify, session
 from intent_classifier import NongPhetIntentClassifier
 from services.gemini_service import (
-    SYSTEM_PROMPT, extract_suggestions, detect_message_language
+    SYSTEM_PROMPT, extract_suggestions, detect_message_language,
+    generate_gemini_response, is_gemini_available
 )
 from services.knowledge_service import (
     semantic_retriever, match_local_knowledge, get_local_knowledge_reply
@@ -261,7 +262,45 @@ def chat():
         except ImportError:
             pass
 
-    # 4. Pure Offline Intelligent Knowledge & Semantic RAG Response
+    # 4. Google Gemini 2.5 Flash Cloud AI (ประมวลผลคำตอบและการสนทนาขั้นสูง)
+    if is_gemini_available():
+        try:
+            rag_top = semantic_retriever.retrieve(user_message, intent=detected_intent)
+            rag_ctx = rag_top['reply'] if rag_top else None
+            gemini_reply = generate_gemini_response(
+                user_message=user_message,
+                history=state.chat_histories.get(session_id),
+                rag_context=rag_ctx,
+                language=language
+            )
+            if gemini_reply:
+                suggestions = extract_suggestions(gemini_reply)
+                logger.info(f"✨ [Gemini 2.5 Flash] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
+                record_interaction(user_message, detected_intent, confidence, 'gemini_flash', language)
+
+                if session_id not in state.chat_histories:
+                    state.chat_histories[session_id] = []
+                state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
+                state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': gemini_reply}]})
+                if len(state.chat_histories[session_id]) > 12:
+                    state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
+
+                return send_chat_response(
+                    user_message=user_message,
+                    reply_text=gemini_reply,
+                    suggestions=suggestions,
+                    engine='gemini_flash',
+                    detected_intent=detected_intent,
+                    intent_th=intent_th,
+                    confidence=confidence,
+                    source='gemini_2.5_flash',
+                    language=language,
+                    base_emotion=target_emotion
+                )
+        except Exception as ge:
+            logger.warning(f"⚠️ Gemini chat processing error ({ge}) -> fallback to offline")
+
+    # 5. Pure Offline Intelligent Knowledge & Semantic RAG Response
     reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
     suggestions = extract_suggestions(reply_text)
     record_interaction(user_message, detected_intent, confidence, 'offline_local_ai', language)
