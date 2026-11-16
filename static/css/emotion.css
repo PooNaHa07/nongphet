@@ -1,0 +1,1216 @@
+/* ==============================================================================
+   Nong Phet AI Smart Guide - Robot Emotion Display CSS (Next-Gen Sci-Fi Edition)
+   Designed for Raspberry Pi 5 Secondary Head Display (2.4" - 3.5" LCD / HDMI)
+   ============================================================================== */
+
+:root {
+    --glow-cyan: #38bdf8;
+    --glow-blue: #0284c7;
+    --glow-electric: #00f0ff;
+    --glow-pink: #f43f5e;
+    --glow-amber: #f59e0b;
+    --glow-emerald: #10b981;
+    --glow-purple: #a855f7;
+    --bg-visor: #020617;
+}
+
+/* Base Visor Screen */
+.robot-face-stage {
+    background: radial-gradient(circle at center, #07152b 0%, #020617 70%, #000000 100%);
+    box-shadow: inset 0 0 60px rgba(0, 240, 255, 0.15);
+    transition: box-shadow 0.5s ease;
+}
+
+/* Color Theme Variations */
+.robot-face-stage.theme-emerald {
+    --glow-cyan: #10b981;
+    --glow-blue: #059669;
+    --glow-electric: #34d399;
+    box-shadow: inset 0 0 60px rgba(16, 185, 129, 0.22);
+}
+.robot-face-stage.theme-rose {
+    --glow-cyan: #f43f5e;
+    --glow-blue: #e11d48;
+    --glow-electric: #fb7185;
+    box-shadow: inset 0 0 60px rgba(244, 63, 94, 0.22);
+}
+.robot-face-stage.theme-amber {
+    --glow-cyan: #f59e0b;
+    --glow-blue: #d97706;
+    --glow-electric: #fbbf24;
+    box-shadow: inset 0 0 60px rgba(245, 158, 11, 0.22);
+}
+.robot-face-stage.theme-purple {
+    --glow-cyan: #a855f7;
+    --glow-blue: #7c3aed;
+    --glow-electric: #c084fc;
+    box-shadow: inset 0 0 60px rgba(168, 85, 247, 0.22);
+}
+
+.ambient-glow {
+    background: radial-gradient(circle at 50% 45%, rgba(6, 182, 212, 0.12) 0%, transparent 60%);
+    animation: ambientPulse 4s ease-in-out infinite alternate;
+}
+
+@keyframes ambientPulse {
+    0% { opacity: 0.6; transform: scale(0.98); }
+    100% { opacity: 1; transform: scale(1.02); }
+}
+
+/* --------------------------------------------------------------------------
+   Futuristic Sci-Fi HUD Overlays
+   -------------------------------------------------------------------------- */
+.orbital-ring {
+    border-radius: 50%;
+    border: 1px dashed rgba(56, 189, 248, 0.12);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.ring-outer {
+    width: min(92vw, 480px);
+    height: min(92vw, 480px);
+    border-color: rgba(56, 189, 248, 0.08);
+    animation: orbitRotate 45s linear infinite;
+}
+
+.ring-inner {
+    width: min(72vw, 360px);
+    height: min(72vw, 360px);
+    border-style: dotted;
+    border-width: 1.5px;
+    border-color: rgba(6, 182, 212, 0.12);
+    animation: orbitRotateRev 30s linear infinite;
+}
+
+@keyframes orbitRotate {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes orbitRotateRev {
+    0% { transform: translate(-50%, -50%) rotate(360deg); }
+    100% { transform: translate(-50%, -50%) rotate(0deg); }
+}
+
+/* Scanner Sweep Laser Line */
+.scanner-sweep-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.85) 50%, transparent 100%);
+    box-shadow: 0 0 18px #00f0ff, 0 0 35px rgba(0, 240, 255, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 25;
+}
+
+.state-scanner .scanner-sweep-line {
+    opacity: 1;
+    animation: laserScanSweep 1.6s infinite ease-in-out alternate;
+}
+
+@keyframes laserScanSweep {
+    0% { top: 22%; }
+    100% { top: 78%; }
+}
+
+/* Cyber Ear Fins (Left & Right) */
+.cyber-ear {
+    opacity: 0.65;
+    transition: all 0.3s ease;
+}
+
+.ear-segment {
+    width: 5px;
+    height: 12px;
+    background: rgba(56, 189, 248, 0.25);
+    border-radius: 3px;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+    transition: all 0.2s ease;
+}
+
+@media (min-width: 640px) {
+    .ear-segment {
+        width: 7px;
+        height: 18px;
+    }
+}
+
+.ear-segment.active,
+.state-speaking .ear-segment,
+.state-listening .ear-segment {
+    background: var(--glow-cyan);
+    box-shadow: 0 0 12px var(--glow-cyan);
+    animation: earGlow 1s infinite alternate ease-in-out;
+}
+
+.state-listening .ear-segment {
+    background: var(--glow-emerald);
+    box-shadow: 0 0 12px var(--glow-emerald);
+}
+
+.state-thinking .ear-segment {
+    background: var(--glow-amber);
+    box-shadow: 0 0 12px var(--glow-amber);
+}
+
+.state-love .ear-segment {
+    background: var(--glow-pink);
+    box-shadow: 0 0 12px var(--glow-pink);
+}
+
+@keyframes earGlow {
+    0% { opacity: 0.4; }
+    100% { opacity: 1; transform: scaleX(1.3); }
+}
+
+/* --------------------------------------------------------------------------
+   Eyes & Eyebrows Section
+   -------------------------------------------------------------------------- */
+.face-container {
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+
+@keyframes organicBreathing {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.018); }
+}
+
+.face-container.breathing {
+    animation: organicBreathing 4.5s ease-in-out infinite;
+}
+
+.eyes-row {
+    transform: translate(var(--gaze-x, 0px), var(--gaze-y, 0px));
+    will-change: transform;
+}
+
+.eye-wrapper {
+    will-change: transform;
+}
+
+/* Cybernetic Eyebrows */
+.cyber-brow {
+    position: absolute;
+    top: -18px;
+    width: 68px;
+    height: 7px;
+    background: linear-gradient(90deg, transparent 0%, var(--glow-cyan) 25%, #ffffff 75%, transparent 100%);
+    border-radius: 4px;
+    box-shadow: 0 0 14px var(--glow-cyan);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center center;
+    opacity: 0.9;
+    z-index: 5;
+    will-change: transform;
+}
+
+@media (min-width: 640px) {
+    .cyber-brow {
+        top: -26px;
+        width: 95px;
+        height: 9px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .cyber-brow {
+        top: -34px;
+        width: 130px;
+        height: 11px;
+    }
+}
+
+.left-brow {
+    left: 0;
+    transform: rotate(4deg);
+}
+
+.right-brow {
+    right: 0;
+    transform: rotate(-4deg);
+}
+
+/* Cyber Eye Shape */
+.cyber-eye {
+    width: 68px;
+    height: 72px;
+    background: linear-gradient(135deg, #e0f2fe 0%, var(--glow-cyan) 60%, var(--glow-blue) 100%);
+    border-radius: 50%;
+    position: relative;
+    box-shadow: 
+        0 0 25px var(--glow-cyan),
+        0 0 50px rgba(56, 189, 248, 0.6),
+        inset 0 0 15px #ffffff;
+    transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center center;
+    overflow: hidden;
+    cursor: pointer;
+    will-change: transform, border-radius;
+}
+
+.cyber-eye:hover {
+    filter: brightness(1.15);
+}
+
+@media (min-width: 640px) {
+    .cyber-eye {
+        width: 95px;
+        height: 100px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .cyber-eye {
+        width: 130px;
+        height: 135px;
+    }
+}
+
+.eye-pupil {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(calc(-50% + var(--pupil-x, 0px)), calc(-50% + var(--pupil-y, 0px)));
+    width: 35%;
+    height: 35%;
+    background: #0369a1;
+    border-radius: 50%;
+    opacity: 0.55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    will-change: transform;
+}
+
+/* Interactive Cyber Touch Ripple Effect */
+.touch-ripple {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--glow-cyan);
+    box-shadow: 0 0 16px var(--glow-cyan), inset 0 0 12px var(--glow-cyan);
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0.4);
+    animation: rippleExpand 0.55s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+    z-index: 60;
+}
+
+@keyframes rippleExpand {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(0.4);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(4.8);
+    }
+}
+
+.eye-glint {
+    position: absolute;
+    top: 15%;
+    right: 20%;
+    width: 25%;
+    height: 25%;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #ffffff;
+}
+
+/* Star Glint for Sparkles */
+.eye-glint-star {
+    position: absolute;
+    bottom: 12%;
+    left: 18%;
+    font-size: 14px;
+    color: #ffffff;
+    opacity: 0;
+    text-shadow: 0 0 8px #ffffff;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+/* Target Ring inside pupil for Scanner state */
+.pupil-target-ring {
+    position: absolute;
+    inset: -6px;
+    border: 2px dashed rgba(0, 240, 255, 0.8);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Heart Pupil for Love state */
+.eye-heart {
+    position: absolute;
+    font-size: 14px;
+    color: #ffffff;
+    display: none;
+    text-shadow: 0 0 10px #f43f5e;
+}
+
+/* =============================================================================
+   Blueprint Vector Eye Shapes & Cheek Blush (ภาพโปสเตอร์พิมพ์เขียว 1:1)
+   ============================================================================= */
+.eye-shape-svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    height: 90%;
+    display: none;
+    pointer-events: none;
+    transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 15;
+}
+
+.eye-shape-stars {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 82%;
+    height: 82%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.eye-star-svg {
+    width: 100%;
+    height: 100%;
+    color: #fbbf24;
+    filter: drop-shadow(0 0 14px #fbbf24) drop-shadow(0 0 28px rgba(245, 158, 11, 0.75));
+    animation: starEyePulse 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes starEyePulse {
+    0% { transform: scale(0.92) rotate(-5deg); filter: drop-shadow(0 0 10px #fbbf24); }
+    100% { transform: scale(1.16) rotate(6deg); filter: drop-shadow(0 0 24px #fbbf24) drop-shadow(0 0 45px rgba(245, 158, 11, 0.95)); }
+}
+
+@keyframes arcBreathe {
+    0% { transform: translate(-50%, -50%) scaleY(0.95); }
+    100% { transform: translate(-50%, -50%) scaleY(1.08); }
+}
+
+@keyframes squintBounce {
+    0% { transform: translate(-50%, -50%) scale(0.96); }
+    100% { transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* 3 Kawaii Angled Slashes on Cheeks (\\\ in poster left, /// right) */
+.blush-slashes {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 3.5px;
+    opacity: 0.3;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.blush-slashes span {
+    display: block;
+    width: 3.5px;
+    height: 12px;
+    background: #f43f5e;
+    border-radius: 2px;
+    box-shadow: 0 0 8px #f43f5e, 0 0 14px rgba(244, 63, 94, 0.6);
+}
+
+.blush-left span {
+    transform: rotate(26deg);
+}
+
+.blush-right span {
+    transform: rotate(-26deg);
+}
+
+@media (min-width: 640px) {
+    .blush-slashes span {
+        width: 4.5px;
+        height: 16px;
+    }
+    .blush-slashes {
+        gap: 5.5px;
+    }
+}
+
+/* Cheeks */
+.cheek {
+    position: absolute;
+    top: 75%;
+    width: 28px;
+    height: 12px;
+    background: radial-gradient(ellipse, rgba(244, 63, 94, 0.6) 0%, transparent 70%);
+    border-radius: 50%;
+    opacity: 0.35;
+    transition: all 0.3s ease;
+    filter: blur(2px);
+    cursor: pointer;
+}
+
+@media (min-width: 640px) {
+    .cheek {
+        width: 40px;
+        height: 18px;
+    }
+}
+
+.cheek-left { left: -15%; }
+.cheek-right { right: -15%; }
+
+/* Center Nose / Sensor */
+.face-center-sensor {
+    width: 8px;
+    height: 8px;
+    background: rgba(56, 189, 248, 0.3);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.face-center-sensor:hover {
+    transform: scale(1.4);
+    background: #00f0ff;
+    box-shadow: 0 0 15px #00f0ff;
+}
+
+/* Mouth */
+.cyber-mouth {
+    width: 45px;
+    height: 20px;
+    border-bottom: 5px solid var(--glow-cyan);
+    border-radius: 0 0 30px 30px;
+    box-shadow: 0 5px 15px rgba(56, 189, 248, 0.7);
+    transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    cursor: pointer;
+    will-change: transform, border-radius;
+}
+
+.cyber-mouth:hover {
+    transform: scale(1.15);
+    border-color: #ffffff;
+    box-shadow: 0 6px 20px rgba(56, 189, 248, 0.9);
+}
+
+.cyber-mouth:active {
+    transform: scale(0.9);
+}
+
+@media (min-width: 640px) {
+    .cyber-mouth {
+        width: 70px;
+        height: 32px;
+        border-bottom-width: 7px;
+    }
+}
+
+/* Audio Waveform Equalizer under mouth */
+.audio-wave-row {
+    height: 22px;
+    opacity: 0.35;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.state-speaking .audio-wave-row,
+.state-listening .audio-wave-row {
+    opacity: 1;
+}
+
+.wave-bar {
+    width: 4px;
+    height: 4px;
+    min-height: 4px;
+    background: var(--glow-cyan);
+    border-radius: 3px;
+    box-shadow: 0 0 8px var(--glow-cyan);
+    transition: height 0.05s ease-out, background-color 0.2s ease;
+}
+
+@media (min-width: 640px) {
+    .wave-bar {
+        width: 5px;
+    }
+}
+
+.state-speaking.audio-active .wave-bar {
+    height: calc(4px + var(--audio-amp, 0.4) * 22px);
+}
+.state-speaking.audio-active .wave-bar.bar-4,
+.state-speaking.audio-active .wave-bar.bar-5,
+.state-speaking.audio-active .wave-bar.bar-6 {
+    height: calc(6px + var(--audio-amp, 0.4) * 32px);
+}
+
+.state-listening .wave-bar {
+    background: var(--glow-emerald);
+    box-shadow: 0 0 8px var(--glow-emerald);
+    animation: listeningWave 1.2s infinite ease-in-out alternate;
+}
+.state-listening .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+.state-listening .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+.state-listening .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+.state-listening .wave-bar:nth-child(5) { animation-delay: 0.6s; }
+.state-listening .wave-bar:nth-child(6) { animation-delay: 0.45s; }
+.state-listening .wave-bar:nth-child(7) { animation-delay: 0.3s; }
+.state-listening .wave-bar:nth-child(8) { animation-delay: 0.15s; }
+
+@keyframes listeningWave {
+    0% { height: 4px; }
+    100% { height: 18px; }
+}
+
+/* --------------------------------------------------------------------------
+   Emotion States (Classes applied to .robot-face-stage)
+   -------------------------------------------------------------------------- */
+
+/* ==========================================================================
+   4 ICONIC BLUEPRINT POSTER EXPRESSIONS (ตรงตามแบบร่างหุ่นยนต์ 1:1)
+   ========================================================================== */
+
+/* 1. SMILE CURVE (⌒ ‿ ⌒) - ยิ้มโค้งพิมพ์เขียว */
+.state-smile .cyber-eye {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible;
+}
+.state-smile .eye-pupil,
+.state-smile .eye-glint,
+.state-smile .eye-glint-star {
+    display: none !important;
+}
+.state-smile .eye-shape-arc {
+    display: block !important;
+    color: var(--glow-cyan);
+    filter: drop-shadow(0 0 16px var(--glow-cyan)) drop-shadow(0 0 35px rgba(0, 240, 255, 0.75));
+    animation: arcBreathe 2.4s infinite alternate ease-in-out;
+}
+.state-smile .left-brow { transform: translateY(-8px) rotate(6deg); }
+.state-smile .right-brow { transform: translateY(-8px) rotate(-6deg); }
+.state-smile .cheek {
+    opacity: 0.9;
+    transform: scale(1.25);
+}
+.state-smile .blush-slashes {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+}
+.state-smile .cyber-mouth {
+    width: 58px;
+    height: 28px;
+    border-bottom: 6px solid var(--glow-cyan);
+    border-radius: 0 0 35px 35px;
+    box-shadow: 0 6px 20px rgba(0, 240, 255, 0.8);
+}
+
+/* 2. SQUINT ( > ‿ < ) - ยิ้มตาหยี */
+.state-squint .cyber-eye {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible;
+}
+.state-squint .eye-pupil,
+.state-squint .eye-glint,
+.state-squint .eye-glint-star {
+    display: none !important;
+}
+.state-squint .eye-shape-squint {
+    display: block !important;
+    color: var(--glow-cyan);
+    filter: drop-shadow(0 0 16px var(--glow-cyan)) drop-shadow(0 0 35px rgba(0, 240, 255, 0.75));
+    animation: squintBounce 1.4s infinite alternate ease-in-out;
+}
+.state-squint .left-brow { transform: translateY(4px) rotate(14deg); }
+.state-squint .right-brow { transform: translateY(4px) rotate(-14deg); }
+.state-squint .cheek {
+    opacity: 0.95;
+    transform: scale(1.35);
+}
+.state-squint .blush-slashes {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.25);
+}
+.state-squint .cyber-mouth {
+    width: 52px;
+    height: 26px;
+    border-bottom: 6px solid var(--glow-cyan);
+    border-radius: 0 0 30px 30px;
+    box-shadow: 0 6px 20px rgba(0, 240, 255, 0.8);
+}
+
+/* 3. EXCITED / STARS ( ✦ ‿ ✦ ) - ประกายดาว */
+.state-excited .cyber-eye {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible;
+}
+.state-excited .eye-pupil,
+.state-excited .eye-glint,
+.state-excited .eye-glint-star {
+    display: none !important;
+}
+.state-excited .eye-shape-stars {
+    display: flex !important;
+}
+.state-excited .left-brow { transform: translateY(-14px) rotate(8deg); }
+.state-excited .right-brow { transform: translateY(-14px) rotate(-8deg); }
+.state-excited .cheek {
+    opacity: 0.9;
+    transform: scale(1.25);
+    background: radial-gradient(ellipse, rgba(251, 191, 36, 0.7) 0%, transparent 70%);
+}
+.state-excited .blush-slashes {
+    opacity: 1;
+}
+.state-excited .cyber-mouth {
+    width: 62px;
+    height: 32px;
+    border-bottom: 7px solid #fbbf24;
+    border-radius: 0 0 40px 40px;
+    box-shadow: 0 6px 22px rgba(251, 191, 36, 0.85);
+}
+
+/* ==========================================================================
+   STANDARD ROBOT MODES
+   ========================================================================== */
+
+/* IDLE (Normal Smiling Face with Organic Blink) */
+.state-idle .cyber-eye {
+    border-radius: 40% 40% 48% 48%;
+}
+
+.state-idle.blink .cyber-eye {
+    transform: scaleY(0.08);
+    box-shadow: 0 0 15px var(--glow-cyan);
+}
+
+.state-idle .left-brow { transform: rotate(4deg); }
+.state-idle .right-brow { transform: rotate(-4deg); }
+
+/* 2. LISTENING (Alert, Listening to user STT) */
+.state-listening .cyber-eye {
+    transform: scale(1.15);
+    background: linear-gradient(135deg, #ffffff 0%, #34d399 50%, #059669 100%);
+    box-shadow: 
+        0 0 35px var(--glow-emerald),
+        0 0 70px rgba(16, 185, 129, 0.7);
+    animation: listeningPulse 1.5s infinite alternate ease-in-out;
+}
+
+.state-listening .cyber-brow {
+    background: linear-gradient(90deg, transparent 0%, var(--glow-emerald) 30%, #ffffff 70%, transparent 100%);
+    box-shadow: 0 0 16px var(--glow-emerald);
+}
+.state-listening .left-brow { transform: translateY(4px) rotate(8deg); }
+.state-listening .right-brow { transform: translateY(4px) rotate(-8deg); }
+
+.state-listening .cyber-mouth {
+    border-color: var(--glow-emerald);
+    width: 28px;
+    height: 28px;
+    border: 4px solid var(--glow-emerald);
+    border-radius: 50%;
+    box-shadow: 0 0 20px var(--glow-emerald);
+}
+
+@keyframes listeningPulse {
+    0% { transform: scale(1.08); }
+    100% { transform: scale(1.18); }
+}
+
+/* 3. THINKING (AI Processing - Curious Asymmetrical Eyebrows) */
+.state-thinking .cyber-eye {
+    background: linear-gradient(135deg, #ffffff 0%, var(--glow-amber) 60%, #b45309 100%);
+    box-shadow: 
+        0 0 30px var(--glow-amber),
+        0 0 60px rgba(245, 158, 11, 0.6);
+    border-radius: 35%;
+    animation: thinkingScan 2s infinite ease-in-out;
+}
+
+.state-thinking .cyber-brow {
+    background: linear-gradient(90deg, transparent 0%, var(--glow-amber) 30%, #ffffff 70%, transparent 100%);
+    box-shadow: 0 0 16px var(--glow-amber);
+}
+.state-thinking .left-brow { transform: translateY(-12px) rotate(-14deg); }
+.state-thinking .right-brow { transform: translateY(4px) rotate(8deg); }
+
+.state-thinking .cyber-mouth {
+    border-color: var(--glow-amber);
+    width: 35px;
+    height: 8px;
+    border-radius: 8px;
+    border-bottom: 5px solid var(--glow-amber);
+    transform: translateY(-5px);
+}
+
+@keyframes thinkingScan {
+    0%, 100% { transform: translateY(-8px) rotate(-5deg); }
+    50% { transform: translateY(-8px) rotate(5deg); }
+}
+
+/* 4. SPEAKING (TTS Talking Mode) */
+.state-speaking .cyber-eye {
+    border-radius: 50% 50% 0 0;
+    border-bottom: 12px solid transparent;
+    height: 50px;
+    box-shadow: 0 -5px 30px var(--glow-cyan);
+    animation: speakingEyes 0.6s infinite alternate ease-in-out;
+}
+
+@media (min-width: 640px) {
+    .state-speaking .cyber-eye {
+        height: 75px;
+        border-bottom-width: 16px;
+    }
+}
+
+.state-speaking .left-brow { transform: translateY(-6px) rotate(5deg); }
+.state-speaking .right-brow { transform: translateY(-6px) rotate(-5deg); }
+
+.state-speaking .cyber-mouth {
+    background: #0284c7;
+    border: 4px solid #ffffff;
+    box-shadow: 0 0 25px var(--glow-cyan);
+    animation: speakingMouth 0.35s infinite alternate cubic-bezier(0.45, 0.05, 0.55, 0.95);
+}
+
+@keyframes speakingEyes {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-4px); }
+}
+
+@keyframes speakingMouth {
+    0% {
+        width: 35px;
+        height: 12px;
+        border-radius: 12px;
+    }
+    100% {
+        width: 55px;
+        height: 38px;
+        border-radius: 50%;
+    }
+}
+
+/* 5. HAPPY (Smiling broadly with Rosy Cheeks & Sparkles) */
+.state-happy .cyber-eye {
+    border-radius: 50% 50% 15% 15%;
+    transform: scale(1.1);
+    background: linear-gradient(135deg, #ffffff 0%, #38bdf8 40%, #ec4899 100%);
+    box-shadow: 
+        0 0 35px #ec4899,
+        0 0 70px rgba(236, 72, 153, 0.6);
+}
+
+.state-happy .eye-glint-star {
+    opacity: 1;
+    animation: starTwinkle 1s infinite alternate ease-in-out;
+}
+
+.state-happy .left-brow { transform: translateY(-10px) rotate(6deg); }
+.state-happy .right-brow { transform: translateY(-10px) rotate(-6deg); }
+
+.state-happy .cheek {
+    opacity: 0.9;
+    transform: scale(1.3);
+    background: radial-gradient(ellipse, rgba(244, 63, 94, 0.9) 0%, transparent 70%);
+}
+
+.state-happy .cyber-mouth {
+    width: 65px;
+    height: 32px;
+    border-bottom-width: 8px;
+    border-color: #38bdf8;
+    transform: scale(1.2);
+}
+
+/* 6. LOVE / SHY (Super Cute Kawaii Emotion) */
+.state-love .cyber-eye {
+    transform: scale(1.12);
+    background: linear-gradient(135deg, #ffffff 0%, #fb7185 50%, #f43f5e 100%);
+    box-shadow: 0 0 40px #f43f5e, 0 0 80px rgba(244, 63, 94, 0.6);
+    border-radius: 46% 46% 42% 42%;
+}
+
+.state-love .cyber-brow {
+    background: linear-gradient(90deg, transparent 0%, #f43f5e 30%, #ffffff 70%, transparent 100%);
+    box-shadow: 0 0 18px #f43f5e;
+}
+
+.state-love .left-brow {
+    transform: translateY(-6px) rotate(-10deg);
+}
+
+.state-love .right-brow {
+    transform: translateY(-6px) rotate(10deg);
+}
+
+.state-love .eye-glint-star {
+    opacity: 1;
+    animation: starTwinkle 0.8s infinite alternate ease-in-out;
+}
+
+.state-love .cheek {
+    opacity: 0.95;
+    transform: scale(1.5);
+    background: radial-gradient(ellipse, rgba(244, 63, 94, 0.95) 0%, transparent 75%);
+    animation: cheekBlush 1.2s infinite alternate ease-in-out;
+}
+
+.state-love .cyber-mouth {
+    width: 48px;
+    height: 24px;
+    border-bottom: 6px solid #f43f5e;
+    box-shadow: 0 4px 15px #f43f5e;
+}
+
+@keyframes starTwinkle {
+    0% { transform: scale(0.8) rotate(-10deg); opacity: 0.6; }
+    100% { transform: scale(1.3) rotate(15deg); opacity: 1; }
+}
+
+@keyframes cheekBlush {
+    0% { transform: scale(1.3); }
+    100% { transform: scale(1.6); }
+}
+
+/* 7. SCANNER (High-tech Laser Vision Analysis) */
+.state-scanner .cyber-eye {
+    transform: scale(1.2);
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffffff 0%, #00f0ff 60%, #0369a1 100%);
+    box-shadow: 0 0 50px #00f0ff, 0 0 90px rgba(0, 240, 255, 0.7);
+}
+
+.state-scanner .pupil-target-ring {
+    opacity: 1;
+    animation: orbitRotate 4s linear infinite;
+}
+
+.state-scanner .cyber-brow {
+    background: linear-gradient(90deg, transparent 0%, #00f0ff 30%, #ffffff 70%, transparent 100%);
+    box-shadow: 0 0 20px #00f0ff;
+}
+
+.state-scanner .left-brow,
+.state-scanner .right-brow {
+    transform: translateY(-16px);
+}
+
+.state-scanner .cyber-mouth {
+    width: 30px;
+    height: 10px;
+    border: 3px solid #00f0ff;
+    border-radius: 6px;
+    box-shadow: 0 0 20px #00f0ff;
+}
+
+/* 8. SURPRISED / VISION (Camera Detection) */
+.state-surprised .cyber-eye {
+    transform: scale(1.25);
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffffff 0%, #a855f7 60%, #7e22ce 100%);
+    box-shadow: 0 0 45px #a855f7;
+    animation: surprisedShake 0.4s ease;
+}
+
+.state-surprised .cyber-brow {
+    background: linear-gradient(90deg, transparent 0%, #c084fc 30%, #ffffff 70%, transparent 100%);
+    box-shadow: 0 0 20px #a855f7;
+}
+
+.state-surprised .left-brow { transform: translateY(-20px) rotate(-6deg); }
+.state-surprised .right-brow { transform: translateY(-20px) rotate(6deg); }
+
+.state-surprised .cyber-mouth {
+    width: 32px;
+    height: 40px;
+    border: 5px solid #a855f7;
+    border-radius: 50%;
+    box-shadow: 0 0 25px #a855f7;
+}
+
+@keyframes surprisedShake {
+    0%, 100% { transform: scale(1.25); }
+    25% { transform: scale(1.3) translateY(-4px); }
+    75% { transform: scale(1.25) translateY(2px); }
+}
+
+/* 9. WINK */
+.state-wink .left-eye {
+    transform: scaleY(0.1);
+    box-shadow: 0 0 15px var(--glow-cyan);
+}
+.state-wink .right-eye {
+    transform: scale(1.1);
+}
+.state-wink .left-brow {
+    transform: translateY(8px) rotate(8deg);
+    opacity: 0.5;
+}
+.state-wink .right-brow {
+    transform: translateY(-10px) rotate(-8deg);
+}
+.state-wink .cheek-left {
+    opacity: 0.8;
+}
+
+/* 10. SLEEPING (Idle Sleep Mode with Floating z Z Z) */
+.state-sleeping .cyber-eye {
+    border-radius: 50% 50% 0 0;
+    border-bottom: 9px solid var(--glow-blue);
+    background: transparent;
+    box-shadow: 0 -4px 15px rgba(2, 132, 199, 0.4);
+    height: 22px;
+    transform: scaleY(0.35) translateY(12px);
+    opacity: 0.75;
+}
+
+.state-sleeping .cyber-brow {
+    transform: translateY(14px) rotate(0deg);
+    opacity: 0.25;
+}
+
+.state-sleeping .eye-pupil,
+.state-sleeping .eye-glint {
+    opacity: 0;
+}
+
+.state-sleeping .cyber-mouth {
+    width: 28px;
+    height: 6px;
+    border-radius: 6px;
+    border-bottom: 4px solid var(--glow-blue);
+    opacity: 0.55;
+}
+
+.state-sleeping .face-container {
+    animation: sleepBreathing 4.5s infinite ease-in-out;
+}
+
+@keyframes sleepBreathing {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(8px); }
+}
+
+/* Floating Sleep 'z Z Z' Particles */
+.sleep-particles {
+    position: absolute;
+    top: -25%;
+    right: 5%;
+    pointer-events: none;
+    display: none;
+}
+
+.state-sleeping .sleep-particles {
+    display: block;
+}
+
+.sleep-z {
+    position: absolute;
+    color: #38bdf8;
+    font-weight: 900;
+    font-family: 'Prompt', sans-serif;
+    opacity: 0;
+    text-shadow: 0 0 12px #38bdf8;
+    animation: floatSleepZ 3s infinite ease-in;
+}
+
+.sleep-z:nth-child(1) { font-size: 15px; animation-delay: 0s; left: 0px; }
+.sleep-z:nth-child(2) { font-size: 22px; animation-delay: 1s; left: 18px; }
+.sleep-z:nth-child(3) { font-size: 32px; animation-delay: 2s; left: 36px; }
+
+@keyframes floatSleepZ {
+    0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+    30% { opacity: 0.9; }
+    80% { opacity: 0.5; }
+    100% { transform: translate(30px, -65px) scale(1.35); opacity: 0; }
+}
+
+/* Real-time Dynamic Audio Lip-Sync */
+.state-speaking.audio-active .cyber-mouth {
+    animation: none;
+    width: calc(38px + var(--audio-amp, 0.5) * 32px);
+    height: calc(12px + var(--audio-amp, 0.5) * 38px);
+    border-radius: calc(12px + var(--audio-amp, 0.5) * 22px);
+    transition: width 0.04s ease-out, height 0.04s ease-out, border-radius 0.04s ease-out;
+}
+
+/* --------------------------------------------------------------------------
+   Quick Emotion Dock Buttons
+   -------------------------------------------------------------------------- */
+.dock-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    cursor: pointer;
+    user-select: none;
+}
+
+.dock-btn:hover {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: rgba(56, 189, 248, 0.8);
+    transform: translateY(-4px) scale(1.18);
+    box-shadow: 0 6px 18px rgba(56, 189, 248, 0.35);
+}
+
+.dock-btn:active {
+    transform: scale(0.92);
+}
+
+/* --------------------------------------------------------------------------
+   Expressive Cyber Ear Fins (หูไซเบอร์กระดิกได้ดุ๊กดิ๊ก)
+   -------------------------------------------------------------------------- */
+.cyber-ear {
+    width: 22px;
+    height: 130px;
+    padding: 6px 3px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
+    backdrop-filter: blur(8px);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+    animation: earBreathe 4s infinite ease-in-out;
+}
+
+.ear-left {
+    transform-origin: right center;
+}
+.ear-right {
+    transform-origin: left center;
+}
+
+@keyframes earBreathe {
+    0%, 100% { transform: translateY(-50%) scaleY(1); }
+    50% { transform: translateY(-50%) scaleY(1.06); }
+}
+
+.ear-segment {
+    display: block;
+    width: 100%;
+    flex: 1;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.2);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    transition: all 0.25s ease;
+}
+
+.ear-segment.active,
+.cyber-ear:hover .ear-segment {
+    background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+    box-shadow: 0 0 12px #38bdf8;
+}
+
+/* Wiggle animation when tickled/touched */
+.cyber-ear.ear-wiggle {
+    animation: earWaggle 0.55s ease-in-out !important;
+}
+
+@keyframes earWaggle {
+    0%, 100% { transform: translateY(-50%) rotate(0deg); }
+    20% { transform: translateY(-58%) rotate(-16deg) scale(1.15); }
+    40% { transform: translateY(-46%) rotate(14deg) scale(1.12); }
+    60% { transform: translateY(-54%) rotate(-8deg); }
+    80% { transform: translateY(-48%) rotate(6deg); }
+}
+
+/* State Reactions for Ears */
+.state-listening .cyber-ear {
+    transform: translateY(-60%) scale(1.15);
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+    border-color: rgba(16, 185, 129, 0.7);
+}
+.state-listening .ear-segment {
+    background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+    box-shadow: 0 0 10px #34d399;
+}
+
+.state-happy .cyber-ear,
+.state-love .cyber-ear {
+    animation: earHappyFlutter 1.8s infinite ease-in-out;
+}
+
+@keyframes earHappyFlutter {
+    0%, 100% { transform: translateY(-50%) rotate(0deg); }
+    50% { transform: translateY(-56%) rotate(10deg) scale(1.1); }
+}
+
+.state-sleeping .cyber-ear {
+    transform: translateY(-38%) rotate(18deg) scaleY(0.85);
+    opacity: 0.45;
+    box-shadow: none;
+    animation: none;
+}
+.state-sleeping .ear-left {
+    transform: translateY(-38%) rotate(-18deg) scaleY(0.85);
+}
+
+/* --------------------------------------------------------------------------
+   Floating Emotion Particles (หัวใจ 💖 และประกายดาว ✦ ลอยฟุ้ง)
+   -------------------------------------------------------------------------- */
+.floating-particle {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+    will-change: transform, opacity;
+    animation: floatEmotionParticle 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes floatEmotionParticle {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0.3) rotate(0deg);
+    }
+    15% {
+        opacity: 1;
+        transform: translate(calc(var(--drift-x, 0px) * 0.25), -25px) scale(1.25) rotate(var(--rot-angle, 0deg));
+    }
+    75% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--drift-x, 0px), -130px) scale(0.9) rotate(calc(var(--rot-angle, 0deg) * 2));
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Head Petting Bliss Reaction (ลูบหัวเคลิ้ม)
+   -------------------------------------------------------------------------- */
+.face-container.is-petting {
+    transform: scale(1.06) translateY(-8px) !important;
+}
+.face-container.is-petting .left-brow {
+    transform: translateY(-16px) rotate(8deg);
+}
+.face-container.is-petting .right-brow {
+    transform: translateY(-16px) rotate(-8deg);
+}
+

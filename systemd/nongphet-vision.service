@@ -1,0 +1,18 @@
+[Unit]
+Description=Nong Phet AI Smart Guide - Computer Vision & Auto Greeting Daemon
+After=nongphet.service
+Wants=nongphet.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/nongphet
+Environment="PATH=/home/pi/nongphet/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/pi/nongphet/venv/bin/python vision_daemon.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

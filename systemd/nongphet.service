@@ -1,0 +1,17 @@
+[Unit]
+Description=Nong Phet AI Smart Guide - Core Web & Kiosk Service
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/nongphet
+Environment="PATH=/home/pi/nongphet/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/pi/nongphet/venv/bin/python app_new.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+

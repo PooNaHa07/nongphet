@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สตูดิโอปรับแต่งเสียงน้องเพชร (Nong Phet Voice Studio)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .voice-card {
+            transition: all 0.25s ease;
+        }
+        .voice-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.3);
+        }
+        .pulse-wave {
+            animation: pulse-bar 1.2s infinite ease-in-out;
+        }
+        @keyframes pulse-bar {
+            0%, 100% { height: 6px; }
+            50% { height: 26px; }
+        }
+    </style>
+</head>
+<body class="text-slate-100 p-4 md:p-8">
+    <div class="max-w-5xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="glass-card rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-indigo-500/20 shadow-xl">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 to-indigo-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-pink-500/30">
+                    <i class="fa-solid fa-microphone-lines"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-indigo-200 to-cyan-300">
+                        สตูดิโอเสียงน้องเพชร AI
+                    </h1>
+                    <p class="text-sm text-slate-400">
+                        ทดสอบและปรับแต่งโทนเสียงเด็กน่ารักสดใส พร้อมระบบความเสถียร Multi-Retry & Zero-Latency Cache
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium transition flex items-center gap-2 border border-slate-700">
+                    <i class="fa-solid fa-arrow-left"></i> กลับหน้าหลัก
+                </a>
+                <span class="px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    ระบบพร้อมใช้งาน
+                </span>
+            </div>
+        </header>
+
+        <!-- Presets Selection Grid -->
+        <section class="space-y-3">
+            <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-wand-magic-sparkles text-pink-400"></i> เลือกฟังตัวอย่างโทนเสียงเด็กที่ปรับแต่งแล้ว
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                
+                <!-- Preset 1: Default Canonical -->
+                <div class="glass-card voice-card rounded-2xl p-5 flex flex-col justify-between border-pink-500/30 bg-gradient-to-b from-pink-500/10 to-transparent relative overflow-hidden">
+                    <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-bold border border-pink-500/30">
+                        ★ เสียงหลักปัจจุบัน
+                    </span>
+                    <div>
+                        <div class="w-10 h-10 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center text-lg mb-3">
+                            <i class="fa-solid fa-child-dress"></i>
+                        </div>
+                        <h3 class="font-bold text-base text-pink-200">เสียงมาตรฐานน้องเพชร</h3>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                            Premwadee Neural (Pitch +2Hz, Rate +5%) เสียงพูดมาตรฐานน้องเพชร สดใสชัดถ้อยชัดคำ จังหวะเว้นวรรคหายใจเหมือนคนจริง
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-700/50 flex items-center justify-between">
+                        <button onclick="playPresetSample('+2Hz', '+5%', this)" 
+                                class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-medium text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-600/30 transition">
+                            <i class="fa-solid fa-play"></i> กดฟังเสียงนี้
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preset 2: Cute Girl -->
+                <div class="glass-card voice-card rounded-2xl p-5 flex flex-col justify-between border-indigo-500/30 bg-gradient-to-b from-indigo-500/10 to-transparent">
+                    <div>
+                        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg mb-3">
+                            <i class="fa-solid fa-face-smile"></i>
+                        </div>
+                        <h3 class="font-bold text-base text-indigo-200">น้องเพชรเด็กหญิงสดใส</h3>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                            Premwadee Neural (Pitch +35Hz, Rate +10%) โทนเสียงเด็กหญิงน่ารัก สดใส เป็นกันเอง
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-700/50 flex items-center justify-between">
+                        <button onclick="playPresetSample('+35Hz', '+10%', this)" 
+                                class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-medium text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition">
+                            <i class="fa-solid fa-play"></i> กดฟังเสียงนี้
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preset 3: Chibi Mascot -->
+                <div class="glass-card voice-card rounded-2xl p-5 flex flex-col justify-between border-purple-500/30 bg-gradient-to-b from-purple-500/10 to-transparent">
+                    <div>
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-lg mb-3">
+                            <i class="fa-solid fa-cat"></i>
+                        </div>
+                        <h3 class="font-bold text-base text-purple-200">มาสคอตตัวจิ๋ว (Chibi)</h3>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                            Premwadee Neural (Pitch +45Hz, Rate +12%) โทนเสียงเล็กน่ารัก คล้ายตัวการ์ตูนมาสคอตญี่ปุ่น
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-700/50 flex items-center justify-between">
+                        <button onclick="playPresetSample('+45Hz', '+12%', this)" 
+                                class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-medium text-xs flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 transition">
+                            <i class="fa-solid fa-play"></i> กดฟังเสียงนี้
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Live Custom Synthesizer Tester -->
+        <section class="glass-card rounded-2xl p-6 md:p-8 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-indigo-300 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-cyan-400"></i> ทดสอบพิมพ์ข้อความสดและปรับระดับเสียงตามใจชอบ
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                        ระบบจะสังเคราะห์เสียงสดผ่านเอนจิน Neural พร้อมแสดงระยะเวลา Latency และสถานะการจัดเก็บลงแคช
+                    </p>
+                </div>
+                <div id="audio-wave" class="hidden flex items-center gap-1 h-8">
+                    <span class="w-1.5 bg-pink-400 rounded-full pulse-wave" style="animation-delay: 0.1s;"></span>
+                    <span class="w-1.5 bg-indigo-400 rounded-full pulse-wave" style="animation-delay: 0.2s;"></span>
+                    <span class="w-1.5 bg-cyan-400 rounded-full pulse-wave" style="animation-delay: 0.3s;"></span>
+                    <span class="w-1.5 bg-purple-400 rounded-full pulse-wave" style="animation-delay: 0.4s;"></span>
+                    <span class="w-1.5 bg-emerald-400 rounded-full pulse-wave" style="animation-delay: 0.5s;"></span>
+                </div>
+            </div>
+
+            <!-- Text Input & Fast Presets -->
+            <div class="space-y-2">
+                <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <span>ข้อความภาษาไทยที่ต้องการให้น้องเพชรพูด:</span>
+                    <span id="char-count" class="text-slate-500">0 ตัวอักษร</span>
+                </label>
+                <textarea id="test-text" rows="3" 
+                          class="w-full bg-slate-900/80 border border-slate-700 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition"
+                          placeholder="พิมพ์ข้อความที่ต้องการทดสอบที่นี่...">สวัสดีค่ะ หนูชื่อน้องเพชร ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีนะคะ วันนี้อยากให้น้องเพชรช่วยแนะนำสถานที่ท่องเที่ยวหรือร้านอาหารเด็ดๆ ดีคะ</textarea>
+                
+                <!-- Quick phrase buttons -->
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <span class="text-xs text-slate-400 self-center">ข้อความทดสอบด่วน:</span>
+                    <button type="button" onclick="setTestText(this.innerText)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                        สวัสดีค่ะ น้องเพชรยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ
+                    </button>
+                    <button type="button" onclick="setTestText(this.innerText)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                        เพชรบุรีมี 8 อำเภอ คือ อำเภอเมือง ชะอำ ท่ายาง บ้านลาด และแก่งกระจานค่ะ
+                    </button>
+                    <button type="button" onclick="setTestText(this.innerText)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                        อย่าลืมแวะชิมขนมหม้อแกงเตาฟืน ข้าวแช่ชาววัง และก๋วยเตี๋ยวน้ำแดงนะคะ
+                    </button>
+                </div>
+            </div>
+
+            <!-- Voice Controls Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                
+                <!-- Voice Choice -->
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-slate-300">โมเดลเสียงหลัก (Voice Model):</label>
+                    <select id="voice-select" onchange="handleVoiceChange()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm text-slate-200 focus:border-pink-500 focus:outline-none">
+                        <option value="th-TH-PremwadeeNeural" selected>เปรมวดี (Premwadee - เสียงหญิง/ค่าเริ่มต้น)</option>
+                    </select>
+                </div>
+
+                <!-- Pitch Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-slate-300">ความสูงต่ำของเสียง (Pitch):</label>
+                        <span id="pitch-val" class="text-xs font-mono px-2 py-0.5 rounded bg-pink-500/20 text-pink-300 border border-pink-500/30">+2Hz</span>
+                    </div>
+                    <input type="range" id="pitch-slider" min="0" max="100" value="2" step="1"
+                           oninput="updatePitchDisplay(this.value)"
+                           class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>ปกติ (+0Hz)</span>
+                        <span>น้องเพชร (+2Hz)</span>
+                        <span>เด็กสดใส (+35Hz)</span>
+                        <span>มาสคอต (+45Hz)</span>
+                    </div>
+                </div>
+
+                <!-- Rate Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold text-slate-300">ความเร็วในการพูด (Rate):</label>
+                        <span id="rate-val" class="text-xs font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">+5%</span>
+                    </div>
+                    <input type="range" id="rate-slider" min="-10" max="30" value="5" step="1"
+                           oninput="updateRateDisplay(this.value)"
+                           class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500">
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>ช้าลง (-10%)</span>
+                        <span>ปกติ (+0%)</span>
+                        <span>น้องเพชร (+5%)</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Action Buttons & Status -->
+            <div class="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-700/60">
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <button id="btn-live-test" onclick="generateAndPlayTTS()" 
+                            class="flex-1 sm:flex-none px-6 py-3 rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-pink-600/30 transition">
+                        <i class="fa-solid fa-play"></i> สังเคราะห์เสียงพูดทันที
+                    </button>
+                    <button id="btn-stop-audio" onclick="stopAudio()" 
+                            class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm flex items-center gap-2 border border-slate-700 transition">
+                        <i class="fa-solid fa-stop text-rose-400"></i> หยุด
+                    </button>
+                </div>
+                
+                <div id="status-box" class="text-xs text-slate-400 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                    <span id="status-text">พร้อมทดสอบ คลิกสังเคราะห์เสียงพูดได้เลยค่ะ</span>
+                </div>
+            </div>
+
+            <!-- Audio Player Element (Hidden) -->
+            <audio id="audio-player" class="hidden"></audio>
+
+        </section>
+
+        <!-- Technical Stability Architecture Card -->
+        <section class="glass-card rounded-2xl p-6 border-indigo-500/20 text-xs text-slate-400 space-y-3">
+            <h3 class="font-bold text-sm text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-shield-halved text-emerald-400"></i> สถาปัตยกรรมความเสถียรของระบบเสียงน้องเพชร (Stability & Fallback Pipeline)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <div class="font-semibold text-emerald-300 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-bolt"></i> 1. Zero-Latency Cache (0ms)
+                    </div>
+                    คำตอบความรู้ 58 รายการ และเสียงตอบรับภาษามือ/ทักทายคนเดินผ่าน ถูก Pre-baked ไว้ล่วงหน้าในเครื่อง ตอบสนอง 0ms แม้ไม่มีเน็ต
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <div class="font-semibold text-indigo-300 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-repeat"></i> 2. Multi-Retry Edge Neural
+                    </div>
+                    คำถามสดใหม่จะส่งไปสังเคราะห์ผ่าน Edge Neural เสียง Premwadee พร้อมระบบ Retry 3 ครั้ง ป้องกันปัญหาเสียงค้าง
+                </div>
+                <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                    <div class="font-semibold text-amber-300 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-server"></i> 3. On-Device Fallback
+                    </div>
+                    หากอินเทอร์เน็ตหลุด ระบบสลับมา On-Device Local TTS (PyThaiTTS / fastthaig2p) บน Raspberry Pi 5 ทันที ไม่ทำให้ Kiosk ค้าง
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        const audioPlayer = document.getElementById('audio-player');
+        const statusText = document.getElementById('status-text');
+        const audioWave = document.getElementById('audio-wave');
+        const btnLiveTest = document.getElementById('btn-live-test');
+
+        function updatePitchDisplay(val) {
+            document.getElementById('pitch-val').innerText = '+' + val + 'Hz';
+        }
+
+        function updateRateDisplay(val) {
+            const prefix = val >= 0 ? '+' : '';
+            document.getElementById('rate-val').innerText = prefix + val + '%';
+        }
+
+        function handleVoiceChange() {
+            const pitchSlider = document.getElementById('pitch-slider');
+            const rateSlider = document.getElementById('rate-slider');
+            pitchSlider.value = 2;
+            updatePitchDisplay(2);
+            rateSlider.value = 5;
+            updateRateDisplay(5);
+        }
+
+        function playPresetSample(pitch, rate, btn) {
+            const text = "สวัสดีค่ะ หนูชื่อน้องเพชร ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีนะคะ";
+            const url = `/api/tts/stream?text=${encodeURIComponent(text)}&voice=th-TH-PremwadeeNeural&pitch=${encodeURIComponent(pitch)}&rate=${encodeURIComponent(rate)}`;
+            playSample(url, btn);
+        }
+
+        function setTestText(text) {
+            document.getElementById('test-text').value = text;
+            updateCharCount();
+        }
+
+        function updateCharCount() {
+            const len = document.getElementById('test-text').value.length;
+            document.getElementById('char-count').innerText = len + ' ตัวอักษร';
+        }
+        document.getElementById('test-text').addEventListener('input', updateCharCount);
+        updateCharCount();
+
+        function playSample(url, btn) {
+            stopAudio();
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเล่น...';
+            audioPlayer.src = url;
+            audioPlayer.play().then(() => {
+                audioWave.classList.remove('hidden');
+                statusText.innerText = 'กำลังเล่นไฟล์ตัวอย่าง...';
+            }).catch(e => {
+                statusText.innerText = 'เกิดข้อผิดพลาดในการเล่น: ' + e;
+                btn.innerHTML = originalHtml;
+            });
+
+            audioPlayer.onended = () => {
+                btn.innerHTML = originalHtml;
+                audioWave.classList.add('hidden');
+                statusText.innerText = 'เล่นเสียงตัวอย่างจบแล้วค่ะ';
+            };
+        }
+
+        async function generateAndPlayTTS() {
+            const text = document.getElementById('test-text').value.trim();
+            if (!text) {
+                alert('กรุณาพิมพ์ข้อความที่ต้องการทดสอบ');
+                return;
+            }
+
+            const voice = document.getElementById('voice-select').value;
+            const pitch = document.getElementById('pitch-val').innerText;
+            const rate = document.getElementById('rate-val').innerText;
+
+            stopAudio();
+            btnLiveTest.disabled = true;
+            btnLiveTest.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังสังเคราะห์เสียง...';
+            statusText.innerText = 'กำลังส่งข้อมูลไปสังเคราะห์เสียง Neural Studio...';
+
+            const t0 = performance.now();
+            try {
+                const res = await fetch('/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        lang: 'th',
+                        voice: voice,
+                        pitch: pitch,
+                        rate: rate
+                    })
+                });
+
+                const data = await res.json();
+                const latency = Math.round(performance.now() - t0);
+
+                if (data.audio_base64) {
+                    const mime = (data.audio_format === 'wav') ? 'audio/wav' : 'audio/mp3';
+                    audioPlayer.src = `data:${mime};base64,` + data.audio_base64;
+                    audioPlayer.play();
+                    audioWave.classList.remove('hidden');
+                    statusText.innerHTML = `<span class="text-emerald-400 font-semibold">สำเร็จ (${latency}ms)</span> | เอนจิน: <span class="text-cyan-300 font-mono">${data.engine}</span> | เสียง: ${voice} (${pitch}, ${rate})`;
+                } else {
+                    statusText.innerHTML = `<span class="text-rose-400">ผิดพลาด: ${data.error || 'ไม่มีข้อมูลเสียง'}</span>`;
+                }
+            } catch (err) {
+                statusText.innerHTML = `<span class="text-rose-400">เชื่อมต่อขัดข้อง: ${err}</span>`;
+            } finally {
+                btnLiveTest.disabled = false;
+                btnLiveTest.innerHTML = '<i class="fa-solid fa-play"></i> สังเคราะห์เสียงพูดทันที';
+            }
+
+            audioPlayer.onended = () => {
+                audioWave.classList.add('hidden');
+                statusText.innerText = 'เล่นเสียงพูดเสร็จสมบูรณ์แล้วค่ะ';
+            };
+        }
+
+        function stopAudio() {
+            if (audioPlayer) {
+                audioPlayer.pause();
+                audioPlayer.currentTime = 0;
+            }
+            audioWave.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
