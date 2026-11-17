@@ -314,63 +314,79 @@ def plan_trip():
         )
     return jsonify({'plan': plan, 'status': 'success', 'engine': 'offline_local_planner'})
 
+# ตัวแนะนำสาขา: จับคู่ความสนใจกับ 11 สาขาที่เปิดสอนจริง แล้วดึงรายละเอียดจากฐานความรู้ (ข้อมูลทางการ)
+# ไม่ใส่คะแนนความเหมาะสมหรือเงินเดือน เพราะไม่มีแหล่งข้อมูลรองรับ
+COURSE_RULES = [
+    ('admission_dbt_001', 'เทคโนโลยีธุรกิจดิจิทัลและคอมพิวเตอร์ธุรกิจ',
+     ['คอม', 'ไอที', 'โปรแกรม', 'เขียนโค้ด', 'เว็บ', 'แอป', 'เกม', 'it', 'computer', 'ai', 'ดิจิทัล', 'เทคโน', 'เครือข่าย']),
+    ('admission_digital_graphic_001', 'ดิจิทัลกราฟิก',
+     ['กราฟิก', 'ออกแบบ', 'ตัดต่อ', 'วิดีโอ', 'ภาพเคลื่อนไหว', 'แอนิเมชัน', 'โปสเตอร์', 'design', 'graphic']),
+    ('admission_fine_arts_001', 'วิจิตรศิลป์', ['วาดรูป', 'วาดภาพ', 'ศิลปะ', 'ระบายสี', 'ปั้น', 'จิตรกรรม', 'art']),
+    ('admission_acct_001', 'การบัญชี', ['บัญชี', 'ตัวเลข', 'คำนวณ', 'การเงิน', 'ภาษี', 'คณิต', 'account']),
+    ('admission_mkt_001', 'การตลาด', ['ขาย', 'ค้าขาย', 'ออนไลน์', 'การตลาด', 'โฆษณา', 'ธุรกิจ', 'แม่ค้า', 'marketing']),
+    ('admission_office_001', 'การจัดการสำนักงาน', ['เอกสาร', 'สำนักงาน', 'เลขา', 'ธุรการ', 'ประสานงาน', 'office']),
+    ('admission_culinary_001', 'อาหารและโภชนาการ', ['อาหาร', 'ทำอาหาร', 'ขนม', 'ครัว', 'เชฟ', 'เบเกอรี่', 'cook', 'chef', 'food']),
+    ('admission_home_econ_001', 'คหกรรม', ['ดอกไม้', 'แกะสลัก', 'ใบตอง', 'งานฝีมือ', 'ประดิษฐ์', 'ดูแลเด็ก', 'ผู้สูงอายุ']),
+    ('admission_fashion_001', 'แฟชั่นและสิ่งทอ', ['แฟชั่น', 'เสื้อผ้า', 'ตัดเย็บ', 'เย็บผ้า', 'แต่งตัว', 'ผ้า', 'fashion']),
+    ('admission_hotel_001', 'การโรงแรม', ['โรงแรม', 'บริการ', 'ต้อนรับ', 'เครื่องดื่ม', 'บาร์', 'hotel']),
+    ('admission_tourism_001', 'การท่องเที่ยว', ['ท่องเที่ยว', 'ไกด์', 'มัคคุเทศก์', 'เที่ยว', 'ภาษาอังกฤษ', 'ทัวร์', 'อีเวนต์', 'tour']),
+]
+
+
+def _course_summary(entry_id):
+    """ดึงบรรทัดหลักสูตรและอาชีพจากคำตอบในฐานความรู้ (แหล่งเดียวกับที่น้องเพชรตอบในแชท)"""
+    try:
+        from services.knowledge_manager import kb_manager
+        entry = kb_manager.get_entry(entry_id) or {}
+    except Exception:
+        entry = {}
+    keep = []
+    for line in (entry.get('answer') or '').split('\n'):
+        s = line.strip()
+        if s.startswith(('- ปวช', '- ปวส', '- ปริญญา', '• **อาชีพ', '• **หลักสูตร', '• มีนักเรียน')):
+            keep.append(line)
+    return '\n'.join(keep)
+
+
 @chat_bp.route('/match_course', methods=['POST'])
 def match_course():
     data = request.json or {}
-    interests = data.get('interests', '')
-    strengths = data.get('strengths', '')
-    dream_job = data.get('dream_job', '')
-    
-    text = (interests + " " + strengths + " " + dream_job).lower()
-    if any(k in text for k in ['คอม', 'ไอที', 'โปรแกรม', 'เกม', 'เว็บ', 'it', 'computer', 'ai', 'ดิจิทัล', 'เทคโน', 'กราฟิก']):
+    text = ' '.join(str(data.get(k, '')) for k in ('interests', 'strengths', 'dream_job')).lower()
+
+    scored = []
+    for entry_id, name, words in COURSE_RULES:
+        hits = [w for w in words if w in text]
+        if hits:
+            scored.append((len(hits), entry_id, name, hits))
+    scored.sort(key=lambda x: -x[0])
+
+    if not scored:
         rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาเทคโนโลยีธุรกิจดิจิทัล / เทคโนโลยีสารสนเทศ (Match Score: 98%)**\n\n"
-            "🎯 **[Why You Fit]:** คุณมีความสนใจและจุดเด่นด้านเทคโนโลยี ดิจิทัล และคอมพิวเตอร์ ซึ่งตรงกับทักษะศตวรรษที่ 21 ที่ตลาดแรงงานต้องการสูงสุด\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• พัฒนาเว็บไซต์ แอปพลิเคชัน และระบบ AI อัจฉริยะ\n"
-            "• การบริหารจัดการข้อมูล การตลาดดิจิทัล และอีคอมเมิร์ซ\n"
-            "• กราฟิกดีไซน์ มัลติมีเดีย และคอนเทนต์สร้างสรรค์\n\n"
-            "💼 **[Career Paths & Salaries]:** นักพัฒนาเว็บ/ซอฟต์แวร์, นักการตลาดดิจิทัล, เจ้าหน้าที่ไอที (เงินเดือนเริ่มต้น 18,000 - 35,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาการบัญชีดิจิทัล (Digital Accounting)"
+            "🎓 **น้องเพชรช่วยแนะนำสาขาให้ค่ะ**\n\n"
+            "ยังจับคู่ความสนใจกับสาขาไม่ได้ ลองบอกสิ่งที่ชอบเพิ่มอีกนิดนะคะ เช่น คอมพิวเตอร์ วาดรูป ทำอาหาร ค้าขาย หรืองานบริการ\n\n"
+            "วิทยาลัยอาชีวศึกษาเพชรบุรี (PBPVC) เปิดสอน 11 สาขา: " + ', '.join(name for _, name, _ in COURSE_RULES)
         )
-    elif any(k in text for k in ['อาหาร', 'ทำอาหาร', 'ขนม', 'ครัว', 'เชฟ', 'cook', 'chef', 'เบเกอรี่', 'food']):
-        rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาอาหารและโภชนาการ (Match Score: 97%)**\n\n"
-            "🎯 **[Why You Fit]:** เพชรบุรีคือเมืองสร้างสรรค์ด้านอาหารของ UNESCO (City of Gastronomy) การเรียนด้านอาหารที่ PBVC จะปลดล็อกศักยภาพสู่การเป็นเชฟมืออาชีพ\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• ศิลปะการประกอบอาหารไทยฟิวชั่น และอาหารตะวันตก\n"
-            "• เทคนิคการทำเบเกอรี่ ขนมไทย และของหวานชาววังชั้นสูง\n"
-            "• การจัดการธุรกิจร้านอาหารและการควบคุมต้นทุน\n\n"
-            "💼 **[Career Paths & Salaries]:** เชฟภัตตาคาร, ผู้เชี่ยวชาญด้านอาหาร, เจ้าของคาเฟ่/ธุรกิจอาหาร (เงินเดือนเริ่มต้น 18,000 - 40,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาการโรงแรม (Hotel Management)"
-        )
-    elif any(k in text for k in ['โรงแรม', 'บริการ', 'ท่องเที่ยว', 'มัคคุเทศก์', 'ไกด์', 'tour', 'hotel']):
-        rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาการโรงแรมและการท่องเที่ยว (Match Score: 96%)**\n\n"
-            "🎯 **[Why You Fit]:** เหมาะกับผู้มีใจรักงานบริการ มนุษยสัมพันธ์ยอดเยี่ยม และต้องการทำงานในอุตสาหกรรมการท่องเที่ยวระดับสากล\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• การบริหารงานส่วนหน้าโรงแรมและงานบริการลูกค้าระดับ 5 ดาว\n"
-            "• ทักษะการสื่อสารภาษาต่างประเทศ (อังกฤษ จีน)\n"
-            "• การจัดนำเที่ยวและมัคคุเทศก์มืออาชีพ\n\n"
-            "💼 **[Career Paths & Salaries]:** ผู้จัดการงานโรงแรม, เจ้าหน้าที่สายการบิน, มัคคุเทศก์ (เงินเดือนเริ่มต้น 17,000 - 35,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาการตลาด (Digital Marketing)"
-        )
-    else:
-        rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาการบัญชี / การตลาดดิจิทัล (Match Score: 95%)**\n\n"
-            "🎯 **[Why You Fit]:** เป็นสาขาวิชาหลักที่ทุกองค์กรและทุกธุรกิจต้องการตัวมากที่สุด พร้อมโอกาสต่อยอดเป็นผู้ประกอบการรุ่นใหม่\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• การวางแผนกลยุทธ์ธุรกิจและบริหารการเงินอย่างเป็นระบบ\n"
-            "• การใช้ระบบคอมพิวเตอร์และ AI ช่วยวิเคราะห์ข้อมูลการตลาด\n"
-            "• การสร้างแบรนด์และการค้าออนไลน์ในยุคดิจิทัล\n\n"
-            "💼 **[Career Paths & Salaries]:** นักการเงินการบัญชี, ที่ปรึกษาธุรกิจ, ผู้ประกอบการออนไลน์ (เงินเดือนเริ่มต้น 16,000 - 30,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาเทคโนโลยีธุรกิจดิจิทัล"
-        )
-    return jsonify({'recommendation': rec, 'status': 'success', 'engine': 'offline_course_matcher'})
+        return jsonify({'recommendation': rec, 'status': 'success', 'engine': 'offline_course_matcher', 'matches': []})
+
+    _, best_id, best_name, best_hits = scored[0]
+    parts = [
+        "🎓 **สาขาที่น้องเพชรแนะนำ**\n",
+        f"🏆 **สาขาวิชา{best_name}**",
+        f"🎯 เพราะคุณสนใจเรื่อง: {', '.join(best_hits)}",
+    ]
+    summary = _course_summary(best_id)
+    if summary:
+        parts += ['', summary]
+    if len(scored) > 1:
+        parts += ['', '🥈 **สาขาที่น่าสนใจรองลงมา**: ' + ', '.join(f"สาขาวิชา{n}" for _, _, n, _ in scored[1:3])]
+    parts += ['', '📌 ข้อมูลจากเว็บไซต์วิทยาลัย (พ.ย. 2569) สอบถามเพิ่มเติม โทร 032-425-557']
+    return jsonify({
+        'recommendation': '\n'.join(parts),
+        'status': 'success',
+        'engine': 'offline_course_matcher',
+        'matches': [{'id': i, 'name': n} for _, i, n, _ in scored[:3]],
+    })
+
 
 @chat_bp.route('/reset', methods=['POST'])
 def reset():

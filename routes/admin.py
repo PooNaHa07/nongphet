@@ -125,7 +125,7 @@ def get_system_telemetry():
         "network": {
             "ip_address": ip_addr,
             "hostname": socket.gethostname(),
-            "status": "Online (PBVC Robotics Lan/5G)"
+            "status": "Online (PBPVC Robotics Lan/5G)"
         },
         "uptime": uptime_formatted,
         "uptime_seconds": uptime_sec,
