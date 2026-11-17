@@ -148,7 +148,8 @@ async def bake_one(clean, cache_key, voice, pitch, rate, attempts=2):
     for attempt in range(attempts):
         _mark_edge_ok()  # สคริปต์นี้ตั้งใจลองซ้ำเอง ไม่ใช้ตัวพักการเชื่อมต่อของเซิร์ฟเวอร์
         try:
-            audio = await generate_speech(clean, voice=voice, rate=rate, pitch=pitch, timeout=30.0, retries=1)
+            audio = await generate_speech(clean, voice=voice, rate=rate, pitch=pitch, timeout=30.0, retries=1,
+                                          purpose='bake')
             if audio:
                 save_cached_tts(cache_key, audio)
                 return len(audio)

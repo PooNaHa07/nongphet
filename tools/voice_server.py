@@ -25,7 +25,12 @@ Raspberry Pi ส่งข้อความมาที่ POST /synthesize แ�
 ค่าที่ปรับได้ (environment):
     OMNIVOICE_MODEL   รุ่นโมเดล (ค่าเริ่มต้น k2-fsa/OmniVoice หรือรุ่นไทย hotdogs/omnivoice-thai)
     OMNIVOICE_DEVICE  อุปกรณ์ (ค่าเริ่มต้น cuda:0)
-    OMNIVOICE_STEPS   จำนวนรอบสร้างเสียง (ค่าเริ่มต้น 32, ใช้ 16 ถ้าต้องการเร็วขึ้น)
+    OMNIVOICE_DTYPE   float32 (ค่าเริ่มต้น) หรือ float16
+                      การ์ด GTX 16xx เช่น GTX 1650: float32 เร็วกว่า float16 ประมาณ 4 เท่า (วัดจริง)
+                      การ์ด RTX รุ่นใหม่: ลอง float16 แล้วเทียบ
+    OMNIVOICE_STEPS_LIVE  จำนวนรอบสร้างเสียงตอนตอบสด (ค่าเริ่มต้น 8: เร็ว)
+    OMNIVOICE_STEPS_BAKE  จำนวนรอบตอนอัดเสียงเก็บล่วงหน้า (ค่าเริ่มต้น 32: คุณภาพสูงสุด)
+                      วัดบน GTX 1650 float32 ประโยค 5 วินาที: 8 รอบ ~5 วินาที, 16 รอบ ~11, 32 รอบ ~21
     OMNIVOICE_SPEED   ความเร็วพูด (ค่าเริ่มต้น 1.0)
     VOICE_SERVER_TOKEN  รหัสป้องกันไม่ให้เครื่องอื่นในวงแลนเรียกใช้
 
@@ -75,11 +80,13 @@ def encode_mp3(samples, sample_rate=SAMPLE_RATE, bitrate=MP3_BITRATE_KBPS):
 class OmniVoiceBackend:
     """โหลดโมเดลครั้งเดียว และสร้างเสียงด้วยเสียงต้นแบบของน้องเพชร (ใช้ GPU ทีละคำขอ)"""
 
-    def __init__(self, model_id, device, steps, speed):
+    def __init__(self, model_id, device, steps, speed, dtype='float32', bake_steps=None):
         self.model_id = model_id
         self.device = device
-        self.steps = steps
+        self.steps = steps                     # ตอบสด
+        self.bake_steps = bake_steps or steps  # อัดเก็บล่วงหน้า
         self.speed = speed
+        self.dtype = dtype
         self.model = None
         self.prompt = None
         self.lock = threading.Lock()
@@ -87,8 +94,9 @@ class OmniVoiceBackend:
     def load(self):
         import torch
         from omnivoice import OmniVoice, VoiceClonePrompt
-        print(f"📥 กำลังโหลด {self.model_id} บน {self.device} ...")
-        self.model = OmniVoice.from_pretrained(self.model_id, device_map=self.device, dtype=torch.float16)
+        print(f"📥 กำลังโหลด {self.model_id} บน {self.device} ({self.dtype}) ...")
+        self.model = OmniVoice.from_pretrained(self.model_id, device_map=self.device,
+                                               dtype=getattr(torch, self.dtype))
         if os.path.exists(PROMPT_FILE):
             self.prompt = VoiceClonePrompt.load(PROMPT_FILE)
         else:
@@ -107,10 +115,11 @@ class OmniVoiceBackend:
             print(f"💾 บันทึกเสียงต้นแบบที่เตรียมแล้ว: {PROMPT_FILE} (ลบไฟล์นี้เมื่อเปลี่ยนเสียงต้นแบบ)")
         print("✅ พร้อมสร้างเสียงน้องเพชร")
 
-    def synthesize(self, text):
+    def synthesize(self, text, purpose='live'):
+        steps = self.bake_steps if purpose == 'bake' else self.steps
         with self.lock:
             audio = self.model.generate(text=text, voice_clone_prompt=self.prompt,
-                                        num_step=self.steps, speed=self.speed)
+                                        num_step=steps, speed=self.speed)
         return audio[0]
 
 
@@ -127,20 +136,23 @@ def create_app(backend, token=''):
     @app.get('/health')
     def health():
         return jsonify({'ok': backend.model is not None, 'model': backend.model_id,
-                        'device': backend.device, 'steps': backend.steps, **stats})
+                        'device': backend.device, 'steps': backend.steps,
+                        'bake_steps': getattr(backend, 'bake_steps', backend.steps), **stats})
 
     @app.post('/synthesize')
     def synthesize():
         if not authorized():
             return jsonify({'error': 'unauthorized'}), 403
-        text = ((request.get_json(silent=True) or {}).get('text') or '').strip()
+        body = request.get_json(silent=True) or {}
+        text = (body.get('text') or '').strip()
+        purpose = 'bake' if body.get('purpose') == 'bake' else 'live'
         if not text:
             return jsonify({'error': 'text is required'}), 400
         if len(text) > MAX_TEXT_CHARS:
             return jsonify({'error': f'text longer than {MAX_TEXT_CHARS} characters'}), 413
         started = time.time()
         try:
-            mp3 = encode_mp3(backend.synthesize(text))
+            mp3 = encode_mp3(backend.synthesize(text, purpose))
         except Exception as e:
             return jsonify({'error': f'synthesis failed: {type(e).__name__}: {e}'}), 500
         stats['requests'] += 1
@@ -159,7 +171,9 @@ def main():
     backend = OmniVoiceBackend(
         model_id=os.environ.get('OMNIVOICE_MODEL', 'k2-fsa/OmniVoice'),
         device=os.environ.get('OMNIVOICE_DEVICE', 'cuda:0'),
-        steps=int(os.environ.get('OMNIVOICE_STEPS', '32')),
+        steps=int(os.environ.get('OMNIVOICE_STEPS_LIVE', os.environ.get('OMNIVOICE_STEPS', '8'))),
+        bake_steps=int(os.environ.get('OMNIVOICE_STEPS_BAKE', '32')),
+        dtype=os.environ.get('OMNIVOICE_DTYPE', 'float32'),
         speed=float(os.environ.get('OMNIVOICE_SPEED', '1.0')),
     )
     backend.load()

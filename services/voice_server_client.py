@@ -58,8 +58,11 @@ def voice_server_status():
 
 
 def voice_server_timeout_for(text):
-    """GPU สร้างเสียงเร็วกว่าเวลาพูดจริงหลายเท่า แต่เผื่อเวลาให้ข้อความยาวและการ์ดจอรุ่นเล็ก"""
-    return min(60.0, 8.0 + len(text or '') / 25.0)
+    """
+    เวลารอเซิร์ฟเวอร์เสียง: ตอบสด (8 รอบ) บน GTX 1650 ใช้เวลาใกล้เคียงความยาวเสียง
+    ภาษาไทยพูดประมาณ 13 ตัวอักษร/วินาที จึงเผื่อ ~1 วินาทีต่อ 10 ตัวอักษร
+    """
+    return min(120.0, 10.0 + len(text or '') / 10.0)
 
 
 def _mark_offline(reason):
@@ -67,7 +70,7 @@ def _mark_offline(reason):
     _state['last_error'] = reason
 
 
-async def synthesize_voice_server(text, timeout=None):
+async def synthesize_voice_server(text, timeout=None, purpose='live'):
     """ขอเสียงจากเซิร์ฟเวอร์เสียงในบูธ คืน MP3 bytes หรือ raise VoiceServerError"""
     url = _url()
     if not url:
@@ -76,8 +79,10 @@ async def synthesize_voice_server(text, timeout=None):
         raise VoiceServerError(f"voice server cooling down ({_state['last_error']})")
     headers = {'X-Voice-Token': os.environ.get('VOICE_SERVER_TOKEN', '')}
     try:
-        async with httpx.AsyncClient(timeout=timeout or voice_server_timeout_for(text)) as client:
-            res = await client.post(f'{url}/synthesize', json={'text': text}, headers=headers)
+        # อัดเก็บล่วงหน้าใช้รอบสร้างเสียงมากกว่าตอบสด (32 vs 8) จึงรอนานกว่า
+        wait = timeout or voice_server_timeout_for(text) * (4 if purpose == 'bake' else 1)
+        async with httpx.AsyncClient(timeout=wait) as client:
+            res = await client.post(f'{url}/synthesize', json={'text': text, 'purpose': purpose}, headers=headers)
     except httpx.HTTPError as e:
         _mark_offline(f'network error: {type(e).__name__}')
         raise VoiceServerError(_state['last_error']) from e

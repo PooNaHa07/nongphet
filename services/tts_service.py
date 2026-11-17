@@ -538,7 +538,8 @@ async def generate_edge_tts(text, voice=None, rate=None, pitch=None, volume="+0%
     raise RuntimeError(f"Edge-TTS failed after {retries} attempts: {last_error}")
 
 
-async def generate_speech(text, voice=None, rate=None, pitch=None, volume="+0%", timeout=None, retries=3):
+async def generate_speech(text, voice=None, rate=None, pitch=None, volume="+0%", timeout=None, retries=3,
+                          purpose='live'):
     """
     สร้างเสียงน้องเพชร: ใช้ Azure Speech (บริการทางการ) ก่อนถ้าตั้งค่าไว้ ถ้าใช้ไม่ได้ค่อยใช้ Edge-TTS
     ทั้งสองทางเป็นเสียงเดียวกัน (voice/pitch/rate เดียวกัน) และส่งไฟล์รูปแบบเดียวกัน
@@ -548,7 +549,7 @@ async def generate_speech(text, voice=None, rate=None, pitch=None, volume="+0%",
         # โหมดเสียงน้องเพชร (OmniVoice): ใช้เซิร์ฟเวอร์เสียงในบูธเท่านั้น
         # ห้ามสำรองด้วย Edge/Azure เพราะเป็นคนละเสียง (นโยบายเสียงเดียวทั้งระบบ)
         try:
-            audio = await synthesize_voice_server(text)
+            audio = await synthesize_voice_server(text, purpose=purpose)
         except VoiceServerError as e:
             raise VoiceUnavailable(f"voice server unavailable: {e}") from e
         if not is_canonical_voice_audio(audio):
@@ -646,8 +647,8 @@ def bake_text_in_background(text, lang='th'):
         if get_cached_tts(key)[0]:
             return
         try:
-            audio = run_coroutine(generate_speech(clean, voice=voice, rate=rate, pitch=pitch),
-                                  timeout=edge_wait_budget(clean))
+            audio = run_coroutine(generate_speech(clean, voice=voice, rate=rate, pitch=pitch, purpose='bake'),
+                                  timeout=edge_wait_budget(clean) * 4)
             save_cached_tts(key, audio)
             logger.info(f"🎙️ [Voice Bake] อัดเสียงคำตอบใหม่แล้ว ({len(clean)} ตัวอักษร)")
         except Exception as e:

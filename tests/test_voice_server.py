@@ -157,7 +157,7 @@ class FakeBackend:
     def __init__(self):
         self.texts = []
 
-    def synthesize(self, text):
+    def synthesize(self, text, purpose='live'):
         self.texts.append(text)
         return np.zeros(2400, dtype=np.float32)
 
