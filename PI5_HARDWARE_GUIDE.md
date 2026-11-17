@@ -220,6 +220,29 @@ python run_tests.py
 - ลองฟังโทนอื่นเปรียบเทียบได้ที่หน้า `/tts-preview` (ไม่มีผลกับเสียงที่ระบบใช้จริง)
 - ภาษาอังกฤษ/จีนใช้เสียงประจำภาษานั้น (`en-US-AriaNeural`, `zh-CN-XiaoxiaoNeural`) เพราะเสียงไทยอ่านภาษาอื่นไม่ชัด
 
+### 9.2.0 เสียงน้องเพชรด้วย OmniVoice (โหมดสำหรับงานประกวด)
+เสียงน้องเพชรโคลนจากเสียงนักศึกษาที่ยินยอม (ดู `voices/README.md`) สร้างบนโน้ตบุ๊ก GPU ในบูธ ไม่ต้องใช้อินเทอร์เน็ต
+
+1. **บนโน้ตบุ๊ก GPU** (ครั้งแรกต้องมีเน็ตเพื่อดาวน์โหลดโมเดล):
+   ```powershell
+   pip install torch==2.8.0+cu128 torchaudio==2.8.0+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+   pip install omnivoice lameenc flask
+   $env:VOICE_SERVER_TOKEN="<ตั้งรหัสเอง>"
+   python tools/voice_server.py --port 8010
+   ```
+2. **บน Pi** ใส่ใน `.env` แล้วรีสตาร์ทเซิร์ฟเวอร์:
+   ```bash
+   TTS_ENGINE=omnivoice
+   VOICE_SERVER_URL=http://<IP โน้ตบุ๊ก>:8010
+   VOICE_SERVER_TOKEN=<รหัสเดียวกับโน้ตบุ๊ก>
+   VOICE_ID=nongphet-omni-v1
+   ```
+3. ตรวจ `http://localhost:5000/api/tts/status` ควรเห็น `"primary_engine": "omnivoice"`
+4. รัน `python prebake_tts.py` บน Pi (ระหว่างเปิดเซิร์ฟเวอร์เสียง) เพื่ออัดคำตอบทุกหัวข้อเก็บไว้ในเครื่อง
+
+ลำดับการหาเสียงในโหมดนี้: เสียงที่อัดไว้ → เซิร์ฟเวอร์เสียงในบูธ → ประโยคกลาง "น้องเพชรสรุปคำตอบไว้บนหน้าจอแล้วนะคะ" + คำตอบเต็มบนจอ
+โหมดนี้ **ไม่ใช้ Edge-TTS/Azure** เพราะเป็นคนละเสียง เพิ่ม/แก้หัวข้อใน `/admin/knowledge` แล้วระบบอัดเสียงคำตอบใหม่ให้อัตโนมัติ
+
 ### 9.2.2 ตั้งค่า Azure Speech (แนะนำ: เสียงเดิมแต่เสถียรกว่า)
 Edge-TTS เป็นช่องทางฟรีที่ไม่มีการรับประกัน ค้างหรือถูกจำกัดความถี่ได้ (เห็นเป็น `POST /tts 503` และ log `stalled`)
 Azure Speech คือบริการทางการของ Microsoft ที่มี **เสียงเปรมวดีตัวเดียวกัน** ระบบจะใช้ Azure ก่อน แล้วใช้ Edge-TTS เป็นตัวสำรอง

@@ -14,9 +14,11 @@ from flask import Blueprint, request, jsonify, Response, render_template
 from services.tts_service import (
     get_cached_tts, save_cached_tts, voice_profile, speech_cache_key, prepare_speech_input,
     extract_first_sentence_for_speech, clean_text_for_speech,
-    generate_speech, run_coroutine, iter_audio_stream, edge_wait_budget, edge_tts_available
+    generate_speech, run_coroutine, iter_audio_stream, edge_wait_budget, edge_tts_available,
+    no_voice_phrase_audio
 )
 from services.azure_speech import azure_enabled, azure_status
+from services.voice_server_client import omnivoice_enabled, voice_server_status
 
 logger = logging.getLogger("nongphet.media")
 
@@ -99,6 +101,19 @@ def tts():
             'status': 'success'
         })
     except Exception as e:
+        # ไม่มีเสียงของคำตอบนี้: พูดประโยคกลางที่อัดไว้แทน (เสียงเดียวกัน) แล้วให้หน้าจอแสดงคำตอบเต็ม
+        fallback_b64, phrase = no_voice_phrase_audio(lang)
+        if use_cache and fallback_b64:
+            logger.info(f"🗣️ [TTS] ไม่มีเสียงของคำตอบนี้ ({e}) -> พูดประโยคกลางที่อัดไว้แทน")
+            return jsonify({
+                'audio_base64': fallback_b64,
+                'audio_format': 'mp3',
+                'engine': 'fallback-phrase',
+                'fallback': True,
+                'spoken_text': phrase,
+                'voice': voice,
+                'status': 'success'
+            })
         logger.warning(f"🔇 [TTS] สร้างเสียงน้องเพชรไม่ได้ ({e}) -> แสดงข้อความอย่างเดียว")
         return _no_voice_response(str(e))
 
@@ -178,9 +193,11 @@ def tts_status():
     return jsonify({
         'status': 'success',
         'voice': {'name': voice, 'pitch': pitch, 'rate': rate},
-        'primary_engine': 'azure' if azure_enabled() else 'edge',
+        'primary_engine': 'omnivoice' if omnivoice_enabled() else ('azure' if azure_enabled() else 'edge'),
+        'voice_server': voice_server_status(),
         'azure': azure_status(),
         'edge_available': edge_tts_available(),
+        'no_voice_phrase_ready': no_voice_phrase_audio('th')[0] is not None,
     })
 
 

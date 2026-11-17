@@ -6,6 +6,19 @@ import logging
 from flask import Blueprint, request, jsonify, render_template
 
 from services.knowledge_manager import kb_manager
+
+
+def _bake_answer_voice(answer):
+    """อัดเสียงคำตอบที่เพิ่ม/แก้ใหม่ทันที (เรียนรู้ซ้ำแล้วพูดได้เลย) ถ้าอัดไม่ได้ หุ่นจะพูดประโยคกลางแทน"""
+    from flask import current_app
+    if current_app.testing:
+        return False  # ระหว่างรันเทสต์ ไม่ต้องสร้างเสียงจริง
+    try:
+        from services.tts_service import bake_text_in_background
+        return bake_text_in_background(answer) is not None
+    except Exception as e:
+        logger.warning(f"Voice bake skipped: {e}")
+        return False
 from semantic_retriever import get_semantic_retriever
 
 logger = logging.getLogger("nongphet.knowledge_route")
@@ -59,6 +72,7 @@ def create_kb_entry():
 
     try:
         res = kb_manager.add_entry(data, auto_reindex=True)
+        res['voice_baking'] = _bake_answer_voice(data.get('answer'))
         return jsonify(res), 201
     except ValueError as ve:
         return jsonify({'status': 'error', 'message': str(ve)}), 400
@@ -72,6 +86,8 @@ def update_kb_entry(entry_id):
     data = request.json or {}
     try:
         res = kb_manager.update_entry(entry_id, data, auto_reindex=True)
+        if data.get('answer'):
+            res['voice_baking'] = _bake_answer_voice(data.get('answer'))
         return jsonify(res), 200
     except KeyError as ke:
         return jsonify({'status': 'error', 'message': str(ke)}), 404

@@ -56,3 +56,12 @@ cloudflared.exe
 *.log
 *.log.*
 analytics_data.json
+
+# เสียงต้นแบบน้องเพชร (ข้อมูลส่วนบุคคลของเจ้าของเสียง ห้าม commit)
+voices/*.wav
+voices/*.mp3
+voices/*.pt
+voices/*.txt
+# ไฟล์ทดลองเลือกเสียง
+voice_samples/
+.venv-voice/

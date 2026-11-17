@@ -36,6 +36,8 @@ sys.path.insert(0, BASE_DIR)
 
 from services import tts_service  # noqa: E402
 from services.azure_speech import azure_enabled  # noqa: E402
+from services.voice_server_client import omnivoice_enabled  # noqa: E402
+from services.tts_service import NO_VOICE_PHRASES  # noqa: E402
 from services.tts_service import (  # noqa: E402
     clean_text_for_speech, generate_speech, save_cached_tts, voice_profile,
     speech_cache_key, audit_audio_cache, is_canonical_voice_audio, prepare_speech_input,
@@ -109,6 +111,8 @@ def collect_items():
     items += [('th', 'phrase', t) for t in THAI_PHRASES]
     items += [('en', 'phrase', t) for t in ENGLISH_PHRASES]
     items += [('zh', 'phrase', t) for t in CHINESE_PHRASES]
+    # ประโยคกลาง: พูดแทนเมื่อคำตอบใดยังไม่มีเสียง (ต้องมีเสียงเสมอ)
+    items = [(lang, 'no-voice', t) for lang, t in NO_VOICE_PHRASES.items()] + items
     return items
 
 
@@ -161,7 +165,9 @@ async def prebake_all(force=False):
     print("=" * 65)
     print("🎙️  อัดเสียงน้องเพชรล่วงหน้า (เสียงเดียวทั้งระบบ)")
     print(f"   เสียงภาษาไทย: {voice}  Pitch {pitch}  Rate {rate}")
-    print(f"   บริการหลัก: {'Azure Speech (ทางการ) + Edge-TTS สำรอง' if azure_enabled() else 'Edge-TTS (ยังไม่ได้ตั้งค่า Azure)'}")
+    engine = ('เซิร์ฟเวอร์เสียง OmniVoice ในบูธ' if omnivoice_enabled() else
+              'Azure Speech (ทางการ) + Edge-TTS สำรอง' if azure_enabled() else 'Edge-TTS (ยังไม่ได้ตั้งค่า Azure)')
+    print(f"   บริการหลัก: {engine}")
     print(f"   โฟลเดอร์: {AUDIO_CACHE_DIR}")
     print("=" * 65)
 
@@ -197,7 +203,9 @@ async def prebake_all(force=False):
             except Exception as e:
                 print(f"❌ {str(e)[:60]}")
                 failed_this_pass.append(item)
-            await asyncio.sleep(PAUSE_BETWEEN_ITEMS_AZURE if azure_enabled() else PAUSE_BETWEEN_ITEMS)
+            # เซิร์ฟเวอร์เสียงในบูธไม่จำกัดความถี่ จึงไม่ต้องเว้นจังหวะ
+            await asyncio.sleep(0.05 if omnivoice_enabled() else
+                                PAUSE_BETWEEN_ITEMS_AZURE if azure_enabled() else PAUSE_BETWEEN_ITEMS)
         pending = failed_this_pass
 
     print("\n" + "=" * 65)

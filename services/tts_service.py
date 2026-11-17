@@ -35,6 +35,10 @@ except Exception:
 def voice_profile(lang='th'):
     """คืน (voice, pitch, rate) ของเสียงน้องเพชรสำหรับภาษานั้น"""
     from config import Config
+    from services.voice_server_client import omnivoice_enabled, voice_id
+    if omnivoice_enabled():
+        # OmniVoice พูดได้หลายภาษาด้วยเสียงต้นแบบเดียวกัน ทุกภาษาจึงใช้เสียงเดียว
+        return voice_id(), '+0Hz', '+0%'
     if lang == 'en':
         return 'en-US-AriaNeural', '+0Hz', '+3%'
     if lang == 'zh':
@@ -379,8 +383,38 @@ def edge_tts_backoff_remaining():
     return max(0.0, _edge_state['offline_until'] - time.time())
 
 
+class VoiceUnavailable(RuntimeError):
+    """สร้างเสียงน้องเพชรไม่ได้ในตอนนี้ (ผู้เรียกควรใช้เสียงที่อัดไว้ / ประโยคกลาง / แสดงข้อความ)"""
+
+
+# ประโยคกลางที่อัดเสียงไว้เสมอ (prebake_tts.py): ใช้พูดแทนเมื่อคำตอบนั้นยังไม่มีเสียง
+# หุ่นจึงไม่เงียบและไม่สลับไปใช้เสียงคนอื่น ส่วนคำตอบเต็มยังแสดงบนจอตามปกติ
+NO_VOICE_PHRASES = {
+    'th': "น้องเพชรสรุปคำตอบไว้บนหน้าจอแล้วนะคะ อ่านได้เลยค่ะ",
+    'en': "I've put the answer on the screen for you. Please take a look!",
+    'zh': "答案已经显示在屏幕上了，请看一下哦！",
+}
+
+
+def no_voice_phrase_audio(lang='th'):
+    """คืน (base64, ข้อความ) ของประโยคกลางที่อัดไว้ หรือ (None, None) ถ้ายังไม่ได้อัด"""
+    for code in (lang, 'th'):
+        phrase = NO_VOICE_PHRASES.get(code)
+        if not phrase:
+            continue
+        voice, pitch, rate = voice_profile(code)
+        clean = clean_text_for_speech(prepare_speech_input(phrase), max_len=2500, voice_gender='female', lang=code)
+        b64, _ = get_cached_tts(speech_cache_key(clean, voice, pitch, rate))
+        if b64:
+            return b64, phrase
+    return None, None
+
+
 def edge_wait_budget(text, retries=3):
     """เวลารวมสูงสุดที่ผู้เรียกควรรอ generate_speech (Azure ถ้าตั้งค่าไว้ + Edge-TTS รวมการเปิดการเชื่อมต่อใหม่)"""
+    from services.voice_server_client import omnivoice_enabled, voice_server_timeout_for
+    if omnivoice_enabled():
+        return voice_server_timeout_for(text) + 2.0
     from services.azure_speech import azure_enabled
     azure_part = azure_timeout_for(text) + 2.0 if azure_enabled() else 0.0
     return azure_part + retries * FIRST_AUDIO_TIMEOUT + edge_timeout_for(text) + 3.0
@@ -509,6 +543,18 @@ async def generate_speech(text, voice=None, rate=None, pitch=None, volume="+0%",
     สร้างเสียงน้องเพชร: ใช้ Azure Speech (บริการทางการ) ก่อนถ้าตั้งค่าไว้ ถ้าใช้ไม่ได้ค่อยใช้ Edge-TTS
     ทั้งสองทางเป็นเสียงเดียวกัน (voice/pitch/rate เดียวกัน) และส่งไฟล์รูปแบบเดียวกัน
     """
+    from services.voice_server_client import omnivoice_enabled, synthesize_voice_server, VoiceServerError
+    if omnivoice_enabled():
+        # โหมดเสียงน้องเพชร (OmniVoice): ใช้เซิร์ฟเวอร์เสียงในบูธเท่านั้น
+        # ห้ามสำรองด้วย Edge/Azure เพราะเป็นคนละเสียง (นโยบายเสียงเดียวทั้งระบบ)
+        try:
+            audio = await synthesize_voice_server(text)
+        except VoiceServerError as e:
+            raise VoiceUnavailable(f"voice server unavailable: {e}") from e
+        if not is_canonical_voice_audio(audio):
+            raise VoiceUnavailable(f"voice server returned wrong audio format {audio_format_of(audio)}")
+        return audio
+
     default_voice, default_pitch, default_rate = voice_profile('th')
     if not voice or 'Niwat' in voice or 'Pattara' in voice:
         voice = default_voice
@@ -582,3 +628,31 @@ tts_worker = PersistentTTSWorker()
 
 def run_coroutine(coro, timeout=12.0):
     return tts_worker.run(coro, timeout=timeout)
+
+
+def bake_text_in_background(text, lang='th'):
+    """
+    อัดเสียงข้อความหนึ่งเก็บลงแคชแบบเบื้องหลัง (เช่น คำตอบใหม่ที่เพิ่งเพิ่มในฐานความรู้)
+    ใช้คีย์แคชเดียวกับที่ /tts ใช้ หน้าจอจึงเล่นเสียงนี้ได้ทันทีเมื่อมีคนถาม
+    คืน threading.Thread ที่เริ่มทำงานแล้ว หรือ None ถ้าไม่มีข้อความ
+    """
+    if not text or not text.strip():
+        return None
+    voice, pitch, rate = voice_profile(lang)
+    clean = clean_text_for_speech(prepare_speech_input(text), max_len=2500, voice_gender='female', lang=lang)
+    key = speech_cache_key(clean, voice, pitch, rate)
+
+    def _work():
+        if get_cached_tts(key)[0]:
+            return
+        try:
+            audio = run_coroutine(generate_speech(clean, voice=voice, rate=rate, pitch=pitch),
+                                  timeout=edge_wait_budget(clean))
+            save_cached_tts(key, audio)
+            logger.info(f"🎙️ [Voice Bake] อัดเสียงคำตอบใหม่แล้ว ({len(clean)} ตัวอักษร)")
+        except Exception as e:
+            logger.warning(f"🎙️ [Voice Bake] อัดเสียงคำตอบใหม่ไม่สำเร็จ ({e}) ระบบจะพูดประโยคกลางแทนจนกว่าจะอัดได้")
+
+    t = threading.Thread(target=_work, daemon=True, name='VoiceBake')
+    t.start()
+    return t
