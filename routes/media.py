@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
 """
 routes/media.py — Text-to-Speech (TTS) & Weather Blueprint
-"""
-import io
-import os
-import base64
-import datetime
-import logging
-from flask import Blueprint, request, jsonify, Response, render_template
-from gtts import gTTS
 
-from config import Config
+นโยบายเสียงเดียวทั้งระบบ: ทุกเส้นทางพูดด้วยเสียงจาก voice_profile() (ตั้งค่าใน config.Config)
+ไม่มีเสียงสำรองที่เป็นคนอื่น ถ้าสร้างเสียงน้องเพชรไม่ได้ จะตอบ 503 ให้หน้าเว็บแสดงข้อความอย่างเดียว
+ข้อยกเว้นเดียว: หน้าทดลองเสียง /tts-preview ส่ง preview=1 มาเพื่อลอง pitch/rate อื่น (ไม่บันทึกลงแคช)
+"""
+import base64
+import logging
+import random
+from flask import Blueprint, request, jsonify, Response, render_template
+
 from services.tts_service import (
-    get_pythaitts_engine, get_cached_tts, save_cached_tts,
+    get_cached_tts, save_cached_tts, voice_profile, speech_cache_key, prepare_speech_input,
     extract_first_sentence_for_speech, clean_text_for_speech,
-    generate_edge_tts, run_coroutine, iter_audio_stream, edge_tts_available
+    generate_speech, run_coroutine, iter_audio_stream, edge_wait_budget, edge_tts_available
 )
+from services.azure_speech import azure_enabled, azure_status
 
 logger = logging.getLogger("nongphet.media")
 
@@ -29,129 +30,78 @@ FILLER_PHRASES = [
     "สักครู่นะคะ น้องเพชรเตรียมข้อมูลให้เดี๋ยวนี้เลยค่าา"
 ]
 
+
+def _is_preview(source):
+    return str(source.get('preview', '')).lower() in ('1', 'true', 'yes')
+
+
+def resolve_voice(lang, source):
+    """
+    คืน (voice, pitch, rate, use_cache)
+    ค่าปกติ: เสียงน้องเพชรตาม config เสมอ (ไม่สนใจ pitch/rate ที่หน้าเว็บส่งมา เพื่อให้ทุกหน้าโทนเดียวกัน)
+    preview=1: ใช้ pitch/rate ที่ส่งมาได้ แต่ไม่บันทึกลงแคช กันโทนอื่นปนเข้ามา
+    """
+    voice, pitch, rate = voice_profile(lang)
+    if _is_preview(source):
+        return voice, source.get('pitch') or pitch, source.get('rate') or rate, False
+    return voice, pitch, rate, True
+
+
+def _no_voice_response(reason):
+    return jsonify({
+        'status': 'no_voice',
+        'error': reason,
+        'message': 'ไม่มีเสียงน้องเพชรสำหรับข้อความนี้ (แสดงข้อความอย่างเดียว)'
+    }), 503
+
+
 @media_bp.route('/tts', methods=['POST'])
 def tts():
     data = request.json or {}
     text = data.get('text', '').strip()
     lang = data.get('lang', data.get('language', 'th'))
     fast_mode = data.get('fast_mode', False) and data.get('first_sentence', False)
-    
+
     if not text:
         return jsonify({'error': 'Text is empty'}), 400
 
-    if fast_mode:
-        target_text = extract_first_sentence_for_speech(text, lang=lang, max_len=500)
-    else:
-        target_text = text
-
-    clean_text = clean_text_for_speech(target_text, max_len=2500, voice_gender='female', lang=lang)
-
-    # กำหนดพารามิเตอร์เสียงมาตรฐานประจำตัวน้องเพชร (Canonical Voice)
+    target_text = extract_first_sentence_for_speech(text, lang=lang, max_len=500) if fast_mode else text
+    clean_text = clean_text_for_speech(prepare_speech_input(target_text), max_len=2500, voice_gender='female', lang=lang)
+    voice, pitch, rate, use_cache = resolve_voice(lang, data)
     volume = data.get('volume', '+0%')
-    if lang == 'en':
-        voice = 'en-US-AriaNeural'
-        rate = '+3%'
-        pitch = '+0Hz'
-    elif lang == 'zh':
-        voice = 'zh-CN-XiaoxiaoNeural'
-        rate = '+3%'
-        pitch = '+0Hz'
-    else:
-        # ภาษาไทย: บังคับใช้เสียงผู้หญิง th-TH-PremwadeeNeural เท่านั้น (ปิดเสียงผู้ชาย)
-        voice = 'th-TH-PremwadeeNeural'
-        pitch = data.get('pitch', '+0Hz')
-        rate = data.get('rate', '+2%')
+    cache_key = speech_cache_key(clean_text, voice, pitch, rate)
 
-    cache_key = f"{voice}_{pitch}_{rate}_{clean_text}"
+    # 1. เสียงที่อัดเก็บไว้แล้ว (ทำงานได้แม้ไม่มีเน็ต)
+    if use_cache:
+        cached_b64, cache_type = get_cached_tts(cache_key)
+        if cached_b64:
+            return jsonify({
+                'audio_base64': cached_b64,
+                'audio_format': 'mp3',
+                'engine': f'cache-{cache_type}',
+                'voice': voice, 'rate': rate, 'pitch': pitch,
+                'latency_ms': 0,
+                'status': 'success'
+            })
 
-    # -------------------------------------------------------------------------
-    # ลำดับที่ 1: ตรวจสอบ Pre-baked Audio Cache จาก RAM หรือ Disk เสมอ (0ms Standalone)
-    # -------------------------------------------------------------------------
-    cached_b64, cache_type = get_cached_tts(cache_key)
-    if cached_b64:
-        return jsonify({
-            'audio_base64': cached_b64,
-            'audio_format': 'mp3',
-            'engine': f'cache-{cache_type}',
-            'voice': voice,
-            'rate': rate,
-            'pitch': pitch,
-            'latency_ms': 0,
-            'status': 'success'
-        })
-
-    # -------------------------------------------------------------------------
-    # ลำดับที่ 2: Edge Neural TTS (พร้อม Fast-Fail Auto-Reconnect และ Timeout 6.0s)
-    # -------------------------------------------------------------------------
+    # 2. สร้างเสียงน้องเพชรสดด้วย Edge-TTS (ต้องใช้เน็ต) แล้วเก็บลงแคช
     try:
-        audio_bytes = run_coroutine(generate_edge_tts(clean_text, voice=voice, rate=rate, pitch=pitch, volume=volume, timeout=6.0), timeout=12.0)
+        audio_bytes = run_coroutine(generate_speech(clean_text, voice=voice, rate=rate, pitch=pitch, volume=volume),
+                                    timeout=edge_wait_budget(clean_text))
         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-        save_cached_tts(cache_key, audio_bytes, audio_base64)
+        if use_cache:
+            save_cached_tts(cache_key, audio_bytes, audio_base64)
         return jsonify({
             'audio_base64': audio_base64,
             'audio_format': 'mp3',
-            'engine': 'edge-neural',
-            'voice': voice,
-            'rate': rate,
-            'pitch': pitch,
+            'engine': 'neural',
+            'voice': voice, 'rate': rate, 'pitch': pitch,
             'status': 'success'
         })
     except Exception as e:
-        logger.warning(f"Edge-TTS failed/timeout ({e}) -> ตกชั้นมาใช้ On-Device Fallback Engine...")
+        logger.warning(f"🔇 [TTS] สร้างเสียงน้องเพชรไม่ได้ ({e}) -> แสดงข้อความอย่างเดียว")
+        return _no_voice_response(str(e))
 
-    # -------------------------------------------------------------------------
-    # ลำดับที่ 3: สลับมา On-Device PyThaiTTS (fastthaig2p) ออฟไลน์ทันทีบน Raspberry Pi 5
-    # -------------------------------------------------------------------------
-    if lang == 'th':
-        try:
-            pytts = get_pythaitts_engine()
-            if pytts:
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_f:
-                    tmp_wav_path = tmp_f.name
-                try:
-                    pytts.tts(clean_text, filename=tmp_wav_path)
-                    with open(tmp_wav_path, 'rb') as f:
-                        wav_bytes = f.read()
-                    audio_base64 = base64.b64encode(wav_bytes).decode('utf-8')
-                    save_cached_tts(cache_key, wav_bytes, audio_base64)
-                    return jsonify({
-                        'audio_base64': audio_base64,
-                        'audio_format': 'wav',
-                        'engine': 'pythaitts-fallback',
-                        'voice': 'fastthaig2p',
-                        'status': 'success'
-                    })
-                finally:
-                    if os.path.exists(tmp_wav_path):
-                        try:
-                            os.remove(tmp_wav_path)
-                        except Exception:
-                            pass
-        except Exception as pe:
-            logger.warning(f"PyThaiTTS Error ({pe}) -> falling back to gTTS")
-
-    # -------------------------------------------------------------------------
-    # ลำดับที่ 4: สำรองขั้นสุดท้ายด้วย gTTS (ไม่บันทึกลงแคช เพื่อรักษาความถูกต้องของเสียงเปรมวดี)
-    # gTTS ก็ต้องใช้อินเทอร์เน็ต: ถ้าเพิ่งรู้ว่าเน็ตล่ม ให้ตอบกลับทันทีแทนการรอจนหมดเวลา
-    # -------------------------------------------------------------------------
-    if not edge_tts_available():
-        return jsonify({'error': 'offline: ไม่มีเสียงในแคชและไม่มีอินเทอร์เน็ต', 'status': 'offline'}), 503
-    try:
-        tts_obj = gTTS(text=clean_text, lang=lang if lang in ['th', 'en', 'zh'] else 'th', timeout=5)
-        fp = io.BytesIO()
-        tts_obj.write_to_fp(fp)
-        raw_bytes = fp.getvalue()
-        audio_base64 = base64.b64encode(raw_bytes).decode('utf-8')
-        return jsonify({
-            'audio_base64': audio_base64,
-            'audio_format': 'mp3',
-            'engine': 'gtts-fallback',
-            'status': 'success'
-        })
-    except Exception as e2:
-        logger.error(f"All TTS engines failed: {e2}")
-        return jsonify({'error': str(e2)}), 500
 
 @media_bp.route('/api/tts/filler', methods=['GET', 'POST'])
 def tts_filler():
@@ -159,21 +109,16 @@ def tts_filler():
     ส่งเสียง Filler Audio สำหรับเล่นคั่นเวลาทันที (0ms Standalone)
     เมื่อระบบต้องประมวลผลคำถามสดยาวๆ ช่วยให้ผู้ใช้งานไม่รู้สึกว่าหุ่นยนต์ค้าง
     """
-    import random
     idx_param = request.args.get('index')
     if idx_param is not None and idx_param.isdigit():
-        idx = int(idx_param) % len(FILLER_PHRASES)
-        filler_text = FILLER_PHRASES[idx]
+        filler_text = FILLER_PHRASES[int(idx_param) % len(FILLER_PHRASES)]
     else:
         filler_text = random.choice(FILLER_PHRASES)
 
-    clean_text = clean_text_for_speech(filler_text, max_len=500, voice_gender='female', lang='th')
-    voice = 'th-TH-PremwadeeNeural'
-    rate = '+2%'
-    pitch = '+0Hz'
-    cache_key = f"{voice}_{pitch}_{rate}_{clean_text}"
+    clean_text = clean_text_for_speech(prepare_speech_input(filler_text), max_len=2500, voice_gender='female', lang='th')
+    voice, pitch, rate = voice_profile('th')
+    cache_key = speech_cache_key(clean_text, voice, pitch, rate)
 
-    # ตรวจสอบในแคช 0ms
     cached_b64, cache_type = get_cached_tts(cache_key)
     if cached_b64:
         return jsonify({
@@ -185,9 +130,9 @@ def tts_filler():
             'latency_ms': 0
         })
 
-    # ถ้ายังไม่มีในแคช ให้เจนผ่าน Edge-TTS และเซฟลงแคช
     try:
-        audio_bytes = run_coroutine(generate_edge_tts(clean_text, voice=voice, rate=rate, pitch=pitch, timeout=8.0))
+        audio_bytes = run_coroutine(generate_speech(clean_text, voice=voice, rate=rate, pitch=pitch),
+                                    timeout=edge_wait_budget(clean_text))
         audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
         save_cached_tts(cache_key, audio_bytes, audio_base64)
         return jsonify({
@@ -195,12 +140,13 @@ def tts_filler():
             'text': filler_text,
             'audio_base64': audio_base64,
             'audio_format': 'mp3',
-            'engine': 'edge-neural',
+            'engine': 'neural',
             'latency_ms': 0
         })
     except Exception as e:
-        logger.warning(f"Filler TTS fallback error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.warning(f"Filler TTS unavailable: {e}")
+        return _no_voice_response(str(e))
+
 
 @media_bp.route('/api/tts/stream', methods=['GET', 'POST'])
 def tts_stream():
@@ -208,76 +154,71 @@ def tts_stream():
     Streaming HTTP Audio Response (Chunked Transfer)
     ส่งข้อมูล MP3 ออกทันที เหมาะสำหรับ HTML5 Audio element หรือเล่นเสียงสด
     """
-    if request.method == 'POST':
-        data = request.json or {}
-        text = data.get('text', '').strip()
-        lang = data.get('lang', data.get('language', 'th'))
-        pitch = data.get('pitch', '+0Hz')
-        rate = data.get('rate', '+2%')
-    else:
-        text = request.args.get('text', '').strip()
-        lang = request.args.get('lang', 'th')
-        pitch = request.args.get('pitch', '+0Hz')
-        rate = request.args.get('rate', '+2%')
-
+    source = (request.json or {}) if request.method == 'POST' else request.args
+    text = (source.get('text') or '').strip()
+    lang = source.get('lang', source.get('language', 'th'))
     if not text:
         return jsonify({'error': 'text is required'}), 400
 
-    if lang == 'en':
-        voice = 'en-US-AriaNeural'
-        rate = '+3%'
-        pitch = '+0Hz'
-    elif lang == 'zh':
-        voice = 'zh-CN-XiaoxiaoNeural'
-        rate = '+3%'
-        pitch = '+0Hz'
-    else:
-        voice = 'th-TH-PremwadeeNeural'
-
+    voice, pitch, rate, use_cache = resolve_voice(lang, source)
     return Response(
-        iter_audio_stream(text, voice=voice, rate=rate, pitch=pitch),
+        iter_audio_stream(text, lang=lang, voice=voice, pitch=pitch, rate=rate, use_cache=use_cache),
         mimetype="audio/mpeg",
         headers={
-            "Cache-Control": "public, max-age=86400",
+            "Cache-Control": "public, max-age=86400" if use_cache else "no-store",
             "Content-Type": "audio/mpeg"
         }
     )
 
+
+@media_bp.route('/api/tts/status', methods=['GET'])
+def tts_status():
+    """ตรวจว่าระบบเสียงพร้อมแค่ไหน (ไม่เปิดเผยคีย์)"""
+    voice, pitch, rate = voice_profile('th')
+    return jsonify({
+        'status': 'success',
+        'voice': {'name': voice, 'pitch': pitch, 'rate': rate},
+        'primary_engine': 'azure' if azure_enabled() else 'edge',
+        'azure': azure_status(),
+        'edge_available': edge_tts_available(),
+    })
+
+
 @media_bp.route('/api/tts/presets', methods=['GET'])
 def get_tts_presets():
-    """ส่งรายการโหมดเสียงสังเคราะห์ (เฉพาะเสียงผู้หญิง)"""
+    """
+    รายการโทนเสียงสำหรับหน้าทดลองเสียง /tts-preview
+    ระบบจริงใช้ค่า "default" (ตาม config) เสมอ ตัวเลือกอื่นมีไว้ฟังเปรียบเทียบเท่านั้น
+    """
+    voice, pitch, rate = voice_profile('th')
     presets = [
         {
             "id": "default",
-            "name": "เสียงมาตรฐานน้องเพชร (ค่าเริ่มต้น)",
-            "description": "เสียงผู้หญิงน้องเพชร th-TH-PremwadeeNeural (Pitch +2Hz, Rate +5%) น่ารักสดใส จังหวะพูดเป็นธรรมชาติ",
-            "voice": "th-TH-PremwadeeNeural",
-            "pitch": "+2Hz",
-            "rate": "+5%"
+            "name": "เสียงน้องเพชร (ที่ระบบใช้จริง)",
+            "description": f"{voice} (Pitch {pitch}, Rate {rate}) — ทุกหน้าจอพูดด้วยเสียงนี้เสียงเดียว",
+            "voice": voice, "pitch": pitch, "rate": rate
+        },
+        {
+            "id": "original",
+            "name": "เปรมวดีเสียงปกติ (เปรียบเทียบ)",
+            "description": "เสียงเดิมก่อนปรับ (Pitch +0Hz, Rate +2%)",
+            "voice": voice, "pitch": "+0Hz", "rate": "+2%"
         },
         {
             "id": "cute_girl",
-            "name": "น้องเพชรเด็กหญิงสดใส (+35Hz)",
-            "description": "เสียงเด็กหญิงน่ารักสดใส สไตล์มาสคอตเด็ก",
-            "voice": "th-TH-PremwadeeNeural",
-            "pitch": "+35Hz",
-            "rate": "+10%"
-        },
-        {
-            "id": "cute_chibi",
-            "name": "มาสคอตตัวจิ๋ว (Chibi Anime)",
-            "description": "เสียงเล็กแหลมหวาน น่ารักสไตล์มาสคอตการ์ตูนญี่ปุ่น",
-            "voice": "th-TH-PremwadeeNeural",
-            "pitch": "+45Hz",
-            "rate": "+12%"
+            "name": "แหลมขึ้นอีก (+35Hz) (เปรียบเทียบ)",
+            "description": "เสียงเด็กหญิงสดใส",
+            "voice": voice, "pitch": "+35Hz", "rate": "+10%"
         }
     ]
-    return jsonify({'status': 'success', 'presets': presets})
+    return jsonify({'status': 'success', 'presets': presets, 'active': 'default'})
+
 
 @media_bp.route('/tts-preview', methods=['GET'])
 def tts_preview_page():
     """หน้าทดสอบและเปรียบเทียบเสียงสังเคราะห์แบบโต้ตอบได้ (Interactive Voice Studio)"""
     return render_template('tts_preview.html')
+
 
 @media_bp.route('/weather', methods=['GET'])
 def get_weather():
@@ -287,5 +228,3 @@ def get_weather():
         'status': 'success',
         'engine': 'offline_local_weather'
     })
-
-

@@ -681,7 +681,7 @@ function selectPlace(placeName) {
 
 function selectCourse(courseName) {
     navigateTo('screen-chat');
-    sendQuickMessage(`อยากทราบว่าสาขา "${courseName}" ของวิทยาลัยอาชีวศึกษาเพชรบุรี เรียนเกี่ยวกับอะไรบ้าง ทักษะที่จะได้รับ และโอกาสในการทำงานในอนาคตครับ`);
+    sendQuickMessage(`สาขาวิชา${courseName} เรียนอะไร`);
 }
 
 function openGoogleMapsSearch(query) {
@@ -742,77 +742,8 @@ function setEmotion(state) {
 // Voice Synthesis Engine (Edge Neural TTS & Browser Fallback)
 // -----------------------------------------------------------------------------
 function fallbackBrowserSpeechMain(text, lang, btnElement, onEndedCallback) {
-    // ตรวจจับระบบปฏิบัติการ Linux / Raspberry Pi OS
-    // เนื่องจากบน Pi/Linux ไม่มี Thai Voice Pack ใน Browser ทำให้เกิดเสียงเพี้ยนหรือเงียบค้าง
-    const isLinuxOrPi = typeof navigator !== 'undefined' && (/linux|arm|aarch64/i.test(navigator.userAgent || navigator.platform) || /Linux/i.test(navigator.userAgent));
-    if (isLinuxOrPi && (lang === 'th' || !lang || lang.startsWith('th'))) {
-        console.warn('⚠️ [TTS Fallback] ตรวจพบ Linux/Raspberry Pi: ปิดใช้งาน Browser SpeechSynthesis (ภาษาไทย) เพื่อป้องกันเสียงเพี้ยนหรือระบบค้าง');
-        setTimeout(() => {
-            isSpeakingTTS = false;
-            setEmotion('idle');
-            if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-            if (typeof onEndedCallback === 'function') onEndedCallback();
-        }, 350);
-        return;
-    }
-
-    // ล็อกไมค์ทันทีเมื่อเริ่มการสังเคราะห์เสียง
-    stopRecognitionSafe();
-    isSpeakingTTS = true;
-
-    if ('speechSynthesis' in window) {
-        try {
-            window.speechSynthesis.cancel();
-            const clean = stripEmojiAndIcons(text);
-            const u = new SpeechSynthesisUtterance(clean || text);
-            u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
-            // เลือกเฉพาะเสียงผู้หญิง บังคับปิดเสียงผู้ชาย (Pattara/Niwat)
-            const availableVoices = window.speechSynthesis.getVoices();
-            const femaleVoice = availableVoices.find(v => v.lang.startsWith('th') && (v.name.includes('Premwadee') || v.name.includes('Achara') || v.name.includes('Google ภาษาไทย') || /female/i.test(v.name))) || availableVoices.find(v => v.lang.startsWith('th') && !v.name.includes('Niwat') && !v.name.includes('Pattara'));
-            if (femaleVoice) u.voice = femaleVoice;
-            u.rate = 1.05;
-            u.pitch = 1.15;
-            let keepAliveTimer = setInterval(() => {
-                if (!window.speechSynthesis.speaking) {
-                    clearInterval(keepAliveTimer);
-                } else {
-                    window.speechSynthesis.pause();
-                    window.speechSynthesis.resume();
-                }
-            }, 10000);
-
-            u.onstart = () => {
-                isSpeakingTTS = true;
-                setEmotion('speaking');
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'speaking' })
-                }).catch(() => {});
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
-            };
-            const finishSpeech = () => {
-                clearInterval(keepAliveTimer);
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'idle' })
-                }).catch(() => {});
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                setTimeout(() => {
-                    isSpeakingTTS = false;
-                    setEmotion('idle');
-                    if (typeof onEndedCallback === 'function') onEndedCallback();
-                }, 350);
-            };
-            u.onend = finishSpeech;
-            u.onerror = finishSpeech;
-            window.speechSynthesis.speak(u);
-            return;
-        } catch (err) {
-            console.warn('speechSynthesis fallback error:', err);
-        }
-    }
+    // นโยบายเสียงเดียวทั้งระบบ: ไม่ใช้เสียงของเบราว์เซอร์ (speechSynthesis) เพราะเป็นคนละเสียงกับน้องเพชร
+    // แสดงข้อความอย่างเดียว แล้วจบรอบการพูดตามปกติ
     setTimeout(() => {
         isSpeakingTTS = false;
         setEmotion('idle');

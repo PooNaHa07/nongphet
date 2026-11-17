@@ -310,7 +310,7 @@
 
         function playPresetSample(pitch, rate, btn) {
             const text = "สวัสดีค่ะ หนูชื่อน้องเพชร ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีนะคะ";
-            const url = `/api/tts/stream?text=${encodeURIComponent(text)}&voice=th-TH-PremwadeeNeural&pitch=${encodeURIComponent(pitch)}&rate=${encodeURIComponent(rate)}`;
+            const url = `/api/tts/stream?text=${encodeURIComponent(text)}&voice=th-TH-PremwadeeNeural&pitch=${encodeURIComponent(pitch)}&rate=${encodeURIComponent(rate)}&preview=1`;
             playSample(url, btn);
         }
 
@@ -372,7 +372,8 @@
                         lang: 'th',
                         voice: voice,
                         pitch: pitch,
-                        rate: rate
+                        rate: rate,
+                        preview: true
                     })
                 });
 

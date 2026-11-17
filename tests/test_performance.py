@@ -166,17 +166,74 @@ class TestEdgeTTSBreaker(unittest.TestCase):
                 asyncio.run(tts_service.generate_edge_tts('ทดสอบ'))
             comm.assert_not_called()
 
+    def test_timeout_scales_with_text_length(self):
+        self.assertEqual(tts_service.edge_timeout_for('สั้น'), 6.0)
+        self.assertGreater(tts_service.edge_timeout_for('ก' * 1200), 20.0)
+        self.assertLessEqual(tts_service.edge_timeout_for('ก' * 100000), 45.0)
+
+    def test_slow_but_working_stream_does_not_trip_breaker(self):
+        class SlowCommunicate:
+            def __init__(self, *a, **k):
+                pass
+
+            async def stream(self):
+                yield {'type': 'audio', 'data': b'partial'}
+                await asyncio.sleep(5)   # ส่งเสียงมาบางส่วนแล้วช้า (ข้อความยาว) ไม่ใช่เน็ตล่ม
+
+        with mock.patch.object(tts_service.edge_tts, 'Communicate', SlowCommunicate), \
+             mock.patch.object(tts_service, 'edge_timeout_for', return_value=0.2):
+            with self.assertRaises(RuntimeError) as ctx:
+                asyncio.run(tts_service.generate_edge_tts('ข้อความยาว', retries=1))
+        self.assertNotIsInstance(ctx.exception, tts_service.EdgeTTSOffline)
+        self.assertTrue(tts_service.edge_tts_available())
+
+    def test_stalled_connection_is_reopened(self):
+        """การเชื่อมต่อแรกค้าง (ไม่มีเสียง) -> เปิดใหม่ทันทีและได้เสียง โดยไม่พักระบบ"""
+        calls = []
+
+        class FlakyCommunicate:
+            def __init__(self, *a, **k):
+                calls.append(1)
+                self.n = len(calls)
+
+            async def stream(self):
+                if self.n == 1:
+                    await asyncio.sleep(5)        # ค้าง
+                yield {'type': 'audio', 'data': b'ok-audio'}
+
+        with mock.patch.object(tts_service.edge_tts, 'Communicate', FlakyCommunicate), \
+             mock.patch.object(tts_service, 'FIRST_AUDIO_TIMEOUT', 0.2):
+            start = time.time()
+            audio = asyncio.run(tts_service.generate_edge_tts('สวัสดีค่ะ'))
+        self.assertEqual(audio, b'ok-audio')
+        self.assertEqual(len(calls), 2)
+        self.assertLess(time.time() - start, 2.0)
+        self.assertTrue(tts_service.edge_tts_available())
+
+    def test_stalls_on_every_attempt_trip_breaker(self):
+        class HangingCommunicate:
+            def __init__(self, *a, **k):
+                pass
+
+            async def stream(self):
+                await asyncio.sleep(5)
+                yield {'type': 'audio', 'data': b'never'}
+
+        with mock.patch.object(tts_service.edge_tts, 'Communicate', HangingCommunicate), \
+             mock.patch.object(tts_service, 'FIRST_AUDIO_TIMEOUT', 0.1):
+            with self.assertRaises(tts_service.EdgeTTSOffline):
+                asyncio.run(tts_service.generate_edge_tts('สวัสดีค่ะ', retries=3))
+        self.assertFalse(tts_service.edge_tts_available())
+
     def test_tts_route_answers_fast_when_offline(self):
         from app_new import app
         tts_service._mark_edge_offline()
         client = app.test_client()
-        with mock.patch('routes.media.get_pythaitts_engine', return_value=None), \
-             mock.patch('routes.media.gTTS') as gtts:
-            start = time.time()
-            res = client.post('/tts', json={'text': 'ข้อความที่ไม่มีในแคชแน่นอน %f' % time.time()})
-            elapsed = time.time() - start
+        start = time.time()
+        res = client.post('/tts', json={'text': 'ข้อความที่ไม่มีในแคชแน่นอน %f' % time.time()})
+        elapsed = time.time() - start
         self.assertEqual(res.status_code, 503)
-        gtts.assert_not_called()
+        self.assertEqual(res.get_json()['status'], 'no_voice')
         self.assertLess(elapsed, 1.0)
 
 

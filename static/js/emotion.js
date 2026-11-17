@@ -1286,7 +1286,7 @@ const EMOTION_SIGN_RESPONSES = {
         emoji: '☝️',
         emotion: 'thinking',
         sfx: 'thinking',
-        speech: 'แนะนำศึกษาต่อ 9 สาขาวิชาชั้นนำ ณ วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ 🎓'
+        speech: 'แนะนำศึกษาต่อ 11 สาขาวิชาชั้นนำ ณ วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ 🎓'
     },
     'fist': {
         name: 'ของกิน & ขนมหวาน (Fist)',
@@ -1834,7 +1834,7 @@ const NONGPHET_SPOKEN_GREETINGS = [
     'สวัสดีค่ะ! น้องเพชร AI Smart Guide ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีนะคะ 😊',
     'วันนี้อากาศเมืองเพชรบุรีแจ่มใสมากค่ะ อยากให้น้องเพชรแนะนำที่เที่ยวหรือร้านของหวานดีคะ',
     'แวะมาชิมขนมหม้อแกงเตาฟืนและก๋วยเตี๋ยวน้ำแดงสูตรเพชรบุรีแท้ๆ นะคะ อร่อยติดใจแน่นอนค่ะ 🍧',
-    'วิทยาลัยอาชีวศึกษาเพชรบุรีมี 9 สาขาวิชาแห่งอนาคต พร้อมต้อนรับทุกคนนะคะ 🎓',
+    'วิทยาลัยอาชีวศึกษาเพชรบุรีมี 11 สาขาวิชาแห่งอนาคต พร้อมต้อนรับทุกคนนะคะ 🎓',
     'แตะปากแบบนี้ อยากคุยกับน้องเพชรใช่ไหมคะ กดปุ่มไมค์ด้านขวาล่างคุยสดกับน้องเพชรได้เลยนะคะ!'
 ];
 
@@ -2325,89 +2325,21 @@ async function processDirectVoiceQuery(queryText, forcedLang = null) {
 }
 
 function fallbackBrowserSpeech(text, lang = 'th') {
+    // นโยบายเสียงเดียวทั้งระบบ: ไม่ใช้เสียงของเบราว์เซอร์ (speechSynthesis) เพราะเป็นคนละเสียงกับน้องเพชร
+    // ถ้าดึงเสียงจากเซิร์ฟเวอร์ไม่ได้ ให้แสดงข้อความบนจอแล้วกลับไปโหมดฟังตามปกติ (เงียบดีกว่าเสียงคนอื่น)
     clearTimeout(emotionSafetyWatchdog);
-    // ตรวจจับระบบปฏิบัติการ Linux / Raspberry Pi OS
-    const isLinuxOrPi = typeof navigator !== 'undefined' && (/linux|arm|aarch64/i.test(navigator.userAgent || navigator.platform) || /Linux/i.test(navigator.userAgent));
-    if (isLinuxOrPi && (lang === 'th' || !lang || lang.startsWith('th'))) {
-        console.warn('⚠️ [Emotion TTS] Linux/Raspberry Pi detected: suppressing browser Thai speechSynthesis');
-        setTimeout(() => {
-            isEmotionSpeaking = false;
-            applyEmotion('idle');
-            fetch('/api/iot/led', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ state: 'idle' })
-            }).catch(() => {});
-            if (autoVoiceMode) {
-                showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยค่ะ)');
-                setTimeout(() => startAutoListening(), 200);
-            }
-        }, 350);
-        return;
-    }
-
-    if ('speechSynthesis' in window) {
-        try {
-            window.speechSynthesis.cancel();
-            // ตัดเฉพาะส่วน interactive suggestion footer ออก แต่คงเนื้อหาหลักครบถ้วน
-            let clean = text;
-            for (const delim of ['---', '💡 ถามต่อยอด', 'ถามต่อยอดกับน้องเพชร', '💡 แนะนำคำถาม', 'คำถามที่น่าสนใจ', '💡 Follow-up', '💡 推荐问题', '❓ คำถาม']) {
-                if (clean.includes(delim)) {
-                    clean = clean.split(delim)[0].trim();
-                }
-            }
-            clean = clean.replace(/[*#_~`>•\-=|]/g, ' ').replace(/\n+/g, ', ').replace(/\s+/g, ' ').trim();
-            const u = new SpeechSynthesisUtterance(clean);
-            u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
-            // เลือกเฉพาะเสียงผู้หญิง บังคับปิดเสียงผู้ชาย (Pattara/Niwat)
-            const availableVoices = window.speechSynthesis.getVoices();
-            const femaleVoice = availableVoices.find(v => v.lang.startsWith('th') && (v.name.includes('Premwadee') || v.name.includes('Achara') || v.name.includes('Google ภาษาไทย') || /female/i.test(v.name))) || availableVoices.find(v => v.lang.startsWith('th') && !v.name.includes('Niwat') && !v.name.includes('Pattara'));
-            if (femaleVoice) u.voice = femaleVoice;
-            u.rate = 1.05;
-            u.pitch = 1.25;
-            u.onstart = () => {
-                isEmotionSpeaking = true;
-                applyEmotion('speaking');
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'speaking' })
-                }).catch(() => {});
-                startLocalLipSyncPulse();
-            };
-            const finishSpeechFallback = () => {
-                setLipSyncAmplitude(0);
-                lastEmotionSpeechEndTime = Date.now();
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'idle' })
-                }).catch(() => {});
-                setTimeout(() => {
-                    isEmotionSpeaking = false;
-                    startAutoVoiceMode();
-                    applyEmotion('listening');
-                    showVoiceSubtitle('🎙️ น้องเพชรพร้อมฟังแล้วค่ะ... พูดต่อได้เลยนะคะ ✨');
-                    startAutoListening();
-                }, 350);
-            };
-            u.onend = finishSpeechFallback;
-            u.onerror = finishSpeechFallback;
-            window.speechSynthesis.speak(u);
-            return;
-        } catch (e) {
-            console.warn('SpeechSynthesis error:', e);
-        }
-    }
+    console.info('🔇 [Emotion TTS] ไม่มีเสียงน้องเพชรสำหรับประโยคนี้ -> แสดงข้อความอย่างเดียว');
     setTimeout(() => {
+        setLipSyncAmplitude(0);
+        lastEmotionSpeechEndTime = Date.now();
         isEmotionSpeaking = false;
-        startAutoVoiceMode();
-        applyEmotion('listening');
         fetch('/api/iot/led', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ state: 'idle' })
         }).catch(() => {});
+        startAutoVoiceMode();
+        applyEmotion('listening');
         showVoiceSubtitle('🎙️ น้องเพชรพร้อมฟังแล้วค่ะ... พูดต่อได้เลยนะคะ ✨');
         startAutoListening();
     }, 350);
