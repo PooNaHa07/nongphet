@@ -15,6 +15,8 @@ TEST_VOICE_ENV = {
     'VOICE_SERVER_TOKEN': '',
     'AZURE_SPEECH_KEY': '',
     'AZURE_SPEECH_REGION': '',
+    # ไม่ให้เทสต์เรียก Gemini จริงด้วยคีย์ใน .env (เทสต์ชั้นค้นเว็บจะ patch เอง)
+    'GEMINI_API_KEY': '',
 }
 
 

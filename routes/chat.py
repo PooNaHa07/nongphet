@@ -10,6 +10,7 @@ import logging
 from flask import Blueprint, request, jsonify, session
 from intent_classifier import NongPhetIntentClassifier
 from services.text_utils import extract_suggestions, detect_message_language
+from services import web_answer_service
 from services.knowledge_service import (
     semantic_retriever, match_local_knowledge, get_local_knowledge_reply
 )
@@ -76,7 +77,7 @@ def resolve_living_emotion(user_message: str, reply_text: str, default_emotion: 
         
     return default_emotion if default_emotion in ['smile', 'happy', 'excited', 'love', 'wink', 'surprised', 'thinking'] else 'smile'
 
-def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None, gesture=None, speech=None):
+def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None, gesture=None, speech=None, extra=None):
     """ส่งต่อคำตอบพร้อมซิงค์อารมณ์ใบหน้าน้องเพชร (Screen 2) และบันทึกลง State"""
     final_emotion = resolve_living_emotion(user_message, reply_text, base_emotion)
     state.emotion_state['current'] = final_emotion
@@ -121,16 +122,44 @@ def send_chat_response(user_message, reply_text, suggestions, engine, detected_i
     if speech:
         # บทพูดสั้นของหัวข้อนี้: หน้าจอแสดง reply เต็ม แต่น้องเพชรพูดแค่ speech
         resp['speech'] = speech
+    if extra:
+        resp.update(extra)
     return jsonify(resp)
+
+def _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion):
+    """ชั้นสำรอง: ค้นคำตอบจากเว็บ (Gemini + Google Search) คืน response หรือ None ถ้าใช้ไม่ได้"""
+    if not web_answer_service.should_use_web(user_message, detected_intent):
+        return None
+    web = web_answer_service.answer(user_message, language)
+    if not web:
+        return None
+    record_interaction(user_message, detected_intent, confidence, 'web_search', language)
+    return send_chat_response(
+        user_message=user_message,
+        reply_text=web['reply'],
+        suggestions=extract_suggestions(web['reply']),
+        engine='web_search',
+        detected_intent=detected_intent,
+        intent_th=intent_th,
+        confidence=confidence,
+        source=f"web_search:{web['model']}",
+        language=language,
+        base_emotion='happy',
+        speech=web['speech'],
+        extra={'sources': web['sources'], 'search_html': web['search_html']}
+    )
+
 
 @chat_bp.route('/chat', methods=['POST'])
 def chat():
     """
-    Route สำหรับประมวลผลข้อความแชท ทำงานในเครื่องทั้งหมด (ไม่พึ่ง Cloud AI):
+    Route สำหรับประมวลผลข้อความแชท (ในเครื่องเป็นหลัก เว็บเป็นชั้นสำรอง):
     1. Local Machine Learning Model: จำแนก Intent และคำนวณ Confidence ในเครื่อง
     2. Semantic RAG / Local Knowledge Base: ตอบคำถามเฉพาะทางทันทีเมื่อพบความมั่นใจสูง
-    3. Local SLM (Ollama): ตอบบทสนทนาเปิดพร้อมบริบทจากฐานความรู้ (ถ้าติดตั้งและเปิดใช้งาน)
-    4. Offline Fallback: คำตอบจากฐานความรู้ในเครื่องเมื่อทุกชั้นข้างต้นตอบไม่ได้
+       (คะแนนต่ำกว่า WEB_PREFER_BELOW = ไม่แน่ใจ ลองค้นเว็บก่อน ถ้าค้นไม่ได้ใช้คำตอบนี้)
+    3. Web Search (Gemini + Google Search): เฉพาะคำถามที่ฐานความรู้ตอบไม่ได้ และไม่ใช่เรื่องวิทยาลัย
+    4. Local SLM (Ollama): ตอบบทสนทนาเปิดพร้อมบริบทจากฐานความรู้ (ถ้าติดตั้งและเปิดใช้งาน)
+    5. Offline Fallback: คำตอบจากฐานความรู้ในเครื่องเมื่อทุกชั้นข้างต้นตอบไม่ได้
     """
     data = request.json or {}
     user_message = data.get('message', '').strip()
@@ -186,6 +215,11 @@ def chat():
             intent=detected_intent,
             context_entry_id=last_topic_id
         )
+        # คะแนน RAG ต่ำ = ไม่แน่ใจว่าตรงหัวข้อ (เช่น ถามสถานที่ที่ไม่มีในฐานความรู้) -> ลองค้นเว็บก่อน
+        if rag_match and rag_match['score'] < web_answer_service.prefer_web_below():
+            web_resp = _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion)
+            if web_resp is not None:
+                return web_resp
         if rag_match:
             if len(state.SESSION_LAST_TOPIC) >= state.MAX_SESSION_TOPICS:
                 state.SESSION_LAST_TOPIC.popitem(last=False)
@@ -227,7 +261,13 @@ def chat():
                 base_emotion=target_emotion
             )
 
-    # 3. RAG-Augmented Local SLM (Ollama) — force_llm ข้ามฐานความรู้มาที่นี่โดยตรง
+    # 3. ฐานความรู้ในเครื่องตอบไม่ได้ -> ค้นจากเว็บ (Gemini + Google Search) ถ้ามีเน็ตและตั้งค่าไว้
+    if not is_creative:
+        web_resp = _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion)
+        if web_resp is not None:
+            return web_resp
+
+    # 4. RAG-Augmented Local SLM (Ollama) — force_llm ข้ามฐานความรู้มาที่นี่โดยตรง
     try:
         from local_slm import generate_local_response, is_ollama_running
         if is_ollama_running():
@@ -259,7 +299,7 @@ def chat():
     except ImportError:
         pass
 
-    # 4. Pure Offline Intelligent Knowledge & Semantic RAG Response
+    # 5. Pure Offline Intelligent Knowledge & Semantic RAG Response
     reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
     suggestions = extract_suggestions(reply_text)
     record_interaction(user_message, detected_intent, confidence, 'offline_local_ai', language)

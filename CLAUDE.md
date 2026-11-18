@@ -12,8 +12,9 @@ Guidance for AI coding assistants working on **น้องเพชร AI Smart
   - `/emotion`: animated avatar (eyes, lip-sync, gaze follow).
 - **Vision daemon (port 5002, `vision_daemon.py`)**: OpenCV YuNet face landmarks, attention gating, MJPEG stream.
 - **ESP32 / arm**: `esp32_listener.py`, `services/arm_service.py`, `routes/arm.py` (servo arm, works before hardware is attached).
-- **AI engine (no Gemini, no cloud LLM)**: ML intent classifier + semantic RAG over `knowledge_base.json`
-  + optional local SLM (`local_slm.py`, Ollama) + deterministic offline fallback.
+- **AI engine (local first)**: ML intent classifier + semantic RAG over `knowledge_base.json`
+  + web fallback (`services/web_answer_service.py`, Gemini + Google Search grounding, only when the KB
+  can't answer and never for college topics) + optional local SLM (Ollama) + deterministic offline fallback.
 - **Voice (one voice for the whole system)**: OmniVoice clone of the Mali reference voice, generated on a
   GPU laptop in the booth (`tools/voice_server.py`, port 8010) and pre-baked into `static/audio/cache/`.
 - **Offline-ready pages**: all web libraries are served from `static/vendor/` (no CDN). Only browser speech
@@ -39,6 +40,7 @@ d:\nongphet\
 │
 ├── routes/                     # chat, vision, media (/tts), iot (SSE), admin, display, knowledge, arm
 ├── services/
+│   ├── web_answer_service.py   # Web fallback (Gemini + Google Search) + pending-approval queue
 │   ├── tts_service.py          # Voice chain, canonical cache guard, speech text prep
 │   ├── voice_server_client.py  # Pi side: calls the booth OmniVoice server
 │   ├── azure_speech.py         # Optional Azure Speech (edge mode only)
@@ -114,9 +116,13 @@ d:\nongphet\
 
 ### C. Chat pipeline
 1. Intent classifier (< 5 ms).
-2. Semantic RAG over `knowledge_base.json` (verified local answers).
-3. Optional local SLM (Ollama) for open questions.
-4. Deterministic offline fallback.
+2. Semantic RAG over `knowledge_base.json` (verified local answers). Score below `WEB_PREFER_BELOW`
+   (0.45) = unsure: try the web first, keep this answer as fallback.
+3. Web fallback (Gemini + Google Search): not for college topics; shows sources, the web disclaimer and
+   Google's search-suggestion chips; times out in 10 s; pauses on errors; answers go to the admin
+   approval queue (`/admin/knowledge`) so teachers can add them to the KB (retrain).
+4. Optional local SLM (Ollama) for open questions.
+5. Deterministic offline fallback.
 
 ### D. College data
 - Use the abbreviation **PBPVC**. Official sources: pbpvc.ac.th and facebook.com/PBPVC.
@@ -130,7 +136,8 @@ d:\nongphet\
 
 ## 5. Security & Configuration
 
-- Secrets in `.env` only (`SECRET_KEY`, `ADMIN_PIN`, `VOICE_SERVER_TOKEN`, optional Azure keys). Never commit it.
+- Secrets in `.env` only (`SECRET_KEY`, `ADMIN_PIN`, `VOICE_SERVER_TOKEN`, `GEMINI_API_KEY`, optional Azure keys). Never commit it.
+- Only the question text goes to Gemini; no visitor data. Tests blank `GEMINI_API_KEY` (see `tests/__init__.py`).
 - Keep `.env`, logs, `*.bak`, virtualenvs, `voices/` recordings and `voice_samples/` out of git.
 - Reconfigure stdout to UTF-8 in entry points and scripts.
 - Ports: `5000` Flask, `5002` vision daemon, `8010` booth voice server, `11434` Ollama (optional).

@@ -186,6 +186,22 @@
             </div>
         </div>
 
+        <!-- SECTION: คำตอบจากเว็บรออนุมัติ (เรียนรู้ซ้ำจากคำถามจริง) -->
+        <div class="glass-panel rounded-2xl p-5 border-amber-500/30">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-globe text-amber-400"></i>
+                    คำถามที่น้องเพชรค้นจากเว็บ รออนุมัติเข้าฐานความรู้
+                </h2>
+                <span class="ml-auto text-xs font-mono text-amber-300" id="webStatusText">-</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+                คำถามที่ฐานความรู้ตอบไม่ได้ น้องเพชรค้นคำตอบจากเว็บ (Gemini + Google Search) แล้วเก็บไว้ที่นี่
+                ครูตรวจความถูกต้องแล้วกด "เพิ่มเข้าฐานความรู้" เพื่อให้ AI เรียนรู้ซ้ำ ครั้งต่อไปจะตอบได้ทันทีโดยไม่ต้องใช้เน็ต
+            </p>
+            <div id="webPendingList" class="flex flex-col gap-2 text-xs text-slate-400">กำลังโหลด...</div>
+        </div>
+
         <!-- Filter & Search Controls -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-1.5" id="intentFilterPills">
@@ -329,7 +345,64 @@
         document.addEventListener('DOMContentLoaded', () => {
             fetchStats();
             fetchEntries();
+            fetchWebPending();
         });
+
+        // ===== คำตอบจากเว็บรออนุมัติ =====
+        function escapeHtml(t) {
+            return String(t || '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+        }
+
+        async function fetchWebPending() {
+            const box = document.getElementById('webPendingList');
+            try {
+                const data = await (await fetch('/api/kb/web-pending')).json();
+                const w = data.web || {};
+                document.getElementById('webStatusText').textContent = w.enabled
+                    ? `เปิดใช้งาน • ตอบแล้ว ${w.answers} ครั้ง${w.cooling_down_sec ? ` • พัก ${w.cooling_down_sec}s` : ''}`
+                    : 'ปิดอยู่ (ไม่มี GEMINI_API_KEY)';
+                if (!data.items || data.items.length === 0) {
+                    box.innerHTML = '<div class="text-slate-500">ยังไม่มีคำถามที่ต้องค้นจากเว็บ</div>';
+                    return;
+                }
+                box.innerHTML = data.items.map(it => `
+                    <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                        <div class="flex items-start gap-2">
+                            <div class="flex-1">
+                                <div class="text-slate-100 font-semibold text-sm">❓ ${escapeHtml(it.question)}
+                                    <span class="ml-1 text-[10px] font-mono text-amber-300">ถาม ${it.count || 1} ครั้ง</span></div>
+                                <div class="mt-1 whitespace-pre-line text-slate-300">${escapeHtml(it.reply)}</div>
+                                <div class="mt-1 text-cyan-300">🗣️ ${escapeHtml(it.speech)}</div>
+                                <div class="mt-1 text-slate-500">แหล่งที่มา: ${(it.sources || []).map(s => escapeHtml(s.title)).join(', ') || '-'}</div>
+                            </div>
+                            <div class="flex flex-col gap-1.5 shrink-0">
+                                <button onclick="approveWebPending('${it.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
+                                    <i class="fa-solid fa-check"></i> เพิ่มเข้าฐานความรู้</button>
+                                <button onclick="rejectWebPending('${it.id}')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-700 text-slate-200">
+                                    <i class="fa-solid fa-xmark"></i> ไม่ใช้</button>
+                            </div>
+                        </div>
+                    </div>`).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-rose-400">โหลดรายการไม่สำเร็จ</div>';
+            }
+        }
+
+        async function approveWebPending(id) {
+            if (!confirm('ตรวจข้อมูลแล้ว ต้องการเพิ่มคำตอบนี้เข้าฐานความรู้ใช่ไหม?')) return;
+            const res = await fetch(`/api/kb/web-pending/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const data = await res.json();
+            if (res.ok) {
+                fetchWebPending(); fetchStats(); fetchEntries();
+            } else {
+                alert(data.message || 'เพิ่มไม่สำเร็จ');
+            }
+        }
+
+        async function rejectWebPending(id) {
+            await fetch(`/api/kb/web-pending/${id}`, { method: 'DELETE' });
+            fetchWebPending();
+        }
 
         async function fetchStats() {
             try {

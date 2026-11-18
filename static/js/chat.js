@@ -267,6 +267,9 @@ function appendChatBubble(sender, text, meta = null) {
             } else if (meta.engine === 'local_slm') {
                 engineLabel = '🦙 Local SLM (Qwen 2.5)';
                 iconClass = 'fa-solid fa-brain text-teal-600';
+            } else if (meta.engine === 'web_search') {
+                engineLabel = '🌐 Web Search (Gemini + Google)';
+                iconClass = 'fa-solid fa-globe text-amber-600';
             }
             
             const badge = document.createElement('div');
@@ -293,6 +296,32 @@ function appendChatBubble(sender, text, meta = null) {
 
             badge.innerHTML = badgesHtml;
             bubble.appendChild(badge);
+        }
+
+        // คำตอบจากเว็บ: แสดงแหล่งที่มา (ข้อความ ไม่เป็นลิงก์ กันผู้ใช้กดออกจากหน้าตู้)
+        if (meta && meta.sources && meta.sources.length > 0) {
+            const src = document.createElement('div');
+            src.className = 'mt-2 text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5';
+            const label = document.createElement('span');
+            label.innerHTML = '<i class="fa-solid fa-link text-amber-600"></i> แหล่งที่มา:';
+            src.appendChild(label);
+            meta.sources.forEach(s => {
+                const chip = document.createElement('span');
+                chip.className = 'px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800';
+                chip.textContent = s.title;
+                src.appendChild(chip);
+            });
+            bubble.appendChild(src);
+        }
+        // Google กำหนดให้แสดง "คำค้นแนะนำ" เมื่อใช้ Grounding with Google Search
+        // วางใน iframe แบบ sandbox: แสดงผลได้ แต่สคริปต์และการเปิดหน้าใหม่ถูกปิดไว้
+        if (meta && meta.search_html) {
+            const frame = document.createElement('iframe');
+            frame.setAttribute('sandbox', '');
+            frame.setAttribute('title', 'Google Search suggestions');
+            frame.className = 'mt-2 w-full h-14 border-0 rounded-lg bg-transparent';
+            frame.srcdoc = meta.search_html;
+            bubble.appendChild(frame);
         }
 
         // แสดง Interactive Suggestion Chips (ปุ่มคำถามต่อยอดที่คลิกได้ทันที)

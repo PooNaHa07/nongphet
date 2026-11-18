@@ -168,3 +168,60 @@ def test_kb_query():
             ]
         })
 
+
+
+# ---------------------------------------------------------------------------
+# คำตอบจากเว็บรออนุมัติ: ครูตรวจแล้วกดเพิ่มเข้าฐานความรู้ = เรียนรู้ซ้ำจากคำถามจริงของผู้ใช้
+# ---------------------------------------------------------------------------
+def _strip_web_notes(item):
+    """ตัดข้อความ "ข้อมูลจากเว็บ" ออกก่อนเข้าฐานความรู้ (กลายเป็นข้อมูลที่ครูตรวจแล้ว)"""
+    from services import web_answer_service as was
+    answer, speech = item.get('reply', ''), item.get('speech', '')
+    for lead, note in was.WEB_NOTE.values():
+        answer = answer.replace(note, '').strip()
+        if speech.startswith(lead):
+            speech = speech[len(lead):].strip()
+    return answer, speech
+
+
+@knowledge_bp.route('/api/kb/web-pending', methods=['GET'])
+def list_web_pending():
+    from services import web_answer_service as was
+    items = sorted(was.list_pending(), key=lambda it: (-it.get('count', 1), it.get('created_at', '')))
+    return jsonify({'status': 'success', 'items': items, 'web': was.status()})
+
+
+@knowledge_bp.route('/api/kb/web-pending/<item_id>/approve', methods=['POST'])
+def approve_web_pending(item_id):
+    """เพิ่มคำตอบจากเว็บเข้าฐานความรู้ (แก้ข้อความได้ก่อนกดอนุมัติ) แล้ว Re-index ทันที"""
+    from services import web_answer_service as was
+    item = next((it for it in was.list_pending() if it['id'] == item_id), None)
+    if not item:
+        return jsonify({'status': 'error', 'message': 'ไม่พบรายการนี้'}), 404
+    data = request.json or {}
+    answer, speech = _strip_web_notes(item)
+    sources = ', '.join(s.get('title', '') for s in item.get('sources', []) if s.get('title'))
+    entry = {
+        'intent': data.get('intent') or 'general_faq',
+        'title': (data.get('title') or item['question'])[:80],
+        'keywords': data.get('keywords') or [],
+        'questions': data.get('questions') or [item['question']],
+        'answer': (data.get('answer') or answer) + (f"\n\n📌 แหล่งข้อมูล: {sources}" if sources and not data.get('answer') else ''),
+        'speech': data.get('speech') or speech,
+        'suggestions': data.get('suggestions') or [],
+    }
+    try:
+        res = kb_manager.add_entry(entry, auto_reindex=True)
+    except ValueError as ve:
+        return jsonify({'status': 'error', 'message': str(ve)}), 400
+    was.pop_pending(item_id)
+    res['voice_baking'] = _bake_answer_voice(spoken_text_of(res.get('entry')))
+    return jsonify(res), 201
+
+
+@knowledge_bp.route('/api/kb/web-pending/<item_id>', methods=['DELETE'])
+def reject_web_pending(item_id):
+    from services import web_answer_service as was
+    if not was.pop_pending(item_id):
+        return jsonify({'status': 'error', 'message': 'ไม่พบรายการนี้'}), 404
+    return jsonify({'status': 'success'})

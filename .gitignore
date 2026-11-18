@@ -66,3 +66,6 @@ voices/*.txt
 # ไฟล์ทดลองเลือกเสียง
 voice_samples/
 .venv-voice/
+
+# คิวคำตอบจากเว็บรออนุมัติ (ข้อมูลระหว่างใช้งาน)
+data/web_answers_pending.json
