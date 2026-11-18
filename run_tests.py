@@ -23,6 +23,11 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     test_dir = os.path.join(base_dir, 'tests')
 
+    # ไม่ให้ .env ของเครื่องนี้ (เช่น TTS_ENGINE=omnivoice) เปลี่ยนผลเทสต์
+    sys.path.insert(0, base_dir)
+    from tests import isolate_voice_env
+    isolate_voice_env()
+
     loader = unittest.TestLoader()
     suite = loader.discover(start_dir=test_dir, pattern='test_*.py')
 

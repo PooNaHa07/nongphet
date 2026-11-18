@@ -81,6 +81,19 @@ class TestOmniVoiceMode(OmniCase):
             asyncio.run(tts_service.generate_speech('อีกประโยค'))
         self.assertEqual(len(self.requests), 1)
 
+    def test_timeout_does_not_pause_next_request(self):
+        self.server_replies(httpx.ReadTimeout('slow'), httpx.Response(200, content=CANONICAL_MP3))
+        with self.assertRaises(tts_service.VoiceUnavailable):
+            asyncio.run(tts_service.generate_speech('ประโยคที่ช้า'))
+        self.assertEqual(asyncio.run(tts_service.generate_speech('ประโยคถัดไป')), CANONICAL_MP3)
+        self.assertEqual(len(self.requests), 2)
+
+    def test_bake_ignores_cooldown(self):
+        self.server_replies(httpx.ConnectError('down'), httpx.Response(200, content=CANONICAL_MP3))
+        with self.assertRaises(tts_service.VoiceUnavailable):
+            asyncio.run(tts_service.generate_speech('ก', purpose='bake'))
+        self.assertEqual(asyncio.run(tts_service.generate_speech('ข', purpose='bake')), CANONICAL_MP3)
+
     def test_wrong_format_rejected(self):
         self.server_replies(httpx.Response(200, content=b'RIFF' + bytes(100)))
         with self.assertRaises(tts_service.VoiceUnavailable):

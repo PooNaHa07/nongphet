@@ -17,9 +17,23 @@
             font-family: 'Prompt', sans-serif;
             background: #020617;
         }
+        /* โหมดหน้าตู้: เหลือแค่ใบหน้า (ตา ปาก แสงไฟ) และปุ่มไมค์ ซ่อนข้อความ/ป้าย/แถบควบคุมทั้งหมด
+           เปิดข้อความกลับมาตอนทดสอบได้ด้วย /emotion?hud=1 */
+        body.face-only .hud-corner,
+        body.face-only .status-indicator,
+        body.face-only #cameraStatusBadge,
+        body.face-only #signLanguageStatusBadge,
+        body.face-only #camPreviewBox,
+        body.face-only #voiceSubtitleBox,
+        body.face-only #quickEmotionDock,
+        body.face-only #btnToggleDock,
+        body.face-only #demoControls {
+            display: none !important;
+        }
     </style>
 </head>
-<body class="h-full w-full flex items-center justify-center p-0 m-0 bg-black cursor-default select-none" id="emotionBody">
+<body class="face-only h-full w-full flex items-center justify-center p-0 m-0 bg-black cursor-default select-none" id="emotionBody">
+    <script>if (new URLSearchParams(location.search).get('hud') === '1') document.body.classList.remove('face-only');</script>
 
     <!-- Robot Visor Screen Container -->
     <div class="robot-face-stage relative w-full h-full flex flex-col items-center justify-center overflow-hidden">

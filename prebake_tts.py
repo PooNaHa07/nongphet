@@ -162,7 +162,7 @@ async def bake_one(clean, cache_key, voice, pitch, rate, attempts=2):
     raise RuntimeError(last or 'no audio')
 
 
-async def prebake_all(force=False):
+async def prebake_all(force=False, langs=None):
     # สคริปต์อัดเสียงรอเสียงท่อนแรกได้นานกว่าตอนใช้งานจริง (ไม่มีคนยืนรอ)
     tts_service.FIRST_AUDIO_TIMEOUT = 25.0
     voice, pitch, rate = voice_profile('th')
@@ -176,6 +176,9 @@ async def prebake_all(force=False):
     print("=" * 65)
 
     items = collect_items()
+    if langs:
+        # อัดเฉพาะภาษาที่เลือก เช่น --lang th
+        items = [it for it in items if it[0] in langs]
     pending = []
     skipped = 0
     for lang, label, text in items:
@@ -227,6 +230,7 @@ def main():
     parser.add_argument('--audit', action='store_true', help='ตรวจหาไฟล์เสียงที่ไม่ใช่เสียงน้องเพชรในแคช')
     parser.add_argument('--clean', action='store_true', help='ลบไฟล์เสียงที่ไม่ใช่เสียงน้องเพชรออกจากแคช')
     parser.add_argument('--force', action='store_true', help='อัดใหม่ทั้งหมด แม้มีไฟล์อยู่แล้ว')
+    parser.add_argument('--lang', help='อัดเฉพาะภาษา คั่นด้วยจุลภาค เช่น th หรือ th,en (ค่าเริ่มต้น: ทุกภาษา)')
     args = parser.parse_args()
 
     if args.audit or args.clean:
@@ -237,7 +241,8 @@ def main():
             print(f"{'🗑️ ลบแล้ว' if args.clean else '⚠️ ไม่ใช่เสียงน้องเพชร'}: {name} {fmt}")
         return
 
-    failed = asyncio.run(prebake_all(force=args.force))
+    langs = {x.strip() for x in args.lang.split(',') if x.strip()} if args.lang else None
+    failed = asyncio.run(prebake_all(force=args.force, langs=langs))
     sys.exit(1 if failed else 0)
 
 

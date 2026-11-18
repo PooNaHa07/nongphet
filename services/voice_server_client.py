@@ -21,6 +21,7 @@ import config  # noqa: F401  (โหลดค่าจาก .env เข้า o
 logger = logging.getLogger("nongphet.voice_server")
 
 OFFLINE_COOLDOWN_SEC = 20.0      # ต่อไม่ได้: พักสั้นๆ แล้วลองใหม่ (โน้ตบุ๊กอาจกำลังรีสตาร์ท)
+BAKE_MIN_WAIT_SEC = 180.0        # อัดเก็บล่วงหน้า: รออย่างน้อย 3 นาทีต่อประโยค
 _state = {'offline_until': 0.0, 'last_error': None, 'last_ms': None}
 
 
@@ -75,14 +76,20 @@ async def synthesize_voice_server(text, timeout=None, purpose='live'):
     url = _url()
     if not url:
         raise VoiceServerError('VOICE_SERVER_URL not set')
-    if time.time() < _state['offline_until']:
+    # อัดเก็บล่วงหน้าไม่สนช่วงพัก: ลองต่อทุกประโยค (ตอบสดเท่านั้นที่ต้องรีบตัดไปใช้ประโยคสำรอง)
+    if purpose != 'bake' and time.time() < _state['offline_until']:
         raise VoiceServerError(f"voice server cooling down ({_state['last_error']})")
     headers = {'X-Voice-Token': os.environ.get('VOICE_SERVER_TOKEN', '')}
+    # อัดเก็บล่วงหน้าไม่มีคนรอฟัง จึงรอนานได้ (บางประโยคช้าเพราะ GPU ถูกแย่ง เช่น มีหน้าเว็บขอเสียงพร้อมกัน)
+    wait = timeout or (max(BAKE_MIN_WAIT_SEC, voice_server_timeout_for(text) * 3) if purpose == 'bake'
+                       else voice_server_timeout_for(text))
     try:
-        # อัดเก็บล่วงหน้าไม่มีคนรอฟัง จึงรอนานกว่าได้ (เผื่อเครื่องช้า/คิวยาว)
-        wait = timeout or voice_server_timeout_for(text) * (2 if purpose == 'bake' else 1)
         async with httpx.AsyncClient(timeout=wait) as client:
             res = await client.post(f'{url}/synthesize', json={'text': text, 'purpose': purpose}, headers=headers)
+    except httpx.TimeoutException as e:
+        # เซิร์ฟเวอร์ยังทำงานอยู่ แค่ช้า: ไม่ต้องพัก ไม่งั้นประโยคถัดไปจะล้มตามทั้งที่เครื่องปกติ
+        _state['last_error'] = f'timeout after {wait:.0f}s: {type(e).__name__}'
+        raise VoiceServerError(_state['last_error']) from e
     except httpx.HTTPError as e:
         _mark_offline(f'network error: {type(e).__name__}')
         raise VoiceServerError(_state['last_error']) from e

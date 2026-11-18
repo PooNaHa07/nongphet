@@ -91,6 +91,23 @@ class TestSpeechThroughSystem(unittest.TestCase):
         self.assertEqual(data['reply'], ANSWER)
         self.assertEqual(data['speech'], SPEECH)
 
+    def test_prebake_lang_filter_bakes_thai_only(self):
+        import asyncio
+        baked = []
+
+        async def fake_bake(clean, key, *a):
+            baked.append(clean)
+            return 1024
+        with mock.patch.object(prebake_tts, 'bake_one', side_effect=fake_bake), \
+             mock.patch.object(prebake_tts, 'has_canonical_file', return_value=False), \
+             mock.patch.object(prebake_tts, 'omnivoice_enabled', return_value=True), \
+             mock.patch('builtins.print'):
+            asyncio.run(prebake_tts.prebake_all(langs={'th'}))
+        expected = [i for i in prebake_tts.collect_items() if i[0] == 'th']
+        self.assertEqual(len(baked), len(expected))
+        others = {prebake_tts.plan_item(l, t)[0] for l, _, t in prebake_tts.collect_items() if l != 'th'}
+        self.assertFalse(others & set(baked))   # ไม่มีประโยคอังกฤษ/จีนหลุดเข้ามา
+
     def test_prebake_bakes_speech_not_full_answer(self):
         texts = {label: text for lang, label, text in prebake_tts.collect_items()}
         self.assertEqual(texts.get(f'KB:{ENTRY_ID}'), SPEECH)
