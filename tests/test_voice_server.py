@@ -131,6 +131,31 @@ class TestFallbackPhrase(OmniCase):
         self.assertTrue(data['fallback'])
         self.assertEqual(data['spoken_text'], tts_service.NO_VOICE_PHRASES['th'])
 
+    def test_cache_only_does_not_synthesize(self):
+        res = self.client.post('/tts', json={'text': 'ยังไม่ได้อัดเสียง %f' % time.time(), 'cache_only': True})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json()['status'], 'not_cached')
+        self.assertEqual(self.requests, [])   # ไม่เรียกเซิร์ฟเวอร์เสียง
+
+    def test_filler_never_synthesized_live(self):
+        res = self.client.get('/api/tts/filler?index=0')
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(self.requests, [])   # ไม่ไปต่อคิวเซิร์ฟเวอร์เสียงขวางคำตอบจริง
+
+    def test_prebake_includes_filler_phrases(self):
+        fillers = [t for lang, label, t in prebake_tts.collect_items() if label == 'filler']
+        self.assertEqual(fillers, tts_service.FILLER_PHRASES)
+
+    def test_cache_only_returns_baked_audio(self):
+        text = 'คำตอบที่อัดเก็บไว้แล้วค่ะ'
+        clean = tts_service.clean_text_for_speech(tts_service.prepare_speech_input(text), max_len=2500,
+                                                  voice_gender='female', lang='th')
+        voice, pitch, rate = tts_service.voice_profile('th')
+        tts_service.save_cached_tts(tts_service.speech_cache_key(clean, voice, pitch, rate), CANONICAL_MP3)
+        data = self.client.post('/tts', json={'text': text, 'cache_only': True}).get_json()
+        self.assertTrue(data.get('audio_base64'))
+        self.assertTrue(data['engine'].startswith('cache'))
+
     def test_no_fallback_baked_returns_503(self):
         res = self.client.post('/tts', json={'text': 'ไม่มีเสียงเลย %f' % time.time()})
         self.assertEqual(res.status_code, 503)
@@ -156,9 +181,11 @@ class FakeBackend:
 
     def __init__(self):
         self.texts = []
+        self.seeds = []
 
-    def synthesize(self, text, purpose='live'):
+    def synthesize(self, text, purpose='live', seed=None):
         self.texts.append(text)
+        self.seeds.append(seed)
         return np.zeros(2400, dtype=np.float32)
 
 
@@ -194,6 +221,26 @@ class TestVoiceServerApp(unittest.TestCase):
         self.assertEqual(self.client.post('/synthesize', json={'text': ' '}, headers=h).status_code, 400)
         long_text = 'ก' * (voice_server.MAX_TEXT_CHARS + 1)
         self.assertEqual(self.client.post('/synthesize', json={'text': long_text}, headers=h).status_code, 413)
+
+    def test_seed_override_passed_through(self):
+        h = {'X-Voice-Token': 'booth-secret'}
+        self.assertEqual(self.client.post('/synthesize', json={'text': 'ก', 'seed': 42}, headers=h).status_code, 200)
+        self.assertEqual(self.client.post('/synthesize', json={'text': 'ข'}, headers=h).status_code, 200)
+        self.assertEqual(self.backend.seeds, [42, None])
+
+    def test_rejects_non_integer_seed(self):
+        res = self.client.post('/synthesize', json={'text': 'ก', 'seed': 'abc'},
+                               headers={'X-Voice-Token': 'booth-secret'})
+        self.assertEqual(res.status_code, 400)
+
+    def test_seed_from_env(self):
+        with mock.patch.dict(os.environ, {'OMNIVOICE_SEED': 'random'}):
+            self.assertIsNone(voice_server._seed_from_env())
+        with mock.patch.dict(os.environ, {'OMNIVOICE_SEED': '123'}):
+            self.assertEqual(voice_server._seed_from_env(), 123)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('OMNIVOICE_SEED', None)
+            self.assertEqual(voice_server._seed_from_env(), voice_server.DEFAULT_SEED)
 
     @unittest.skipUnless(__import__('importlib').util.find_spec('lameenc'), 'lameenc not installed')
     def test_encoder_produces_cache_format(self):

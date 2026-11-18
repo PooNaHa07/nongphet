@@ -15,7 +15,7 @@ from services.tts_service import (
     get_cached_tts, save_cached_tts, voice_profile, speech_cache_key, prepare_speech_input,
     extract_first_sentence_for_speech, clean_text_for_speech,
     generate_speech, run_coroutine, iter_audio_stream, edge_wait_budget, edge_tts_available,
-    no_voice_phrase_audio
+    no_voice_phrase_audio, FILLER_PHRASES
 )
 from services.azure_speech import azure_enabled, azure_status
 from services.voice_server_client import omnivoice_enabled, voice_server_status
@@ -23,14 +23,6 @@ from services.voice_server_client import omnivoice_enabled, voice_server_status
 logger = logging.getLogger("nongphet.media")
 
 media_bp = Blueprint('media', __name__)
-
-FILLER_PHRASES = [
-    "ได้เลยค่าา แป๊บนึงน้าา",
-    "อื้อหืออ เรื่องนี้นะคะ สักครู่น้าา",
-    "อ๋ออ ได้เลยค่ะ เดี๋ยวค้นให้นะคะ",
-    "รับทราบเลยค่าา รอแป๊บนึงน้าา",
-    "สักครู่นะคะ น้องเพชรเตรียมข้อมูลให้เดี๋ยวนี้เลยค่าา"
-]
 
 
 def _is_preview(source):
@@ -85,6 +77,9 @@ def tts():
                 'latency_ms': 0,
                 'status': 'success'
             })
+        # หน้าจอถามแค่ว่ามีเสียงอัดไว้หรือไม่ (cache_only) ถ้าไม่มีจะขอทีละประโยคแทน
+        if data.get('cache_only'):
+            return jsonify({'status': 'not_cached'})
 
     # 2. สร้างเสียงน้องเพชรสดด้วย Edge-TTS (ต้องใช้เน็ต) แล้วเก็บลงแคช
     try:
@@ -144,6 +139,11 @@ def tts_filler():
             'engine': f'filler-cache-{cache_type}',
             'latency_ms': 0
         })
+
+    # โหมด OmniVoice: เซิร์ฟเวอร์เสียงในบูธสร้างทีละคำขอ ~20 วินาที
+    # ห้ามสร้างประโยคคั่นเวลาสด ไม่งั้นจะไปต่อคิวขวางคำตอบจริง (ต้องอัดเก็บด้วย prebake_tts.py)
+    if omnivoice_enabled():
+        return _no_voice_response('filler not baked')
 
     try:
         audio_bytes = run_coroutine(generate_speech(clean_text, voice=voice, rate=rate, pitch=pitch),

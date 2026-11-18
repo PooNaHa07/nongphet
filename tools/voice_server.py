@@ -29,6 +29,8 @@ Raspberry Pi ส่งข้อความมาที่ POST /synthesize แ�
                       การ์ด GTX 16xx เช่น GTX 1650: float32 เร็วกว่า float16 ประมาณ 4 เท่า (วัดจริง)
                       การ์ด RTX รุ่นใหม่: ลอง float16 แล้วเทียบ
     OMNIVOICE_TOKENIZER_DEVICE  cpu (ค่าเริ่มต้น: ย้าย audio tokenizer ออกจาก GPU กัน VRAM 4 GB ล้น)
+    OMNIVOICE_SEED    7 (ค่าเริ่มต้น: ล็อกการสุ่มให้โทนเสียงคงที่) หรือ random
+                      เปลี่ยน seed แล้วต้องเปลี่ยน VOICE_ID บน Pi และอัดเสียงใหม่
     OMNIVOICE_FAST    1 (ค่าเริ่มต้น: ทางลัด CFG เร็วขึ้น ~25%) หรือ 0 ใช้โค้ดต้นฉบับ
     OMNIVOICE_STEPS_LIVE  จำนวนรอบสร้างเสียงตอนตอบสด (ค่าเริ่มต้น 32: เท่ากับตอนอัดเก็บ โทนเสียงจึงตรงกัน)
     OMNIVOICE_STEPS_BAKE  จำนวนรอบตอนอัดเสียงเก็บล่วงหน้า (ค่าเริ่มต้น 32: คุณภาพสูงสุด)
@@ -64,6 +66,7 @@ PROMPT_FILE = os.path.join(VOICES_DIR, 'nongphet_voice.pt')
 SAMPLE_RATE = 24000          # OmniVoice ส่งเสียงออกที่ 24 kHz
 MP3_BITRATE_KBPS = 48        # ต้องตรงกับรูปแบบแคชเสียงบน Pi (services/tts_service.py)
 MAX_TEXT_CHARS = 2500
+DEFAULT_SEED = 7             # เลือกจากการฟังเทียบ (tools/pick_seed.py) เปลี่ยนแล้วต้องเปลี่ยน VOICE_ID ด้วย
 
 
 def encode_mp3(samples, sample_rate=SAMPLE_RATE, bitrate=MP3_BITRATE_KBPS):
@@ -82,13 +85,14 @@ def encode_mp3(samples, sample_rate=SAMPLE_RATE, bitrate=MP3_BITRATE_KBPS):
 class OmniVoiceBackend:
     """โหลดโมเดลครั้งเดียว และสร้างเสียงด้วยเสียงต้นแบบของน้องเพชร (ใช้ GPU ทีละคำขอ)"""
 
-    def __init__(self, model_id, device, steps, speed, dtype='float32', bake_steps=None):
+    def __init__(self, model_id, device, steps, speed, dtype='float32', bake_steps=None, seed=None):
         self.model_id = model_id
         self.device = device
         self.steps = steps                     # ตอบสด
         self.bake_steps = bake_steps or steps  # อัดเก็บล่วงหน้า
         self.speed = speed
         self.dtype = dtype
+        self.seed = seed                       # ล็อกการสุ่ม: ข้อความเดิมได้เสียงเดิมทุกครั้ง (None = สุ่มใหม่ทุกครั้ง)
         self.model = None
         self.prompt = None
         self.lock = threading.Lock()
@@ -130,9 +134,13 @@ class OmniVoiceBackend:
             print(f"↪️ ย้าย audio tokenizer ไป {tok_device} (ประหยัด VRAM)")
         print("✅ พร้อมสร้างเสียงน้องเพชร")
 
-    def synthesize(self, text, purpose='live'):
+    def synthesize(self, text, purpose='live', seed=None):
+        import torch
         steps = self.bake_steps if purpose == 'bake' else self.steps
+        seed = self.seed if seed is None else seed
         with self.lock:
+            if seed is not None:
+                torch.manual_seed(seed)        # ตั้งทั้ง CPU และ CUDA
             audio = self.model.generate(text=text, voice_clone_prompt=self.prompt,
                                         num_step=steps, speed=self.speed)
         return audio[0]
@@ -152,7 +160,8 @@ def create_app(backend, token=''):
     def health():
         return jsonify({'ok': backend.model is not None, 'model': backend.model_id,
                         'device': backend.device, 'steps': backend.steps,
-                        'bake_steps': getattr(backend, 'bake_steps', backend.steps), **stats})
+                        'bake_steps': getattr(backend, 'bake_steps', backend.steps),
+                        'seed': getattr(backend, 'seed', None), **stats})
 
     @app.post('/synthesize')
     def synthesize():
@@ -161,13 +170,17 @@ def create_app(backend, token=''):
         body = request.get_json(silent=True) or {}
         text = (body.get('text') or '').strip()
         purpose = 'bake' if body.get('purpose') == 'bake' else 'live'
+        seed = body.get('seed')                # ใช้ตอนเลือก seed เท่านั้น (tools/pick_seed.py)
+        if seed is not None and not isinstance(seed, int):
+            return jsonify({'error': 'seed must be an integer'}), 400
         if not text:
             return jsonify({'error': 'text is required'}), 400
         if len(text) > MAX_TEXT_CHARS:
             return jsonify({'error': f'text longer than {MAX_TEXT_CHARS} characters'}), 413
         started = time.time()
         try:
-            mp3 = encode_mp3(backend.synthesize(text, purpose))
+            mp3 = encode_mp3(backend.synthesize(text, purpose, seed=seed) if seed is not None
+                             else backend.synthesize(text, purpose))
         except Exception as e:
             return jsonify({'error': f'synthesis failed: {type(e).__name__}: {e}'}), 500
         stats['requests'] += 1
@@ -175,6 +188,11 @@ def create_app(backend, token=''):
         return Response(mp3, mimetype='audio/mpeg', headers={'X-Synthesis-Ms': str(stats['last_ms'])})
 
     return app
+
+
+def _seed_from_env():
+    raw = os.environ.get('OMNIVOICE_SEED', str(DEFAULT_SEED)).strip().lower()
+    return None if raw in ('', 'none', 'random') else int(raw)
 
 
 def main():
@@ -190,6 +208,7 @@ def main():
         bake_steps=int(os.environ.get('OMNIVOICE_STEPS_BAKE', '32')),
         dtype=os.environ.get('OMNIVOICE_DTYPE', 'float32'),
         speed=float(os.environ.get('OMNIVOICE_SPEED', '1.0')),
+        seed=_seed_from_env(),
     )
     backend.load()
     token = os.environ.get('VOICE_SERVER_TOKEN', '')

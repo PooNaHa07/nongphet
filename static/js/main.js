@@ -342,7 +342,8 @@ function startLipSyncAnalysis() {
         }
         const t = performance.now() / 140;
         const normAmp = 0.35 + 0.45 * Math.abs(Math.sin(t) * Math.cos(t * 1.6));
-        lipSyncBroadcast.postMessage({ type: 'lipsync', amp: normAmp });
+        // ช่วงรอเสียงประโยคถัดไป: ปิดปากไว้ แต่ยังถือว่ากำลังพูด (ไมค์ยังปิด กันเสียงสะท้อน)
+        lipSyncBroadcast.postMessage({ type: 'lipsync', amp: ttsGapActive ? 0 : normAmp });
         lipSyncAnimFrame = requestAnimationFrame(update);
     }
     update();
@@ -775,6 +776,7 @@ let ttsQueue = [];
 let ttsQueueIndex = 0;
 let ttsQueueAbortController = null;
 let isPlayingQueue = false;
+let ttsGapActive = false;       // กำลังรอเสียงประโยคถัดไป (ปากหยุดขยับ)
 
 function splitTextIntoSentences(text, maxSentenceLen = 140) {
     if (!text) return [];
@@ -815,43 +817,45 @@ function splitTextIntoSentences(text, maxSentenceLen = 140) {
     return merged.length > 0 ? merged : [cleaned];
 }
 
-async function fetchSentenceAudio(text, lang, gender) {
-    const cacheKey = lang + '_' + text;
-    if (clientAudioCache.has(cacheKey)) {
-        return clientAudioCache.get(cacheKey);
-    }
+// ขอเสียงจาก /tts คืน JSON (หรือ null) — cacheOnly=true ถามแค่ว่ามีเสียงที่อัดเก็บไว้หรือไม่
+async function requestTTS(text, lang, signal, cacheOnly = false) {
     try {
         const response = await fetch('/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: text,
-                lang: lang,
-                gender: gender,
-                fast_mode: false
-            }),
-            signal: ttsQueueAbortController ? ttsQueueAbortController.signal : null
+            body: JSON.stringify({ text: text, lang: lang, gender: 'female', fast_mode: false, cache_only: cacheOnly }),
+            signal: signal
         });
-        const data = await response.json();
-        if (data.audio_base64) {
-            const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
-            const uri = `data:${mime};base64,` + data.audio_base64;
-            if (clientAudioCache.size < 128) {
-                clientAudioCache.set(cacheKey, uri);
-            }
-            return uri;
-        }
+        return await response.json();
     } catch (e) {
-        if (e.name !== 'AbortError') {
-            console.warn('Sentence audio fetch error:', e);
-        }
+        if (e.name !== 'AbortError') console.warn('TTS fetch error:', e);
+        return null;
     }
-    return null;
+}
+
+function ttsDataToUri(data) {
+    const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
+    return `data:${mime};base64,` + data.audio_base64;
+}
+
+// ความยาวเสียง (วินาที) จาก metadata ถ้าอ่านไม่ได้ ประมาณจากจำนวนตัวอักษร (~12 ตัว/วินาที)
+function audioDurationSec(uri, fallbackSec) {
+    return new Promise(resolve => {
+        const probe = new Audio();
+        let settled = false;
+        const done = (v) => { if (settled) return; settled = true; resolve(v); };
+        setTimeout(() => done(fallbackSec), 1500);
+        probe.preload = 'metadata';
+        probe.onloadedmetadata = () => done(isFinite(probe.duration) ? probe.duration : fallbackSec);
+        probe.onerror = () => done(fallbackSec);
+        probe.src = uri;
+    });
 }
 
 function stopAllSpeech() {
     lastBotSpeechEndTime = Date.now();
     isPlayingQueue = false;
+    ttsGapActive = false;
     ttsQueue = [];
     ttsQueueIndex = 0;
     if (ttsQueueAbortController) {
@@ -951,60 +955,147 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
     setEmotion('thinking');
 
     ttsQueueAbortController = new AbortController();
+    const signal = ttsQueueAbortController.signal;
 
-    try {
-        const response = await fetch('/tts', {
+    const markSpeaking = () => {
+        isSpeakingTTS = true;
+        ttsGapActive = false;
+        setEmotion('speaking');
+        fetch('/api/iot/led', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            body: JSON.stringify({ state: 'speaking' })
+        }).catch(() => {});
+        if (btnElement) {
+            btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+        }
+        startLipSyncAnalysis();
+    };
+
+    const handleAutoplayBlock = (playErr) => {
+        if (playErr && (playErr.name === 'NotAllowedError' || playErr.name === 'NotSupportedError')) {
+            console.warn('🔇 [Autoplay Shield] เบราว์เซอร์บล็อกเสียง รอการแตะหน้าจอเพื่อปลดล็อก');
+            pendingAutoplayTTS = {
                 text: speechText,
-                lang: activeLang,
-                gender: 'female',
-                fast_mode: false
-            }),
-            signal: ttsQueueAbortController.signal
+                btnElement: btnElement,
+                onEndedCallback: onEndedCallback,
+                forcedLang: activeLang
+            };
+            showAudioUnlockPrompt('👆 แตะหน้าจอ 1 ครั้ง เพื่อเปิดระบบเสียงและไมโครโฟนอัตโนมัติ');
+        }
+    };
+
+    // เล่นเสียงหนึ่งท่อนจนจบ: true = เล่นจบ/ถูกหยุด, false = เบราว์เซอร์บล็อกเสียง
+    const playUriToEnd = (uri) => new Promise(resolve => {
+        if (signal.aborted) return resolve(true);
+        const onAbort = () => finish(true);
+        const finish = (v) => { signal.removeEventListener('abort', onAbort); resolve(v); };
+        signal.addEventListener('abort', onAbort);
+        audioPlayer.src = uri;
+        audioPlayer.volume = 1.0;
+        audioPlayer.muted = false;
+        audioPlayer.onended = () => finish(true);
+        audioPlayer.onerror = () => finish(true);
+        audioPlayer.play().then(markSpeaking).catch((playErr) => {
+            handleAutoplayBlock(playErr);
+            finish(false);
         });
-        const data = await response.json();
-        if (data && data.audio_base64) {
-            const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
-            const uri = `data:${mime};base64,` + data.audio_base64;
-            if (clientAudioCache.size < 128) {
-                clientAudioCache.set(cacheKey, uri);
-            }
-            audioPlayer.src = uri;
-            audioPlayer.volume = 1.0;
-            audioPlayer.muted = false;
-            audioPlayer.onended = handlePlaybackFinished;
-            audioPlayer.onerror = handlePlaybackFinished;
-            try {
-                await audioPlayer.play();
-                isSpeakingTTS = true;
-                setEmotion('speaking');
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'speaking' })
-                }).catch(() => {});
-                if (btnElement) {
-                    btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+    });
+
+    // คำตอบที่ไม่มีเสียงอัดไว้: ขอเสียงทีละประโยค แล้วเริ่มพูดเมื่อเสียงที่ได้มาพอให้พูดต่อเนื่อง
+    // (เซิร์ฟเวอร์เสียงในบูธสร้างเสียงช้ากว่าเวลาพูดจริง ~2 เท่า จึงสะสมก่อนเล็กน้อย)
+    const MAX_PREBUFFER_MS = 6000;   // หลังได้ประโยคแรก รอสะสมเสียงเพิ่มไม่เกินนี้
+    const playSentenceQueue = async (sentences) => {
+        const queue = [];
+        let producing = true;
+        let producedChars = 0, genMs = 0, genChars = 0;
+        const totalChars = sentences.reduce((n, x) => n + x.length, 0);
+        let wake = null;
+        const notify = () => { if (wake) { const w = wake; wake = null; w(); } };
+        const waitChange = (ms) => new Promise(r => {
+            wake = r;
+            setTimeout(() => { if (wake === r) wake = null; r(); }, ms);
+        });
+
+        (async () => {
+            for (const sentence of sentences) {
+                if (signal.aborted) break;
+                const t0 = performance.now();
+                const d = await requestTTS(sentence, activeLang, signal);
+                if (signal.aborted) break;
+                producedChars += sentence.length;
+                // สร้างเสียงไม่ได้เลย (ไม่มีประโยคกลางอัดไว้): หยุด ไม่ต้องรอประโยคถัดไปอีก
+                if (d && d.status === 'no_voice') break;
+                if (!d || !d.audio_base64) continue;
+                if (!String(d.engine || '').startsWith('cache')) {
+                    genMs += performance.now() - t0;
+                    genChars += sentence.length;
                 }
-                startLipSyncAnalysis();
-            } catch (playErr) {
-                if (playErr && (playErr.name === 'NotAllowedError' || playErr.name === 'NotSupportedError')) {
-                    console.warn('🔇 [Autoplay Shield] เบราว์เซอร์บล็อกเสียง รอการแตะหน้าจอเพื่อปลดล็อก');
-                    pendingAutoplayTTS = {
-                        text: speechText,
-                        btnElement: btnElement,
-                        onEndedCallback: onEndedCallback,
-                        forcedLang: activeLang
-                    };
-                    showAudioUnlockPrompt('👆 แตะหน้าจอ 1 ครั้ง เพื่อเปิดระบบเสียงและไมโครโฟนอัตโนมัติ');
-                }
-                handlePlaybackFinished();
+                const uri = ttsDataToUri(d);
+                queue.push({ uri, dur: await audioDurationSec(uri, sentence.length / 12) });
+                notify();
+                // เซิร์ฟเวอร์เสียงใช้ไม่ได้: พูดประโยคกลางครั้งเดียวพอ ไม่ต้องขอประโยคถัดไป
+                if (d.fallback) break;
             }
-        } else {
+            producing = false;
+            notify();
+        })();
+
+        // รอจนเสียงที่สะสมไว้ยาวพอให้พูดต่อเนื่องจนจบ หรือรอครบ MAX_PREBUFFER_MS
+        let firstReadyAt = null;
+        while (!signal.aborted && producing) {
+            if (queue.length) {
+                if (firstReadyAt === null) firstReadyAt = performance.now();
+                const bufferedSec = queue.reduce((n, q) => n + q.dur, 0);
+                const remainingGenSec = genChars ? (totalChars - producedChars) * (genMs / genChars) / 1000 : 0;
+                if (bufferedSec >= remainingGenSec || performance.now() - firstReadyAt >= MAX_PREBUFFER_MS) break;
+            }
+            await waitChange(400);
+        }
+
+        isPlayingQueue = true;
+        while (!signal.aborted) {
+            if (!queue.length) {
+                if (!producing) break;
+                ttsGapActive = true;          // ยังสร้างเสียงประโยคถัดไปไม่เสร็จ
+                setEmotion('thinking');
+                await waitChange(400);
+                continue;
+            }
+            const ok = await playUriToEnd(queue.shift().uri);
+            if (!ok) break;
+        }
+        if (!signal.aborted) {
+            ttsGapActive = false;
             handlePlaybackFinished();
         }
+    };
+
+    try {
+        // 1) เสียงคำตอบเต็มที่อัดเก็บไว้แล้ว (prebake) เล่นได้ทันที
+        let data = await requestTTS(speechText, activeLang, signal, true);
+        if (signal.aborted) return;
+        const sentences = splitTextIntoSentences(speechText);
+        // 2) ไม่มีเสียงอัดไว้ และเป็นข้อความประโยคเดียว: ขอทั้งก้อน
+        if (!(data && data.audio_base64) && sentences.length <= 1) {
+            data = await requestTTS(speechText, activeLang, signal);
+            if (signal.aborted) return;
+        }
+        if (data && data.audio_base64) {
+            const uri = ttsDataToUri(data);
+            if (!data.fallback && clientAudioCache.size < 128) {
+                clientAudioCache.set(cacheKey, uri);
+            }
+            await playUriToEnd(uri);
+            if (!signal.aborted) handlePlaybackFinished();   // ถูกขัดจังหวะ: คำตอบใหม่จัดการสถานะเอง
+            return;
+        }
+        // 3) ไม่มีเสียงอัดไว้ และมีหลายประโยค: สร้างทีละประโยคแล้วพูดต่อกัน
+        if (sentences.length > 1) {
+            await playSentenceQueue(sentences);
+            return;
+        }
+        handlePlaybackFinished();
     } catch (err) {
         if (err.name !== 'AbortError') {
             console.warn('⚠️ [Audio Playback] TTS error:', err);
