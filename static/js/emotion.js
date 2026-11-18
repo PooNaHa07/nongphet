@@ -2430,9 +2430,10 @@ async function playDirectVoiceTTS(text, lang = 'th') {
             return;
         }
 
-        // ใช้ AbortController จำกัดเวลาเชื่อมต่อ (25 วินาที สำหรับคำตอบที่มีเนื้อหายาว)
+        // จำกัดเวลารอเสียง: เผื่อเท่ากับเซิร์ฟเวอร์เสียง OmniVoice 32 รอบ (15 วินาที + 0.3 วินาที/ตัวอักษร) + 5 วินาที
         const abortCtrl = new AbortController();
-        const timeoutId = setTimeout(() => abortCtrl.abort(), 25000);
+        const ttsWaitMs = Math.min(185000, 20000 + (speakText || '').length * 300);
+        const timeoutId = setTimeout(() => abortCtrl.abort(), ttsWaitMs);
 
         const ttsRes = await fetch('/tts', {
             method: 'POST',

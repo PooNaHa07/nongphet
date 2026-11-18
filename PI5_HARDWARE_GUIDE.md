@@ -235,7 +235,7 @@ python run_tests.py
    TTS_ENGINE=omnivoice
    VOICE_SERVER_URL=http://<IP โน้ตบุ๊ก>:8010
    VOICE_SERVER_TOKEN=<รหัสเดียวกับโน้ตบุ๊ก>
-   VOICE_ID=nongphet-omni-v1
+   VOICE_ID=nongphet-omni-v2
    ```
 3. ตรวจ `http://localhost:5000/api/tts/status` ควรเห็น `"primary_engine": "omnivoice"`
 4. รัน `python prebake_tts.py` บน Pi (ระหว่างเปิดเซิร์ฟเวอร์เสียง) เพื่ออัดคำตอบทุกหัวข้อเก็บไว้ในเครื่อง

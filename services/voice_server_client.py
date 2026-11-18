@@ -6,7 +6,7 @@ services/voice_server_client.py — ฝั่ง Raspberry Pi ที่เรี
 ใช้เมื่อ TTS_ENGINE=omnivoice:
     VOICE_SERVER_URL=http://<IP โน้ตบุ๊ก>:8010
     VOICE_SERVER_TOKEN=<รหัสเดียวกับบนโน้ตบุ๊ก>
-    VOICE_ID=nongphet-omni-v1      (เปลี่ยนเมื่อเปลี่ยนเสียงต้นแบบ เพื่อไม่ให้เล่นไฟล์เสียงเก่า)
+    VOICE_ID=nongphet-omni-v2      (เปลี่ยนเมื่อเปลี่ยนเสียงต้นแบบ เพื่อไม่ให้เล่นไฟล์เสียงเก่า)
 
 ถ้าโน้ตบุ๊กดับหรือหลุดจากวงแลน จะพักการเรียกชั่วคราว แล้วให้ระบบใช้เสียงที่อัดไว้ / ประโยคกลางแทน
 """
@@ -37,7 +37,7 @@ def omnivoice_enabled():
 
 
 def voice_id():
-    return os.environ.get('VOICE_ID', 'nongphet-omni-v1').strip() or 'nongphet-omni-v1'
+    return os.environ.get('VOICE_ID', 'nongphet-omni-v2').strip() or 'nongphet-omni-v2'
 
 
 def _url():
@@ -59,10 +59,10 @@ def voice_server_status():
 
 def voice_server_timeout_for(text):
     """
-    เวลารอเซิร์ฟเวอร์เสียง: ตอบสด (8 รอบ) บน GTX 1650 ใช้เวลาใกล้เคียงความยาวเสียง
-    ภาษาไทยพูดประมาณ 13 ตัวอักษร/วินาที จึงเผื่อ ~1 วินาทีต่อ 10 ตัวอักษร
+    เวลารอเซิร์ฟเวอร์เสียง: 32 รอบบน GTX 1650 (ต้นแบบ 5 วินาที) ใช้เวลาประมาณ 3 เท่าของความยาวเสียง
+    ภาษาไทยพูดประมาณ 12 ตัวอักษร/วินาที จึงเผื่อ 0.3 วินาทีต่อตัวอักษร
     """
-    return min(120.0, 10.0 + len(text or '') / 10.0)
+    return min(180.0, 15.0 + len(text or '') * 0.3)
 
 
 def _mark_offline(reason):
@@ -79,8 +79,8 @@ async def synthesize_voice_server(text, timeout=None, purpose='live'):
         raise VoiceServerError(f"voice server cooling down ({_state['last_error']})")
     headers = {'X-Voice-Token': os.environ.get('VOICE_SERVER_TOKEN', '')}
     try:
-        # อัดเก็บล่วงหน้าใช้รอบสร้างเสียงมากกว่าตอบสด (32 vs 8) จึงรอนานกว่า
-        wait = timeout or voice_server_timeout_for(text) * (4 if purpose == 'bake' else 1)
+        # อัดเก็บล่วงหน้าไม่มีคนรอฟัง จึงรอนานกว่าได้ (เผื่อเครื่องช้า/คิวยาว)
+        wait = timeout or voice_server_timeout_for(text) * (2 if purpose == 'bake' else 1)
         async with httpx.AsyncClient(timeout=wait) as client:
             res = await client.post(f'{url}/synthesize', json={'text': text, 'purpose': purpose}, headers=headers)
     except httpx.HTTPError as e:

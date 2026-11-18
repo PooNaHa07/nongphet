@@ -28,9 +28,11 @@ Raspberry Pi ส่งข้อความมาที่ POST /synthesize แ�
     OMNIVOICE_DTYPE   float32 (ค่าเริ่มต้น) หรือ float16
                       การ์ด GTX 16xx เช่น GTX 1650: float32 เร็วกว่า float16 ประมาณ 4 เท่า (วัดจริง)
                       การ์ด RTX รุ่นใหม่: ลอง float16 แล้วเทียบ
-    OMNIVOICE_STEPS_LIVE  จำนวนรอบสร้างเสียงตอนตอบสด (ค่าเริ่มต้น 8: เร็ว)
+    OMNIVOICE_TOKENIZER_DEVICE  cpu (ค่าเริ่มต้น: ย้าย audio tokenizer ออกจาก GPU กัน VRAM 4 GB ล้น)
+    OMNIVOICE_FAST    1 (ค่าเริ่มต้น: ทางลัด CFG เร็วขึ้น ~25%) หรือ 0 ใช้โค้ดต้นฉบับ
+    OMNIVOICE_STEPS_LIVE  จำนวนรอบสร้างเสียงตอนตอบสด (ค่าเริ่มต้น 32: เท่ากับตอนอัดเก็บ โทนเสียงจึงตรงกัน)
     OMNIVOICE_STEPS_BAKE  จำนวนรอบตอนอัดเสียงเก็บล่วงหน้า (ค่าเริ่มต้น 32: คุณภาพสูงสุด)
-                      วัดบน GTX 1650 float32 ประโยค 5 วินาที: 8 รอบ ~5 วินาที, 16 รอบ ~11, 32 รอบ ~21
+                      วัดบน GTX 1650 float32 (tokenizer บน CPU, ต้นแบบ 5 วินาที) ประโยค 6.7 วินาที: 8 รอบ ~6 วินาที, 32 รอบ ~20
     OMNIVOICE_SPEED   ความเร็วพูด (ค่าเริ่มต้น 1.0)
     VOICE_SERVER_TOKEN  รหัสป้องกันไม่ให้เครื่องอื่นในวงแลนเรียกใช้
 
@@ -94,6 +96,11 @@ class OmniVoiceBackend:
     def load(self):
         import torch
         from omnivoice import OmniVoice, VoiceClonePrompt
+        if os.environ.get('OMNIVOICE_FAST', '1').strip() != '0':
+            # แยก forward ของ CFG uncond ให้ยาวเท่าเสียงเป้าหมาย: เร็วขึ้น ~25% (tools/omnivoice_fast.py)
+            import omnivoice_fast
+            omnivoice_fast.install()
+            print("⚡ เปิดทางลัดถอดรหัส OmniVoice (OMNIVOICE_FAST=0 เพื่อปิด)")
         print(f"📥 กำลังโหลด {self.model_id} บน {self.device} ({self.dtype}) ...")
         self.model = OmniVoice.from_pretrained(self.model_id, device_map=self.device,
                                                dtype=getattr(torch, self.dtype))
@@ -113,6 +120,14 @@ class OmniVoiceBackend:
             self.prompt = self.model.create_voice_clone_prompt(**kwargs)
             self.prompt.save(PROMPT_FILE)
             print(f"💾 บันทึกเสียงต้นแบบที่เตรียมแล้ว: {PROMPT_FILE} (ลบไฟล์นี้เมื่อเปลี่ยนเสียงต้นแบบ)")
+        # ตัวแปลงเสียง (audio tokenizer ~760 MiB) ใช้แค่ตอนเตรียมต้นแบบและถอดเสียงท้ายสุด
+        # ย้ายไป CPU เพื่อให้ VRAM 4 GB ไม่ล้นไปใช้ RAM ระบบ (ล้นแล้วช้าลง 5-17 เท่า)
+        tok_device = os.environ.get('OMNIVOICE_TOKENIZER_DEVICE', 'cpu').strip() or 'cpu'
+        if tok_device != self.device:
+            self.model.audio_tokenizer.to(tok_device)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print(f"↪️ ย้าย audio tokenizer ไป {tok_device} (ประหยัด VRAM)")
         print("✅ พร้อมสร้างเสียงน้องเพชร")
 
     def synthesize(self, text, purpose='live'):
@@ -171,7 +186,7 @@ def main():
     backend = OmniVoiceBackend(
         model_id=os.environ.get('OMNIVOICE_MODEL', 'k2-fsa/OmniVoice'),
         device=os.environ.get('OMNIVOICE_DEVICE', 'cuda:0'),
-        steps=int(os.environ.get('OMNIVOICE_STEPS_LIVE', os.environ.get('OMNIVOICE_STEPS', '8'))),
+        steps=int(os.environ.get('OMNIVOICE_STEPS_LIVE', os.environ.get('OMNIVOICE_STEPS', '32'))),
         bake_steps=int(os.environ.get('OMNIVOICE_STEPS_BAKE', '32')),
         dtype=os.environ.get('OMNIVOICE_DTYPE', 'float32'),
         speed=float(os.environ.get('OMNIVOICE_SPEED', '1.0')),
