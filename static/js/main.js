@@ -1,3 +1,19 @@
+// ===== QR Code ในเครื่อง (static/vendor/qrcode, qrcode-generator) ใช้ได้แม้ไม่มีอินเทอร์เน็ต =====
+function makeQrDataUrl(text, cellSize = 6) {
+    if (typeof qrcode === 'undefined') return '';
+    const qr = qrcode(0, 'M');
+    qr.addData(String(text || ''));
+    qr.make();
+    return qr.createDataURL(cellSize, 2);
+}
+
+function renderStaticQrCodes(root = document) {
+    root.querySelectorAll('img[data-qr]').forEach(img => {
+        if (!img.src) img.src = makeQrDataUrl(img.dataset.qr);
+    });
+}
+document.addEventListener('DOMContentLoaded', () => renderStaticQrCodes());
+
 
 const clientAudioCache = new Map();
 let quickFeedbackAudioCtx = null;

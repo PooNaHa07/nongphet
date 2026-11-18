@@ -43,7 +43,7 @@ function initMediaPipeHands() {
 
     try {
         signHands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            locateFile: (file) => `/static/vendor/mediapipe/hands/${file}`
         });
 
         signHands.setOptions({

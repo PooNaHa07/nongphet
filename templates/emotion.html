@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>น้องเพชร - Emotion Display (จอแสดงอารมณ์ส่วนหัว)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="{{ url_for('static', filename='vendor/tailwind/tailwind.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <link rel="icon" type="image/svg+xml" href="/static/img/robot.svg">
     <!-- Google MediaPipe Hands & Camera Utils for Sign Language Tracking -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/camera_utils/camera_utils.js') }}" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/hands/hands.js') }}" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="/static/css/emotion.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap');
+        @import url('{{ url_for('static', filename='vendor/fonts/fonts.css') }}');
         body {
             font-family: 'Prompt', sans-serif;
             background: #020617;

@@ -71,6 +71,13 @@ def setup_logging():
 
 logger = setup_logging()
 
+# ชนิดไฟล์ของไลบรารีที่เก็บในเครื่อง (static/vendor): Windows / Pi บางเครื่องไม่รู้จัก
+# ถ้าส่งผิดชนิด เบราว์เซอร์อาจไม่ยอมโหลดฟอนต์ หรือโหลด WebAssembly ของ MediaPipe ไม่ได้
+import mimetypes
+mimetypes.add_type('font/woff2', '.woff2')
+mimetypes.add_type('font/ttf', '.ttf')
+mimetypes.add_type('application/wasm', '.wasm')
+
 # Initialize Flask App
 app = Flask(__name__)
 app.config.from_object(Config)

@@ -409,8 +409,8 @@ async function openMobileHandoffQR(content, intent = 'travel') {
             document.getElementById('qrLoadingBox').classList.add('hidden');
             const qrBox = document.getElementById('qrContentBox');
             qrBox.classList.remove('hidden');
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.share_url)}`;
-            document.getElementById('qrImg').src = qrUrl;
+            // สร้าง QR ในเครื่อง (static/vendor/qrcode) ใช้ได้แม้ไม่มีอินเทอร์เน็ต
+            document.getElementById('qrImg').src = makeQrDataUrl(data.share_url);
             document.getElementById('qrDirectLink').href = data.share_url;
         }
     } catch (e) {

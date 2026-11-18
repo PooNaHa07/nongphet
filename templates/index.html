@@ -5,16 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>น้องเพชร (nongphet) - ผู้ช่วยอัจฉริยะ AI Smart Guide</title>
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{{ url_for('static', filename='vendor/tailwind/tailwind.js') }}"></script>
     <!-- FontAwesome 6 Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <!-- Google Fonts: Prompt & JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/fonts.css') }}" rel="stylesheet">
     <!-- Google MediaPipe Hands & Camera Utils for Sign Language Recognition -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous" defer></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/camera_utils/camera_utils.js') }}" crossorigin="anonymous" defer></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/hands/hands.js') }}" crossorigin="anonymous" defer></script>
     <!-- Modular Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -93,6 +91,7 @@
     <audio id="audioPlayer" class="hidden" preload="auto"></audio>
 
     <!-- Modular Client JavaScript -->
+    <script src="{{ url_for('static', filename='vendor/qrcode/qrcode.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}?v=1.0.5"></script>
     <script src="{{ url_for('static', filename='js/chat.js') }}?v=1.0.5"></script>
     <script src="{{ url_for('static', filename='js/modals.js') }}?v=1.0.5"></script>

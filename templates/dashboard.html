@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nong Phet Robotics - Mission Control & Hardware Telemetry</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="{{ url_for('static', filename='vendor/tailwind/tailwind.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <link rel="icon" type="image/svg+xml" href="/static/img/robot.svg">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700;800&display=swap');
+        @import url('{{ url_for('static', filename='vendor/fonts/fonts.css') }}');
         body { font-family: 'Prompt', sans-serif; }
         .font-mono-code { font-family: 'JetBrains Mono', monospace; }
         .glass-card {
