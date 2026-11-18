@@ -42,7 +42,7 @@ if %errorlevel% equ 0 (
     echo [ERROR] rsync failed! Please check:
     echo   1. Raspberry Pi เปิดเครื่องและเชื่อมต่อเน็ตแล้วหรือยัง (ping %TARGET_HOST%)
     echo   2. Git Bash ติดตั้งอยู่ที่ C:\Program Files\Git\
-    echo   3. SSH key ตั้งค่าเรียบร้อย (ดู SSH_KEY_SETUP.md)
+    echo   3. SSH key ตั้งค่าเรียบร้อย (ดู docs/SSH_KEY_SETUP.md)
 )
 
 pause

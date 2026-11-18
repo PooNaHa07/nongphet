@@ -53,6 +53,7 @@ d:\nongphet\
 │   ├── fetch_vendor.py         # Download pinned web libraries into static/vendor/
 │   └── fetch_college_data.py / build_college_kb.py   # College data from official PBPVC sources
 │
+├── docs/                       # Guides (Pi 5 hardware, arm, SSH deploy, system overview) + research_report/
 ├── voices/                     # Reference voice (audio/text/.pt are git-ignored, see voices/README.md)
 ├── data/college_official.json  # Scraped official college data
 ├── static/

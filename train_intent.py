@@ -520,9 +520,8 @@ def train_and_evaluate():
 
         cm_image_path = os.path.join(ARTIFACT_DIR, "confusion_matrix.png")
         plt.savefig(cm_image_path)
-        plt.savefig("confusion_matrix.png")
         plt.close()
-        print(f"  ✅ บันทึกกราฟ Confusion Matrix สำเร็จที่: confusion_matrix.png และ {cm_image_path}")
+        print(f"  ✅ บันทึกกราฟ Confusion Matrix สำเร็จที่: {cm_image_path}")
     else:
         print("  ℹ️ ข้ามการสร้างภาพ Confusion Matrix (ไม่ได้ติดตั้ง matplotlib/seaborn) โดยยังบันทึกข้อมูลสถิติครบถ้วน")
 
@@ -533,11 +532,8 @@ def train_and_evaluate():
 
     joblib.dump(best_model, model_path)
     joblib.dump(vectorizer, vec_path)
-    # สำเนาไว้ที่รากโปรเจกต์ตามข้อกำหนด
-    joblib.dump(best_model, "model.pkl")
-    joblib.dump(vectorizer, "vectorizer.pkl")
 
-    print(f"  ✅ บันทึกไฟล์โมเดลสำเร็จ: model.pkl และ vectorizer.pkl")
+    print(f"  ✅ บันทึกไฟล์โมเดลสำเร็จ: {model_path} และ {vec_path}")
 
     # ทดสอบความแม่นยำกับประโยคจริงนอกชุดฝึกสอน หลายภาษา TH/EN/ZH (Real-World Unseen Probe Test)
     probe_cases = [

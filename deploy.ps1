@@ -2,7 +2,7 @@
 # โครงการ: น้องเพชร AI Smart Guide
 # สคริปต์: ซิงก์โค้ดและ Assets ไปยัง Raspberry Pi 5 (deploy.ps1)
 # ==============================================================================
-# SSH KEY SETUP (ทำครั้งเดียวก่อนใช้งาน): ดูรายละเอียดได้ที่ SSH_KEY_SETUP.md
+# SSH KEY SETUP (ทำครั้งเดียวก่อนใช้งาน): ดูรายละเอียดได้ที่ docs/SSH_KEY_SETUP.md
 # หากยังไม่มี SSH key ให้รัน: ssh-keygen -t ed25519 -C "nongphet-deploy"
 # จากนั้น: ssh-copy-id pi@raspberrypi.local  (ใส่ password ครั้งสุดท้าย)
 # ==============================================================================
@@ -16,7 +16,7 @@ Write-Host "  Syncing NongPhet to Raspberry Pi 5 ($PI_HOST)" -ForegroundColor Cy
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "[INFO] Target: ${PI_USER}@${PI_HOST}:${PI_TARGET}" -ForegroundColor Yellow
-Write-Host "[INFO] Using SSH key authentication (see SSH_KEY_SETUP.md)" -ForegroundColor Green
+Write-Host "[INFO] Using SSH key authentication (see docs/SSH_KEY_SETUP.md)" -ForegroundColor Green
 Write-Host ""
 
 Write-Host "[*] กำลังอัปโหลดไฟล์ผ่าน rsync (Git Bash)..." -ForegroundColor Yellow
@@ -45,5 +45,5 @@ if ($LASTEXITCODE -eq 0) {
 } else {
     Write-Host ""
     Write-Host "[ERROR] การส่งไฟล์ขัดข้อง กรุณาตรวจสอบ SSH key หรือการเชื่อมต่อ Wi-Fi" -ForegroundColor Red
-    Write-Host "[INFO]  ดูวิธีตั้งค่า SSH key ได้ที่ SSH_KEY_SETUP.md" -ForegroundColor Yellow
+    Write-Host "[INFO]  ดูวิธีตั้งค่า SSH key ได้ที่ docs/SSH_KEY_SETUP.md" -ForegroundColor Yellow
 }

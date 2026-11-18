@@ -173,7 +173,6 @@ flowchart TD
 * **[routes/](file:///d:/nongphet/routes/):** โมดูลแยกการทำงาน (`chat.py`, `media.py`, `vision.py`, `iot.py`, `admin.py`, `display.py`, `knowledge.py`)
 * **[services/](file:///d:/nongphet/services/):** เอนจินประมวลผล (`tts_service.py`, `knowledge_service.py`, `gemini_service.py`, `analytics_service.py`)
 * **[vision_daemon.py](file:///d:/nongphet/vision_daemon.py):** ระบบกล้อง AI ตรวจจับคน/สายตา/ภาษามือ (Port 5002) พร้อม Smart Gaze Throttling
-* **[bake_thonburian_windows.py](file:///d:/nongphet/bake_thonburian_windows.py):** สคริปต์สังเคราะห์คลังเสียงล่วงหน้าบน Windows GPU ด้วย ThonburianTTS
 * **[static/audio/cache/](file:///d:/nongphet/static/audio/cache/):** โฟลเดอร์เก็บไฟล์เสียงสังเคราะห์ล่วงหน้า 58 ไฟล์ (.mp3)
 * **[static/audio/cache_manifest.json](file:///d:/nongphet/static/audio/cache_manifest.json):** ดัชนีสรุปรายชื่อไฟล์เสียงและข้อความทั้งหมด
 * **[run_tests.py](file:///d:/nongphet/run_tests.py):** Automated Test Suite 30 รายการสำหรับตรวจสอบความสมบูรณ์ของระบบ

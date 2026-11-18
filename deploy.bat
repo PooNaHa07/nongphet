@@ -4,7 +4,7 @@ title Deploy NongPhet to Raspberry Pi 5
 
 :: ============================================================
 :: SSH KEY SETUP (ทำครั้งเดียวก่อนใช้งาน)
-:: ดูรายละเอียดได้ที่ SSH_KEY_SETUP.md
+:: ดูรายละเอียดได้ที่ docs/SSH_KEY_SETUP.md
 :: รองรับทั้ง pi@raspberrypi.local และ pi@192.168.1.162
 :: ============================================================
 
@@ -20,7 +20,7 @@ echo   Syncing NongPhet to Raspberry Pi 5 (%TARGET_HOST%)
 echo ========================================================
 echo.
 echo [INFO] Target: pi@%TARGET_HOST%:~/nongphet/
-echo [INFO] Using SSH key authentication (see SSH_KEY_SETUP.md)
+echo [INFO] Using SSH key authentication (see docs/SSH_KEY_SETUP.md)
 echo.
 
 echo [*] Transferring source code via rsync (Git Bash)...
@@ -38,7 +38,7 @@ if %errorlevel% equ 0 (
 ) else (
     echo.
     echo [ERROR] Transfer failed! Please check network connection or SSH key setup.
-    echo [INFO]  See SSH_KEY_SETUP.md for instructions.
+    echo [INFO]  See docs/SSH_KEY_SETUP.md for instructions.
 )
 
 pause

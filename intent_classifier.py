@@ -71,11 +71,12 @@ class NongPhetIntentClassifier:
         self.vectorizer = None
         self.is_ready = False
 
-        # ตรวจสอบทั้งในโฟลเดอร์ปัจจุบันและในโฟลเดอร์ ml_artifacts
-        if not os.path.exists(model_path) and os.path.exists(os.path.join("ml_artifacts", model_path)):
-            model_path = os.path.join("ml_artifacts", model_path)
-        if not os.path.exists(vectorizer_path) and os.path.exists(os.path.join("ml_artifacts", vectorizer_path)):
-            vectorizer_path = os.path.join("ml_artifacts", vectorizer_path)
+        # โมเดลอยู่ใน ml_artifacts/ ของโปรเจกต์ (หาได้ไม่ว่ารันจากโฟลเดอร์ไหน)
+        artifact_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml_artifacts")
+        if not os.path.exists(model_path) and os.path.exists(os.path.join(artifact_dir, model_path)):
+            model_path = os.path.join(artifact_dir, model_path)
+        if not os.path.exists(vectorizer_path) and os.path.exists(os.path.join(artifact_dir, vectorizer_path)):
+            vectorizer_path = os.path.join(artifact_dir, vectorizer_path)
 
         self._load_artifacts(model_path, vectorizer_path)
 
