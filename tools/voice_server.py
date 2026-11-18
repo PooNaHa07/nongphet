@@ -195,7 +195,22 @@ def _seed_from_env():
     return None if raw in ('', 'none', 'random') else int(raw)
 
 
+def _load_dotenv(path=os.path.join(ROOT, '.env')):
+    """อ่าน .env ของโปรเจกต์ (ไม่ทับค่าที่ตั้งไว้แล้ว) ให้ VOICE_SERVER_TOKEN ฯลฯ ตรงกับแอปเมื่อรันจาก run.bat"""
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    except OSError:
+        pass
+
+
 def main():
+    _load_dotenv()
     parser = argparse.ArgumentParser(description='เซิร์ฟเวอร์เสียงน้องเพชร (OmniVoice)')
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8010)
