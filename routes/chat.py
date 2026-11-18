@@ -76,7 +76,7 @@ def resolve_living_emotion(user_message: str, reply_text: str, default_emotion: 
         
     return default_emotion if default_emotion in ['smile', 'happy', 'excited', 'love', 'wink', 'surprised', 'thinking'] else 'smile'
 
-def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None, gesture=None):
+def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None, gesture=None, speech=None):
     """ส่งต่อคำตอบพร้อมซิงค์อารมณ์ใบหน้าน้องเพชร (Screen 2) และบันทึกลง State"""
     final_emotion = resolve_living_emotion(user_message, reply_text, base_emotion)
     state.emotion_state['current'] = final_emotion
@@ -118,6 +118,9 @@ def send_chat_response(user_message, reply_text, suggestions, engine, detected_i
     }
     if rag_score is not None:
         resp['rag_score'] = rag_score
+    if speech:
+        # บทพูดสั้นของหัวข้อนี้: หน้าจอแสดง reply เต็ม แต่น้องเพชรพูดแค่ speech
+        resp['speech'] = speech
     return jsonify(resp)
 
 @chat_bp.route('/chat', methods=['POST'])
@@ -202,7 +205,8 @@ def chat():
                 source=f"semantic_rag:{rag_match['id']}",
                 language=language,
                 base_emotion=target_emotion,
-                rag_score=rag_match['score']
+                rag_score=rag_match['score'],
+                speech=rag_match.get('speech')
             )
 
         local_reply = match_local_knowledge(user_message, detected_intent, confidence, language)

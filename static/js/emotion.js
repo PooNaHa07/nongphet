@@ -2312,7 +2312,7 @@ async function processDirectVoiceQuery(queryText, forcedLang = null) {
         const replyLang = chatData.language || forcedLang || 'th';
 
         showVoiceSubtitle(reply);
-        playDirectVoiceTTS(reply, replyLang);
+        playDirectVoiceTTS(chatData.speech || reply, replyLang);
     } catch (e) {
         isEmotionSpeaking = false;
         showVoiceSubtitle('ขออภัยค่ะ เกิดข้อผิดพลาดในการเชื่อมต่อ AI', 3000);

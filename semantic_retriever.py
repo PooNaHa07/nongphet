@@ -311,6 +311,7 @@ class SemanticRetriever:
                 "intent": matched_entry.get("intent"),
                 "title": matched_entry.get("title"),
                 "reply": full_reply,
+                "speech": (matched_entry.get("speech") or "").strip() or None,
                 "suggestions": suggestions,
                 "score": round(best_score, 4),
                 "source": "semantic_rag",

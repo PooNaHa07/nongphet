@@ -112,6 +112,7 @@ class KnowledgeBaseManager:
             "keywords": [k.strip() for k in entry_data.get("keywords", []) if k.strip()],
             "questions": [q.strip() for q in entry_data.get("questions", []) if q.strip()],
             "answer": entry_data.get("answer", "").strip(),
+            "speech": (entry_data.get("speech") or "").strip(),
             "suggestions": [s.strip() for s in entry_data.get("suggestions", []) if s.strip()],
             "updated_at": datetime.datetime.now().isoformat()
         }
@@ -146,6 +147,8 @@ class KnowledgeBaseManager:
             existing["questions"] = [q.strip() for q in entry_data["questions"] if q.strip()]
         if "answer" in entry_data:
             existing["answer"] = entry_data["answer"].strip()
+        if "speech" in entry_data:
+            existing["speech"] = (entry_data["speech"] or "").strip()
         if "suggestions" in entry_data:
             existing["suggestions"] = [s.strip() for s in entry_data["suggestions"] if s.strip()]
         existing["updated_at"] = datetime.datetime.now().isoformat()

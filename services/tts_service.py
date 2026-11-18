@@ -199,6 +199,13 @@ def extract_first_sentence_for_speech(text, lang='th', max_len=500):
             break
     return first_para[:cutoff].strip()
 
+# คำที่เสียงน้องเพชรอ่านผิด -> เขียนตามเสียงอ่าน (เพิ่มได้เมื่อฟังแล้วเจอคำอ่านผิด)
+# ข้อควรระวัง: เปลี่ยนรายการนี้แล้วคีย์แคชของประโยคนั้นเปลี่ยน ต้องอัดเสียงประโยคนั้นใหม่
+PRONUNCIATION_FIXES = [
+    (r'เหตุ(?!การณ์)', 'เหด'),   # เหตุ, เหตุด่วน, สาเหตุ, เหตุผล (เหตุการณ์ อ่าน เหด-ตุ-กาน ปล่อยไว้)
+]
+
+
 def clean_text_for_speech(text, max_len=2500, voice_gender='female', lang='th'):
     """
     ขัดเกลาและจัดวรรคตอนข้อความให้อ่านได้ครบถ้วน ชัดเจน และเป็นธรรมชาติเสมือนคนพูดจริง
@@ -273,6 +280,11 @@ def clean_text_for_speech(text, max_len=2500, voice_gender='female', lang='th'):
         ]
         for pattern, repl in abbrev_map:
             t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
+        # "เปิดสอนระดับ ปวช." ถูกเติมคำว่า ระดับ ซ้ำ: ยุบให้เหลือคำเดียว
+        t = re.sub(r'ระดับ\s*ระดับ', 'ระดับ', t)
+        # คำที่เสียงสังเคราะห์อ่านผิด: เขียนตามเสียงอ่าน (ใช้เฉพาะเสียง หน้าจอยังแสดงคำเดิม)
+        for pattern, repl in PRONUNCIATION_FIXES:
+            t = re.sub(pattern, repl, t)
 
     # แปลงการขึ้นบรรทัดใหม่เป็นจุลภาคแบ่งวรรค
     t = re.sub(r'\n+', ', ', t)

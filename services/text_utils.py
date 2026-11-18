@@ -71,3 +71,13 @@ def detect_message_language(text, fallback_lang='th'):
     elif has_english:
         return 'en'
     return fallback_lang
+
+
+def spoken_text_of(entry):
+    """
+    ข้อความที่น้องเพชรพูดสำหรับหัวข้อในฐานความรู้:
+    ใช้บทพูดสั้น (speech) ถ้ามี ไม่งั้นใช้คำตอบเต็ม (answer) ที่แสดงบนหน้าจอ
+    """
+    if not entry:
+        return ''
+    return (entry.get('speech') or '').strip() or (entry.get('answer') or '').strip()

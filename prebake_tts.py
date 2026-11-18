@@ -38,6 +38,7 @@ from services import tts_service  # noqa: E402
 from services.azure_speech import azure_enabled  # noqa: E402
 from services.voice_server_client import omnivoice_enabled  # noqa: E402
 from services.tts_service import NO_VOICE_PHRASES, FILLER_PHRASES  # noqa: E402
+from services.text_utils import spoken_text_of  # noqa: E402
 from services.tts_service import (  # noqa: E402
     clean_text_for_speech, generate_speech, save_cached_tts, voice_profile,
     speech_cache_key, audit_audio_cache, is_canonical_voice_audio, prepare_speech_input,
@@ -104,8 +105,9 @@ def collect_items():
         with open(KNOWLEDGE_BASE_FILE, encoding='utf-8') as f:
             kb = json.load(f)
         for entry in kb.get('entries', []):
-            if entry.get('answer'):
-                items.append(('th', f"KB:{entry.get('id')}", entry['answer']))
+            spoken = spoken_text_of(entry)   # บทพูดสั้น (speech) หรือคำตอบเต็มถ้ายังไม่มีบทพูด
+            if spoken:
+                items.append(('th', f"KB:{entry.get('id')}", spoken))
     except Exception as e:
         print(f"⚠️ อ่านฐานความรู้ไม่ได้: {e}")
     items += [('th', 'filler', t) for t in FILLER_PHRASES]

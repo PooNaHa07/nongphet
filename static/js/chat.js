@@ -138,7 +138,7 @@ async function sendChatMessage(forcedLang = null) {
                         stopRecognitionSafe();
                     }
 
-                    playTTS(data.reply, null, () => {
+                    playTTS(data.speech || data.reply, null, () => {
                         // เมื่อเสียงเล่นจบสมบูรณ์ (Audio onended + buffer delay)
                         isWaitingChatResponse = false;
                         if (typeof setEmotion === 'function') {
@@ -324,7 +324,7 @@ function appendChatBubble(sender, text, meta = null) {
         const ttsBtn = document.createElement('button');
         ttsBtn.className = 'hover:text-blue-600 flex items-center gap-1 transition';
         ttsBtn.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-        ttsBtn.onclick = () => playTTS(text, ttsBtn);
+        ttsBtn.onclick = () => playTTS((meta && meta.speech) || text, ttsBtn);
         
         const copyBtn = document.createElement('button');
         copyBtn.className = 'hover:text-blue-600 flex items-center gap-1 transition';
