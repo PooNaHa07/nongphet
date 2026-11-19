@@ -73,8 +73,8 @@ if /i "%TTS_ENGINE%"=="omnivoice" (
 )
 if "%START_VOICE%"=="1" (
     if exist "%~dp0.venv-voice\Scripts\python.exe" (
-        echo [*] Starting OmniVoice voice server ^(Port 8010, โหลดโมเดล ~30 วินาที^)...
-        start "NongPhet Voice Server" /min "%~dp0.venv-voice\Scripts\python.exe" tools\voice_server.py --host 127.0.0.1 --port 8010
+        echo [*] Starting OmniVoice voice server ^(Port 8010 ให้ Pi ในวงแลนเรียกได้ ป้องกันด้วย VOICE_SERVER_TOKEN, โหลดโมเดล ~30 วินาที^)...
+        start "NongPhet Voice Server" /min "%~dp0.venv-voice\Scripts\python.exe" tools\voice_server.py --host 0.0.0.0 --port 8010
     ) else (
         echo [WARN] ไม่พบ .venv-voice: ข้ามเซิร์ฟเวอร์เสียง ระบบจะใช้เสียงที่อัดไว้ล่วงหน้าเท่านั้น
     )
