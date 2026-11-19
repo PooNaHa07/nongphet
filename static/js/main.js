@@ -817,6 +817,14 @@ function splitTextIntoSentences(text, maxSentenceLen = 140) {
     return merged.length > 0 ? merged : [cleaned];
 }
 
+// เซิร์ฟเวอร์เสียงในบูธใช้เวลาขั้นต่ำ ~6 วินาทีต่อคำขอ ไม่ว่าข้อความสั้นแค่ไหน
+// จึงขอเสียงแค่ 2 ท่อน: ประโยคแรก (มักเป็นประโยคที่อัดไว้แล้ว เช่น "น้องเพชรค้นจากเว็บมาให้แล้วค่ะ")
+// กับประโยคที่เหลือรวมกัน แทนการขอทีละประโยค (ข้อความเดิมจะได้ท่อนเดิม เสียงที่สร้างแล้วจึงใช้ซ้ำจากแคชได้)
+function speechChunks(sentences) {
+    if (!sentences || sentences.length <= 2) return sentences || [];
+    return [sentences[0], sentences.slice(1).join(' ')];
+}
+
 // ขอเสียงจาก /tts คืน JSON (หรือ null) — cacheOnly=true ถามแค่ว่ามีเสียงที่อัดเก็บไว้หรือไม่
 async function requestTTS(text, lang, signal, cacheOnly = false) {
     try {
@@ -1090,9 +1098,9 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
             if (!signal.aborted) handlePlaybackFinished();   // ถูกขัดจังหวะ: คำตอบใหม่จัดการสถานะเอง
             return;
         }
-        // 3) ไม่มีเสียงอัดไว้ และมีหลายประโยค: สร้างทีละประโยคแล้วพูดต่อกัน
+        // 3) ไม่มีเสียงอัดไว้ และมีหลายประโยค: ขอเสียงแค่ 2 ท่อน แล้วพูดต่อกัน
         if (sentences.length > 1) {
-            await playSentenceQueue(sentences);
+            await playSentenceQueue(speechChunks(sentences));
             return;
         }
         handlePlaybackFinished();

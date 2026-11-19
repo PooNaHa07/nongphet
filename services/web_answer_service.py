@@ -23,6 +23,7 @@ services/web_answer_service.py — ค้นคำตอบจากเว็บ
     GEMINI_MODELS=gemini-2.5-flash,gemini-2.5-flash-lite   (แต่ละรุ่นมีโควตาฟรีแยกกัน)
     WEB_ANSWER_TIMEOUT=12
     WEB_PREFER_BELOW=0.45              (คะแนน RAG ต่ำกว่านี้ถือว่า "ไม่แน่ใจ" ลองค้นเว็บก่อน)
+    WEB_REPEAT_TTL_HOURS=24            (คำถามเดิมภายในเวลานี้ ตอบจากคำตอบที่บันทึกไว้ทันที ไม่ค้นเว็บซ้ำ; 0 = ปิด)
 """
 import os
 import re
@@ -83,6 +84,11 @@ WEB_NOTE = {
     'zh': ('我在网上查到了。', '🌐 以上信息来自网络，请再次核实。'),
 }
 
+# คำถามที่คำตอบเปลี่ยนตามเวลา (อากาศ วันนี้/พรุ่งนี้ ข่าว) ต้องค้นใหม่ทุกครั้ง ไม่ใช้คำตอบที่บันทึกไว้
+TIME_SENSITIVE = re.compile(
+    r'วันนี้|พรุ่งนี้|เมื่อวาน|ตอนนี้|ขณะนี้|ล่าสุด|ฝน|อากาศ|พยากรณ์|ข่าว|\btoday\b|\btomorrow\b|\btonight\b|\bnow\b|latest|weather|\brain|\bnews\b|今天|明天|现在|天气',
+    re.IGNORECASE)
+
 _lock = threading.Lock()
 _cache = OrderedDict()
 _state = {'cooldown_until': 0.0, 'last_error': None, 'last_ms': None, 'last_model': None,
@@ -111,6 +117,47 @@ def prefer_web_below():
         return float(_env('WEB_PREFER_BELOW', '0.45'))
     except ValueError:
         return 0.45
+
+
+def repeat_ttl_sec():
+    try:
+        return max(0.0, float(_env('WEB_REPEAT_TTL_HOURS', '24'))) * 3600
+    except ValueError:
+        return 24 * 3600.0
+
+
+def _answered_at(item):
+    raw = item.get('answered_at') or item.get('created_at') or ''
+    try:
+        return datetime.datetime.fromisoformat(raw).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def saved_answer(question, lang='th'):
+    """
+    คำตอบจากเว็บที่บันทึกไว้ในคิวรออนุมัติ ของคำถามเดิม (ถามซ้ำ) ที่ยังไม่หมดอายุ
+    ข้อความเดิมทุกตัวอักษร = หน้าจอขอเสียงท่อนเดิม จึงได้เสียงจากแคชทันที ไม่ต้องสร้างใหม่
+    คืน None ถ้าไม่มี, หมดอายุ, เป็นคำถามที่คำตอบเปลี่ยนตามเวลา หรือรายการเก่าที่ไม่มีคำค้นแนะนำของ Google
+    """
+    ttl = repeat_ttl_sec()
+    if not ttl or TIME_SENSITIVE.search(question or ''):
+        return None
+    norm = _normalize(question)
+    with _lock:
+        items = _load_pending()
+    for it in items:
+        if it.get('lang', 'th') != lang or _normalize(it.get('question', '')) != norm:
+            continue
+        # Google กำหนดให้แสดงคำค้นแนะนำคู่กับคำตอบที่ใช้ Google Search ทุกครั้ง: ไม่มีเก็บไว้ = ค้นใหม่
+        if not it.get('search_html') or time.time() - _answered_at(it) > ttl:
+            return None
+        return {
+            'reply': it['reply'], 'speech': it['speech'], 'sources': it.get('sources', []),
+            'grounded': True, 'search_html': it['search_html'], 'model': it.get('model', ''),
+            'repeat': True,
+        }
+    return None
 
 
 def _timeout():
@@ -247,6 +294,15 @@ def answer(question, language='th'):
         if key in _cache:
             _cache.move_to_end(key)
             return dict(_cache[key])
+    saved = saved_answer(question, lang)
+    if saved:
+        with _lock:
+            _cache[key] = dict(saved)
+            if len(_cache) > CACHE_SIZE:
+                _cache.popitem(last=False)
+        add_pending(question, lang, saved)          # นับว่าถามซ้ำอีกครั้ง (ครูเห็นว่าควรเพิ่มเข้าฐานความรู้)
+        logger.info("🌐 [Web] ตอบจากคำตอบที่บันทึกไว้ (ถามซ้ำ ไม่ค้นเว็บใหม่)")
+        return dict(saved)
     if not is_enabled() or time.time() < _state['cooldown_until']:
         return None
 
@@ -356,10 +412,16 @@ def add_pending(question, lang, result):
     with _lock:
         items = _load_pending()
         norm = _normalize(question)
+        now = datetime.datetime.now().isoformat(timespec='seconds')
         for it in items:
             if _normalize(it['question']) == norm:
                 it['count'] = it.get('count', 1) + 1       # ถามซ้ำบ่อย = ควรเพิ่มเข้าฐานความรู้
-                it['last_asked'] = datetime.datetime.now().isoformat(timespec='seconds')
+                it['last_asked'] = now
+                if not result.get('repeat') and it.get('lang', 'th') == lang:
+                    # ค้นเว็บใหม่ (คำตอบเดิมหมดอายุ): เก็บคำตอบล่าสุดไว้ตอบครั้งถัดไป
+                    it.update(reply=result['reply'], speech=result['speech'], sources=result['sources'],
+                              model=result['model'], search_html=result.get('search_html', ''),
+                              answered_at=now)
                 _save_pending(items)
                 return it['id']
         item = {
@@ -370,8 +432,10 @@ def add_pending(question, lang, result):
             'speech': result['speech'],
             'sources': result['sources'],
             'model': result['model'],
+            'search_html': result.get('search_html', ''),
             'count': 1,
-            'created_at': datetime.datetime.now().isoformat(timespec='seconds'),
+            'created_at': now,
+            'answered_at': now,
         }
         items.append(item)
         _save_pending(items)

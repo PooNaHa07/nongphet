@@ -72,6 +72,7 @@ class TestLocalSLM(unittest.TestCase):
         local_slm._models_cache.update(ts=0.0, models=[])
         self._enabled = local_slm.LOCAL_SLM_ENABLED
         self._explicit = local_slm.EXPLICIT_MODEL
+        local_slm.LOCAL_SLM_ENABLED = True   # ทดสอบตอนเปิดใช้ ไม่ขึ้นกับ LOCAL_SLM_ENABLED ใน .env ของเครื่อง
 
     def tearDown(self):
         local_slm.LOCAL_SLM_ENABLED = self._enabled

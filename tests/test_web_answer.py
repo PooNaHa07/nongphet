@@ -242,5 +242,87 @@ class TestApproveFlow(WebCase):
         self.assertEqual(was.list_pending(), [])
 
 
+class TestRepeatQuestions(WebCase):
+    """ถามซ้ำ: ตอบจากคำตอบที่บันทึกไว้ทันที ข้อความเดิมทุกตัวอักษร (หน้าจอจึงได้เสียงจากแคช) ไม่ค้นเว็บใหม่"""
+    Q = 'ตลาดน้ำอัมพวาเปิดวันไหน'
+
+    def _age_pending(self, hours):
+        import datetime, json
+        items = was.list_pending()
+        old = (datetime.datetime.now() - datetime.timedelta(hours=hours)).isoformat(timespec='seconds')
+        for it in items:
+            it['answered_at'] = old
+        with open(was.PENDING_FILE, 'w', encoding='utf-8') as f:
+            json.dump(items, f, ensure_ascii=False)
+
+    def test_repeat_after_restart_served_from_saved_answer(self):
+        self.replies(fake_response())
+        first = was.answer(self.Q)
+        was._cache.clear()                      # จำลองรีสตาร์ทแอป (แคชในหน่วยความจำหาย)
+        again = was.answer('  ' + self.Q + ' ')
+        self.assertEqual(self.calls, ['model-a'])   # เรียก Gemini ครั้งเดียว
+        self.assertEqual(again['reply'], first['reply'])
+        self.assertEqual(again['speech'], first['speech'])
+        self.assertEqual(again['search_html'], '<div>chips</div>')
+        self.assertEqual(again['sources'], first['sources'])
+        self.assertEqual(was.list_pending()[0]['count'], 2)
+
+    def test_expired_answer_is_searched_again_and_refreshed(self):
+        new_text = GOOD_TEXT.replace('ศุกร์ถึงอาทิตย์นะคะ', 'ทุกวันนะคะ')
+        self.replies(fake_response(), fake_response(text=new_text))
+        was.answer(self.Q)
+        was._cache.clear()
+        self._age_pending(25)
+        res = was.answer(self.Q)
+        self.assertEqual(len(self.calls), 2)
+        self.assertIn('ทุกวันนะคะ', res['speech'])
+        was._cache.clear()
+        self.assertIn('ทุกวันนะคะ', was.answer(self.Q)['speech'])   # ครั้งถัดไปใช้คำตอบใหม่
+        self.assertEqual(len(self.calls), 2)
+
+    def test_time_sensitive_questions_always_searched(self):
+        q = 'พรุ่งนี้ที่ชะอำฝนตกไหม'
+        self.replies(fake_response(), fake_response())
+        was.answer(q)
+        was._cache.clear()
+        was.answer(q)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_old_item_without_search_chips_is_searched_again(self):
+        import json
+        self.replies(fake_response(), fake_response())
+        was.answer(self.Q)
+        items = was.list_pending()
+        items[0].pop('search_html')
+        with open(was.PENDING_FILE, 'w', encoding='utf-8') as f:
+            json.dump(items, f, ensure_ascii=False)
+        was._cache.clear()
+        self.assertEqual(was.answer(self.Q)['search_html'], '<div>chips</div>')
+        self.assertEqual(len(self.calls), 2)
+
+    def test_rejected_answer_is_not_reused(self):
+        self.replies(fake_response(), fake_response())
+        was.answer(self.Q)
+        was.pop_pending(was.list_pending()[0]['id'])     # ครูกดไม่อนุมัติ
+        was._cache.clear()
+        was.answer(self.Q)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_ttl_zero_disables_reuse(self):
+        self.replies(fake_response(), fake_response())
+        with mock.patch.dict(os.environ, {'WEB_REPEAT_TTL_HOURS': '0'}):
+            was.answer(self.Q)
+            was._cache.clear()
+            was.answer(self.Q)
+        self.assertEqual(len(self.calls), 2)
+
+
+class TestWebLeadIsBaked(unittest.TestCase):
+    def test_prebake_includes_web_lead_phrases(self):
+        import prebake_tts
+        texts = {t for _, label, t in prebake_tts.collect_items() if label == 'web-lead'}
+        self.assertIn(was.WEB_NOTE['th'][0].strip(), texts)
+
+
 if __name__ == '__main__':
     unittest.main()
