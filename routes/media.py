@@ -18,7 +18,8 @@ from services.tts_service import (
     no_voice_phrase_audio, FILLER_PHRASES
 )
 from services.azure_speech import azure_enabled, azure_status
-from services.voice_server_client import omnivoice_enabled, voice_server_status
+from services.voice_server_client import (omnivoice_enabled, voice_server_status, stt_status,
+                                          transcribe_voice_server, VoiceServerError)
 
 logger = logging.getLogger("nongphet.media")
 
@@ -184,6 +185,36 @@ def tts_stream():
             "Content-Type": "audio/mpeg"
         }
     )
+
+
+MAX_STT_UPLOAD_BYTES = 2 * 1024 * 1024
+
+
+@media_bp.route('/api/stt/status', methods=['GET'])
+def stt_status_route():
+    """หน้าเว็บถามก่อนว่าจะใช้ตัวถอดเสียงในบูธ (Whisper) หรือ Web Speech ของเบราว์เซอร์"""
+    return jsonify(stt_status(refresh=request.args.get('refresh') == '1'))
+
+
+@media_bp.route('/api/stt', methods=['POST'])
+def stt_route():
+    """
+    ถอดเสียงพูดเป็นข้อความ: หน้าเว็บอัดเสียง (WAV 16 kHz) ส่งมาที่ Pi แล้ว Pi ส่งต่อให้เซิร์ฟเวอร์เสียงในบูธ
+    (เบราว์เซอร์ไม่ต้องรู้ที่อยู่/รหัสของเซิร์ฟเวอร์เสียง)
+    """
+    data = request.get_data(cache=False)
+    if not data:
+        return jsonify({'error': 'audio is required'}), 400
+    if len(data) > MAX_STT_UPLOAD_BYTES:
+        return jsonify({'error': 'audio too large'}), 413
+    lang = request.args.get('lang', 'th')
+    lang = lang if lang in ('th', 'en', 'zh') else 'th'
+    try:
+        text = transcribe_voice_server(data, lang)
+    except VoiceServerError as e:
+        logger.warning(f"🎧 [STT] ถอดเสียงไม่ได้: {e}")
+        return jsonify({'error': 'stt_unavailable', 'message': str(e)}), 503
+    return jsonify({'status': 'success', 'text': text, 'lang': lang})
 
 
 @media_bp.route('/api/tts/status', methods=['GET'])

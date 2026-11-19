@@ -1253,8 +1253,10 @@ function parseWakeWord(transcript) {
     return { isWakeWord: false, isWakeOnly: false, query: raw, detectedLang: detectedLang };
 }
 
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+// ใช้ตัวฟังเสียงของน้องเพชร (local_stt.js): Whisper ในบูธถ้ามี ไม่งั้นใช้ Web Speech ของเบราว์เซอร์
+// (Chromium บน Raspberry Pi ใช้ Web Speech ไม่ได้ -> error: network)
+if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.NongPhetSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
     recognition.lang = getRecognitionLang();
     recognition.interimResults = true;

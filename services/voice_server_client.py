@@ -105,3 +105,47 @@ async def synthesize_voice_server(text, timeout=None, purpose='live'):
     else:
         _state['last_error'] = f'HTTP {res.status_code}'
     raise VoiceServerError(f"voice server HTTP {res.status_code}")
+
+
+# ---------------------------------------------------------------------------
+# ถอดเสียงพูดเป็นข้อความ (Whisper ภาษาไทยบนโน้ตบุ๊ก GPU) แทน Web Speech ของ Chromium บน Pi ที่ใช้ไม่ได้
+# ---------------------------------------------------------------------------
+_stt_state = {'available': None, 'checked_at': 0.0, 'last_error': None, 'last_ms': None}
+STT_STATUS_TTL_SEC = 30.0
+
+
+def stt_status(refresh=False):
+    """มีตัวถอดเสียงบนเซิร์ฟเวอร์เสียงหรือไม่ (จำผลไว้ 30 วินาที ไม่ยิงถามทุกครั้ง)"""
+    url = _url()
+    now = time.time()
+    if url and (refresh or _stt_state['available'] is None or now - _stt_state['checked_at'] > STT_STATUS_TTL_SEC):
+        try:
+            res = httpx.get(f'{url}/health', timeout=3.0)
+            _stt_state['available'] = bool(res.status_code == 200 and res.json().get('stt'))
+            _stt_state['last_error'] = None if _stt_state['available'] else 'stt not enabled on voice server'
+        except (httpx.HTTPError, ValueError) as e:
+            _stt_state['available'] = False
+            _stt_state['last_error'] = f'network error: {type(e).__name__}'
+        _stt_state['checked_at'] = now
+    return {'available': bool(url) and bool(_stt_state['available']), 'url': url or None,
+            'last_error': _stt_state['last_error'], 'last_ms': _stt_state['last_ms']}
+
+
+def transcribe_voice_server(wav_bytes, lang='th', timeout=20.0):
+    """ส่งเสียง WAV ไปถอดความที่เซิร์ฟเวอร์เสียง คืนข้อความ หรือ raise VoiceServerError"""
+    url = _url()
+    if not url:
+        raise VoiceServerError('VOICE_SERVER_URL not set')
+    try:
+        res = httpx.post(f'{url}/transcribe', params={'lang': lang}, content=wav_bytes, timeout=timeout,
+                         headers={'X-Voice-Token': os.environ.get('VOICE_SERVER_TOKEN', ''),
+                                  'Content-Type': 'audio/wav'})
+    except httpx.HTTPError as e:
+        _stt_state.update(available=False, checked_at=time.time(), last_error=f'network error: {type(e).__name__}')
+        raise VoiceServerError(_stt_state['last_error']) from e
+    if res.status_code == 200:
+        data = res.json()
+        _stt_state.update(available=True, checked_at=time.time(), last_error=None, last_ms=data.get('ms'))
+        return (data.get('text') or '').strip()
+    _stt_state['last_error'] = 'unauthorized: ตรวจ VOICE_SERVER_TOKEN' if res.status_code == 403 else f'HTTP {res.status_code}'
+    raise VoiceServerError(f"transcribe HTTP {res.status_code}")

@@ -2126,8 +2126,8 @@ function initDirectVoiceEngine() {
         console.log('🔇 [Audio Arbitration] ปิดไมค์จอใบหน้าตาม URL Slave parameter');
         return;
     }
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRec = window.NongPhetSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
         emotionRecognition = new SpeechRec();
         emotionRecognition.lang = 'th-TH';
         emotionRecognition.interimResults = true;
