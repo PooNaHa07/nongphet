@@ -36,6 +36,103 @@ function sendQuickMessage(text) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// คำสั่งเสียง: ประโยคสั้นๆ เช่น "เปิดหน้าที่เที่ยว" "หยุดพูด" "ยิ้มหน่อย" ทำทันที ไม่ส่งเข้าแชต
+// (เซิร์ฟเวอร์ตัดสินว่าเป็นคำสั่งหรือไม่: services/voice_command_service.py)
+// -----------------------------------------------------------------------------
+let lastAnswerSpeech = null;   // {text, lang} คำตอบล่าสุด สำหรับคำสั่ง "พูดอีกครั้ง"
+const VOICE_COMMAND_MAX_CHARS = 60;
+
+async function tryVoiceCommand(text) {
+    if (!text || text.length > VOICE_COMMAND_MAX_CHARS) return false;
+    let cmd = null;
+    try {
+        const res = await fetch('/api/voice/command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        cmd = (await res.json()).command;
+    } catch (e) {
+        return false;            // เช็กไม่ได้: ส่งเข้าแชตตามปกติ
+    }
+    if (!cmd) return false;
+    applyVoiceCommand(cmd);
+    return true;
+}
+
+function resumeListeningAfterCommand() {
+    if (typeof isRealtimeVoiceActive === 'undefined' || !isRealtimeVoiceActive) return;
+    if (typeof setEmotion === 'function') setEmotion('listening');
+    if (typeof setRealtimeVoiceStatus === 'function') {
+        setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยไม่ต้องกดปุ่ม)');
+    }
+    if (typeof startRecognitionSafe === 'function') setTimeout(() => startRecognitionSafe(), 250);
+}
+
+function speakCommandReply(text, lang) {
+    const shouldSpeak = (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) || (typeof autoSpeak !== 'undefined' && autoSpeak);
+    if (!text || !shouldSpeak || typeof playTTS !== 'function') {
+        resumeListeningAfterCommand();
+        return;
+    }
+    if (typeof stopRecognitionSafe === 'function') stopRecognitionSafe();
+    playTTS(text, null, () => resumeListeningAfterCommand(), lang || 'th');
+}
+
+function showVoiceCommandHelp(groups) {
+    if (!groups || !groups.length || typeof showAppToast !== 'function') return;
+    const lines = groups.map(g => `${g.group}: ${g.examples.map(x => `"${x}"`).join(' ')}`);
+    showAppToast('🎙️ ลองพูดว่า<br>' + lines.join('<br>'), 'info', 10000);   // ข้อความคงที่จากเซิร์ฟเวอร์
+}
+
+function closeAllModals() {
+    ['closeQrModal', 'closeTripPlannerModal', 'closeMatcherModal', 'closeContactModal', 'closeExploreModal']
+        .forEach(fn => { try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {} });
+}
+
+function applyVoiceCommand(cmd) {
+    const ui = cmd.ui || {};
+    if (typeof stopAllSpeech === 'function') stopAllSpeech();   // คำสั่งใหม่ตัดเสียงที่พูดค้างอยู่เสมอ
+    isWaitingChatResponse = false;
+
+    if (ui.speech === 'stop') {
+        resumeListeningAfterCommand();
+        return;
+    }
+    if (ui.speech === 'repeat') {
+        if (lastAnswerSpeech) {
+            speakCommandReply(lastAnswerSpeech.text, lastAnswerSpeech.lang);
+        } else {
+            if (typeof showAppToast === 'function') showAppToast('ยังไม่มีคำตอบให้พูดซ้ำค่ะ', 'info');
+            resumeListeningAfterCommand();
+        }
+        return;
+    }
+    if (ui.navigate && typeof navigateTo === 'function') navigateTo(ui.navigate);
+    if (ui.modal === 'qr' && typeof openQrModal === 'function') openQrModal();
+    if (ui.modal === 'close') closeAllModals();
+    if (ui.language && typeof changeLanguage === 'function') changeLanguage(ui.language);
+    let note = '';
+    if (typeof ui.volume === 'number' && typeof setKioskVolume === 'function') {
+        const before = kioskVolume;
+        const after = setKioskVolume(kioskVolume + ui.volume);
+        if (after === before) note = after >= 1.0 ? ' (ดังสุดแล้ว)' : ' (เบาสุดแล้ว)';
+        else note = ` (${Math.round(after * 100)}%)`;
+    }
+    if (ui.help) showVoiceCommandHelp(cmd.help);
+    if (cmd.emotion && typeof setEmotion === 'function') {
+        setEmotion(cmd.emotion);
+        setTimeout(() => { if (!isSpeakingTTS && !isWaitingChatResponse) setEmotion('idle'); }, 4000);
+    }
+    if (cmd.reply) {
+        if (typeof showAppToast === 'function' && !ui.help) showAppToast(cmd.reply + note, 'success');
+        speakCommandReply(cmd.reply, cmd.lang);
+    } else {
+        resumeListeningAfterCommand();
+    }
+}
+
 async function sendChatMessage(forcedLang = null) {
     const chatInput = document.getElementById('chatInput');
     const chatBox = document.getElementById('chatBox');
@@ -44,6 +141,12 @@ async function sendChatMessage(forcedLang = null) {
     if (!chatInput) return;
     const text = chatInput.value.trim();
     if (!text) return;
+
+    // คำสั่งเสียง (เปิดหน้า หยุดพูด ยิ้ม ...) ทำทันที ไม่เข้าแชต ไม่เล่นเสียงคั่นเวลา
+    if (await tryVoiceCommand(text)) {
+        chatInput.value = '';
+        return;
+    }
 
     if (typeof evaluateSpeechQuality === 'function') {
         const quality = evaluateSpeechQuality(text);
@@ -117,6 +220,7 @@ async function sendChatMessage(forcedLang = null) {
 
         if (data.reply) {
             appendChatBubble('ai', data.reply, data);
+            lastAnswerSpeech = { text: data.speech || data.reply, lang: data.language || forcedLang || currentLang || 'th' };
             
             // ปรับภาษาตามที่ระบบตรวจจับได้
             const replyLang = data.language || forcedLang || currentLang || 'th';

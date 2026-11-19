@@ -41,6 +41,7 @@ from services.tts_service import NO_VOICE_PHRASES, FILLER_PHRASES  # noqa: E402
 from services.text_utils import spoken_text_of  # noqa: E402
 from semantic_retriever import answer_variants_of  # noqa: E402
 from services.web_answer_service import WEB_NOTE  # noqa: E402
+from services.voice_command_service import COMMAND_PHRASES  # noqa: E402
 from services.tts_service import (  # noqa: E402
     clean_text_for_speech, generate_speech, save_cached_tts, voice_profile,
     speech_cache_key, audit_audio_cache, is_canonical_voice_audio, prepare_speech_input,
@@ -118,6 +119,8 @@ def collect_items():
     items += [('th', 'filler', t) for t in FILLER_PHRASES]
     # ประโยคนำของคำตอบจากเว็บ ("น้องเพชรค้นจากเว็บมาให้แล้วค่ะ") หน้าจอขอเป็นท่อนแรกแยก: อัดไว้ให้พูดได้ทันที
     items += [(lang, 'web-lead', lead.strip()) for lang, (lead, _) in WEB_NOTE.items() if lead.strip()]
+    # ประโยคตอบรับคำสั่งเสียง ("เปิดหน้าสถานที่ท่องเที่ยวให้แล้วค่ะ" ...) ต้องพูดได้ทันที
+    items += [('th', 'command', t) for t in COMMAND_PHRASES]
     items += [('th', 'phrase', t) for t in THAI_PHRASES]
     items += [('en', 'phrase', t) for t in ENGLISH_PHRASES]
     items += [('zh', 'phrase', t) for t in CHINESE_PHRASES]

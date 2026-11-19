@@ -126,7 +126,7 @@ function playInstantFiller(onEndedCallback) {
 
         const audio = new Audio();
         window.currentFillerAudio = audio;
-        audio.volume = 1.0;
+        audio.volume = kioskVolume;
 
         let hasEnded = false;
         const finishFiller = () => {
@@ -269,6 +269,15 @@ window.showAppToast = showAppToast;
 let currentVisionIndex = 0;
 let uploadedVisionFile = null;
 let autoSpeak = true;
+// ระดับเสียงของน้องเพชร (คำสั่งเสียง "เสียงดังขึ้น" / "เสียงเบาลง") 0.2 - 1.0
+let kioskVolume = 1.0;
+function setKioskVolume(v) {
+    kioskVolume = Math.round(Math.min(1.0, Math.max(0.2, v)) * 10) / 10;
+    const p = document.getElementById('audioPlayer');
+    if (p) p.volume = kioskVolume;
+    if (window.currentFillerAudio) window.currentFillerAudio.volume = kioskVolume;
+    return kioskVolume;
+}
 let currentLang = 'th';
 let currentVoiceGender = 'female'; // 'female' (Premwadee - Default Female Voice)
 let isSpeakingTTS = false;
@@ -927,7 +936,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
     if (clientAudioCache.has(cacheKey)) {
         const cachedUri = clientAudioCache.get(cacheKey);
         audioPlayer.src = cachedUri;
-        audioPlayer.volume = 1.0;
+        audioPlayer.volume = kioskVolume;
         audioPlayer.muted = false;
         audioPlayer.onended = handlePlaybackFinished;
         audioPlayer.onerror = handlePlaybackFinished;
@@ -1000,7 +1009,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
         const finish = (v) => { signal.removeEventListener('abort', onAbort); resolve(v); };
         signal.addEventListener('abort', onAbort);
         audioPlayer.src = uri;
-        audioPlayer.volume = 1.0;
+        audioPlayer.volume = kioskVolume;
         audioPlayer.muted = false;
         audioPlayer.onended = () => finish(true);
         audioPlayer.onerror = () => finish(true);

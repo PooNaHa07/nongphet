@@ -317,6 +317,36 @@ def chat():
         base_emotion=target_emotion
     )
 
+@chat_bp.route('/api/voice/command', methods=['POST'])
+def voice_command():
+    """
+    คำสั่งเสียง/พิมพ์สั้นๆ (เปิดหน้า หยุดพูด ยิ้ม โบกมือ กี่โมง ...) ตรวจก่อนส่งเข้าแชต ทำงานในเครื่องทันที
+    คืน {'command': {...}} หรือ {'command': None} ถ้าไม่ใช่คำสั่ง (หน้าจอส่งต่อให้ /chat ตอบตามปกติ)
+    """
+    from services import voice_command_service
+    data = request.json or {}
+    cmd = voice_command_service.parse(data.get('text', ''))
+    if not cmd:
+        return jsonify({'status': 'success', 'command': None})
+    if cmd.get('gesture'):
+        try:
+            from services import arm_service
+            cmd['arm'] = arm_service.trigger_gesture(cmd['gesture'], source='voice_command', force=True).get('status')
+        except Exception as e:
+            logger.debug(f"Voice command arm note: {e}")
+    if cmd['ui'].get('help'):
+        cmd['help'] = voice_command_service.help_list()
+    logger.info(f"🎙️ [Voice Command] {cmd['name']} <- {data.get('text', '')!r}")
+    return jsonify({'status': 'success', 'command': cmd})
+
+
+@chat_bp.route('/api/voice/commands', methods=['GET'])
+def voice_command_list():
+    """ตัวอย่างคำสั่งเสียงสำหรับการ์ด "ลองพูดว่า..." """
+    from services import voice_command_service
+    return jsonify({'status': 'success', 'groups': voice_command_service.help_list()})
+
+
 @chat_bp.route('/plan_trip', methods=['POST'])
 def plan_trip():
     data = request.json or {}
