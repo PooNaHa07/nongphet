@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import re
+import random
 import numpy as np
 from typing import Optional, Dict, Any, List
 
@@ -88,6 +89,20 @@ def expand_query_with_synonyms(query: str) -> str:
     if not extra_terms:
         return query
     return f"{query} " + " ".join(extra_terms)
+
+
+def answer_variants_of(entry: Dict[str, Any]) -> List[Dict[str, str]]:
+    """คำตอบทั้งหมดของหัวข้อ: คำตอบหลัก (answer/speech) + answer_variants [{answer, speech}]"""
+    variants = [{"answer": entry.get("answer", ""), "speech": entry.get("speech", "")}]
+    for v in entry.get("answer_variants") or []:
+        if isinstance(v, dict) and (v.get("answer") or "").strip():
+            variants.append({"answer": v["answer"], "speech": v.get("speech", "")})
+    return variants
+
+
+def pick_answer_variant(entry: Dict[str, Any]) -> Dict[str, str]:
+    """สุ่ม 1 คำตอบ (ทุกแบบมีเสียงอัดล่วงหน้าแยกกัน ดู prebake_tts.collect_items)"""
+    return random.choice(answer_variants_of(entry))
 
 
 class SemanticRetriever:
@@ -302,7 +317,9 @@ class SemanticRetriever:
                 return None
 
             matched_entry = self.entries[best_idx]
-            answer_text = matched_entry.get("answer", "")
+            # สุ่มคำตอบจากคำตอบหลัก + answer_variants (ถ้ามี) เพื่อไม่ให้น้องเพชรตอบซ้ำเดิมทุกครั้ง
+            variant = pick_answer_variant(matched_entry)
+            answer_text = variant.get("answer", "")
             suggestions = matched_entry.get("suggestions", [])
             full_reply = answer_text
 
@@ -311,7 +328,7 @@ class SemanticRetriever:
                 "intent": matched_entry.get("intent"),
                 "title": matched_entry.get("title"),
                 "reply": full_reply,
-                "speech": (matched_entry.get("speech") or "").strip() or None,
+                "speech": (variant.get("speech") or "").strip() or None,
                 "suggestions": suggestions,
                 "score": round(best_score, 4),
                 "source": "semantic_rag",

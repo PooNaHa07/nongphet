@@ -43,11 +43,30 @@ class TestSpeechScripts(unittest.TestCase):
             self.assertTrue(speech.endswith(('ค่ะ', 'นะคะ')), entry['id'])
             self.assertNotIn('ครับ', speech, entry['id'])
 
+    def test_every_answer_variant_has_short_polite_speech(self):
+        for entry in kb_manager.list_entries():
+            for n, variant in enumerate(entry.get('answer_variants') or []):
+                label = f"{entry['id']}#{n + 1}"
+                self.assertTrue((variant.get('answer') or '').strip(), label)
+                speech = variant.get('speech', '')
+                self.assertTrue(speech, label)
+                self.assertLessEqual(len(speech), 200, label)
+                self.assertTrue(speech.endswith(('ค่ะ', 'นะคะ')), label)
+                self.assertNotIn('ครับ', speech, label)
+
     def test_pronunciation_fix_het(self):
         from services.tts_service import clean_text_for_speech, prepare_speech_input
         clean = lambda s: clean_text_for_speech(prepare_speech_input(s), max_len=2500, voice_gender='female', lang='th')
         self.assertIn('เหดด่วนเหดร้าย', clean('เหตุด่วนเหตุร้ายโทรหนึ่งเก้าหนึ่งค่ะ'))
         self.assertIn('เหตุการณ์', clean('เหตุการณ์นี้ค่ะ'))
+
+    def test_pronunciation_fix_quota_and_palm(self):
+        from services.tts_service import clean_text_for_speech, prepare_speech_input
+        clean = lambda s: clean_text_for_speech(prepare_speech_input(s), max_len=2500, voice_gender='female', lang='th')
+        self.assertIn('โคว ต้า', clean('มีรอบโควตาค่ะ'))
+        self.assertIn('โคว ต้า', clean('มีรอบโควต้าค่ะ'))
+        self.assertIn('ตะโหนด', clean('น้ำตาลโตนดหอมมากค่ะ'))
+        self.assertNotIn('โตนด', clean('ดงตาลโตนดค่ะ'))
 
     def test_no_doubled_level_word(self):
         from services.tts_service import clean_text_for_speech, prepare_speech_input
@@ -107,6 +126,12 @@ class TestSpeechThroughSystem(unittest.TestCase):
         self.assertEqual(len(baked), len(expected))
         others = {prebake_tts.plan_item(l, t)[0] for l, _, t in prebake_tts.collect_items() if l != 'th'}
         self.assertFalse(others & set(baked))   # ไม่มีประโยคอังกฤษ/จีนหลุดเข้ามา
+
+    def test_prebake_bakes_every_answer_variant(self):
+        texts = {label: text for lang, label, text in prebake_tts.collect_items()}
+        for entry in kb_manager.list_entries():
+            for n, variant in enumerate(entry.get('answer_variants') or []):
+                self.assertEqual(texts.get(f"KB:{entry['id']}#{n + 1}"), variant['speech'])
 
     def test_prebake_bakes_speech_not_full_answer(self):
         texts = {label: text for lang, label, text in prebake_tts.collect_items()}
