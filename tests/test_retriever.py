@@ -75,6 +75,40 @@ class TestAnswerVariants(unittest.TestCase):
             self.assertIn((m['reply'], m['speech']), pairs)
 
 
+class TestUnknownPlace(unittest.TestCase):
+    """ชื่อสถานที่ที่ไม่มีในฐานความรู้ ต้องไม่ถูกตอบด้วยหัวข้อของสถานที่อื่นที่ชื่อคล้ายกัน"""
+
+    def test_unknown_places_are_flagged(self):
+        r = get_semantic_retriever()
+        for q in ['วัดเขาตะเครามีอะไรน่าสนใจ', 'ตลาดน้ำอัมพวาเปิดวันไหนบ้าง', 'วัดคงคารามมีอะไร', 'ร้านส้มตำอร่อยในเพชรบุรี']:
+            m = r.retrieve(q, intent='travel')
+            if m:
+                self.assertTrue(m['unknown_place'], q)
+
+    def test_known_places_and_generic_words_are_not_flagged(self):
+        r = get_semantic_retriever()
+        for q in ['วัดเขาบันไดอิฐอยู่ที่ไหน', 'ขึ้นเขาวังต้องเดินไหม', 'วัดสวยๆในเมืองเพชร', 'หาดเจ้าสำราญไปยังไง',
+                  'ถ้ำเขาหลวงเปิดกี่โมง', 'ตลาดน้ำท่ายางเปิดวันไหน', 'หาดไหนดี', 'ร้านอร่อยในเพชรบุรี']:
+            m = r.retrieve(q, intent='travel')
+            self.assertIsNotNone(m, q)
+            self.assertIsNone(m['unknown_place'], q)
+
+    def test_no_false_flags_on_kb_questions(self):
+        r = get_semantic_retriever()
+        flagged = [q for e in r.entries for q in e['questions']
+                   if (m := r.retrieve(q)) and m['unknown_place']]
+        self.assertEqual(flagged, [])
+
+    def test_chat_does_not_answer_another_place_when_web_is_off(self):
+        from unittest import mock
+        from app_new import app
+        with mock.patch('local_slm.is_ollama_running', return_value=False):
+            data = app.test_client().post('/chat', json={'message': 'วัดเขาตะเครามีอะไรน่าสนใจ', 'language': 'th'}).get_json()
+        self.assertEqual(data['engine'], 'unknown_place')
+        self.assertNotIn('บันไดอิฐ', data['reply'])
+        self.assertTrue(data['speech'].endswith(('ค่ะ', 'นะคะ')))
+
+
 class TestNewFaqTopics(unittest.TestCase):
     CASES = [
         ('ขอบคุณนะ', 'kiosk_thanks_001'),

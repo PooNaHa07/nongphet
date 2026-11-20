@@ -404,12 +404,19 @@ class VoiceUnavailable(RuntimeError):
 # ประโยคกลางที่อัดเสียงไว้เสมอ (prebake_tts.py): ใช้พูดแทนเมื่อคำตอบนั้นยังไม่มีเสียง
 # หุ่นจึงไม่เงียบและไม่สลับไปใช้เสียงคนอื่น ส่วนคำตอบเต็มยังแสดงบนจอตามปกติ
 # ประโยคคั่นเวลาตอนรอคำตอบ (ต้องอัดเก็บไว้ก่อน: โหมด OmniVoice ไม่สร้างสด)
+# หน้าจอเล่นประโยค "กำลังคิด" เมื่อคำตอบช้ากว่า ~0.7 วินาที (คำตอบจากฐานความรู้มาทันที ไม่ต้องเล่น)
 FILLER_PHRASES = [
-    "ได้เลยค่าา แป๊บนึงน้าา",
-    "อื้อหืออ เรื่องนี้นะคะ สักครู่น้าา",
-    "อ๋ออ ได้เลยค่ะ เดี๋ยวค้นให้นะคะ",
-    "รับทราบเลยค่าา รอแป๊บนึงน้าา",
-    "สักครู่นะคะ น้องเพชรเตรียมข้อมูลให้เดี๋ยวนี้เลยค่าา"
+    "ขอน้องเพชรคิดแป๊บนึงนะคะ",
+    "อืม คำถามดีเลยค่ะ ขอนึกก่อนนะคะ",
+    "รอสักครู่นะคะ น้องเพชรกำลังคิดอยู่ค่ะ",
+    "เดี๋ยวน้องเพชรหาคำตอบให้นะคะ",
+    "แป๊บนึงนะคะ กำลังเรียบเรียงคำตอบให้ค่ะ",
+]
+# รอนานกว่า ~5 วินาที (เช่น กำลังค้นเว็บ): บอกว่ายังทำงานอยู่ ไม่ได้ค้าง
+LONG_WAIT_PHRASES = [
+    "ขอเวลาอีกนิดนะคะ น้องเพชรกำลังค้นข้อมูลให้อยู่ค่ะ",
+    "ใกล้ได้แล้วค่ะ รออีกนิดเดียวนะคะ",
+    "เรื่องนี้ต้องค้นเพิ่มนิดนึงค่ะ ขอบคุณที่รอนะคะ",
 ]
 
 
@@ -655,6 +662,19 @@ def run_coroutine(coro, timeout=12.0):
     return tts_worker.run(coro, timeout=timeout)
 
 
+_baking_keys = set()
+_baking_lock = threading.Lock()
+
+
+def is_text_baked(text, lang='th'):
+    """มีเสียงของข้อความนี้ (ทั้งก้อน) อัดเก็บไว้แล้วหรือยัง (คีย์เดียวกับที่ /tts ใช้)"""
+    if not text or not text.strip():
+        return False
+    voice, pitch, rate = voice_profile(lang)
+    clean = clean_text_for_speech(prepare_speech_input(text), max_len=2500, voice_gender='female', lang=lang)
+    return bool(get_cached_tts(speech_cache_key(clean, voice, pitch, rate))[0])
+
+
 def bake_text_in_background(text, lang='th'):
     """
     อัดเสียงข้อความหนึ่งเก็บลงแคชแบบเบื้องหลัง (เช่น คำตอบใหม่ที่เพิ่งเพิ่มในฐานความรู้)
@@ -667,16 +687,25 @@ def bake_text_in_background(text, lang='th'):
     clean = clean_text_for_speech(prepare_speech_input(text), max_len=2500, voice_gender='female', lang=lang)
     key = speech_cache_key(clean, voice, pitch, rate)
 
+    # ข้อความเดียวกันกำลังอัดอยู่แล้ว (เช่น มีคนถามซ้ำติดกัน): ไม่ต้องอัดซ้ำ
+    with _baking_lock:
+        if key in _baking_keys:
+            return None
+        _baking_keys.add(key)
+
     def _work():
-        if get_cached_tts(key)[0]:
-            return
         try:
+            if get_cached_tts(key)[0]:
+                return
             audio = run_coroutine(generate_speech(clean, voice=voice, rate=rate, pitch=pitch, purpose='bake'),
                                   timeout=edge_wait_budget(clean) * 4)
             save_cached_tts(key, audio)
             logger.info(f"🎙️ [Voice Bake] อัดเสียงคำตอบใหม่แล้ว ({len(clean)} ตัวอักษร)")
         except Exception as e:
             logger.warning(f"🎙️ [Voice Bake] อัดเสียงคำตอบใหม่ไม่สำเร็จ ({e}) ระบบจะพูดประโยคกลางแทนจนกว่าจะอัดได้")
+        finally:
+            with _baking_lock:
+                _baking_keys.discard(key)
 
     t = threading.Thread(target=_work, daemon=True, name='VoiceBake')
     t.start()

@@ -189,21 +189,35 @@ async function sendChatMessage(forcedLang = null) {
         localStorage.setItem('nongphet_session_id', sessionId);
     }
 
-    // Zero-Perceived Latency: เล่นเสียง Filler ทันที (<100ms จาก Cache) คั่นเวลาระหว่างรอ AI สังเคราะห์
+    // ประโยค "กำลังคิด" (อัดไว้แล้ว เล่นทันที) เฉพาะตอนคำตอบช้า:
+    //   - คำตอบจากฐานความรู้มาภายใน THINK_DELAY_MS: ไม่ต้องเล่น พูดคำตอบเลย
+    //   - ช้ากว่านั้น: "ขอน้องเพชรคิดแป๊บนึงนะคะ"
+    //   - ยังรออยู่ถึง LONG_WAIT_MS (เช่น ค้นเว็บ): "ขอเวลาอีกนิดนะคะ น้องเพชรกำลังค้นข้อมูลให้อยู่ค่ะ"
+    const THINK_DELAY_MS = 700;
+    const LONG_WAIT_MS = 5000;
     let pendingMainSpeech = null;
     let fillerAudio = null;
+    const fillerTimers = [];
     const shouldSpeakCheck = (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) || (typeof autoSpeak !== 'undefined' && autoSpeak);
+    const onFillerEnded = () => {
+        if (pendingMainSpeech) {
+            const speakFn = pendingMainSpeech;
+            pendingMainSpeech = null;
+            speakFn();
+        } else if (isWaitingChatResponse) {
+            if (typeof setEmotion === 'function') setEmotion('thinking');
+        }
+    };
+    const fillerPlaying = () => fillerAudio && !fillerAudio.paused && !fillerAudio.ended;
     if (shouldSpeakCheck && typeof playInstantFiller === 'function') {
-        fillerAudio = playInstantFiller(() => {
-            if (pendingMainSpeech) {
-                const speakFn = pendingMainSpeech;
-                pendingMainSpeech = null;
-                speakFn();
-            } else if (isWaitingChatResponse) {
-                if (typeof setEmotion === 'function') setEmotion('thinking');
-            }
-        });
+        fillerTimers.push(setTimeout(() => {
+            if (isWaitingChatResponse && !fillerPlaying()) fillerAudio = playInstantFiller(onFillerEnded, 'think');
+        }, THINK_DELAY_MS));
+        fillerTimers.push(setTimeout(() => {
+            if (isWaitingChatResponse && !fillerPlaying()) fillerAudio = playInstantFiller(onFillerEnded, 'long');
+        }, LONG_WAIT_MS));
     }
+    const cancelFillerTimers = () => { while (fillerTimers.length) clearTimeout(fillerTimers.pop()); };
 
     try {
         const response = await fetch('/chat', {
@@ -216,6 +230,7 @@ async function sendChatMessage(forcedLang = null) {
             })
         });
         const data = await response.json();
+        cancelFillerTimers();      // ได้คำตอบแล้ว: ไม่ต้องเล่นประโยคกำลังคิดที่ยังไม่ถึงเวลา
         if (typingIndicator) typingIndicator.classList.add('hidden');
 
         if (data.reply) {
@@ -312,6 +327,7 @@ async function sendChatMessage(forcedLang = null) {
         }
     } catch (error) {
         pendingMainSpeech = null;
+        cancelFillerTimers();
         if (fillerAudio) {
             try { fillerAudio.pause(); fillerAudio.currentTime = 0; } catch (fe) {}
         }
@@ -457,7 +473,8 @@ function appendChatBubble(sender, text, meta = null) {
         const ttsBtn = document.createElement('button');
         ttsBtn.className = 'hover:text-blue-600 flex items-center gap-1 transition';
         ttsBtn.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-        ttsBtn.onclick = () => playTTS((meta && meta.speech) || text, ttsBtn);
+        // คำตอบจากเว็บพูดแค่ประโยคสั้น: ปุ่มนี้เล่นสรุปเต็ม (speech_full)
+        ttsBtn.onclick = () => playTTS((meta && (meta.speech_full || meta.speech)) || text, ttsBtn);
         
         const copyBtn = document.createElement('button');
         copyBtn.className = 'hover:text-blue-600 flex items-center gap-1 transition';

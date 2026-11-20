@@ -12,7 +12,7 @@ from intent_classifier import NongPhetIntentClassifier
 from services.text_utils import extract_suggestions, detect_message_language
 from services import web_answer_service
 from services.knowledge_service import (
-    semantic_retriever, match_local_knowledge, get_local_knowledge_reply
+    semantic_retriever, match_local_knowledge, get_local_knowledge_reply, cant_answer_reply
 )
 from services.analytics_service import record_interaction
 from services.arm_service import extract_gesture_tag
@@ -134,6 +134,7 @@ def _try_web_answer(user_message, detected_intent, intent_th, confidence, langua
     if not web:
         return None
     record_interaction(user_message, detected_intent, confidence, 'web_search', language)
+    full_speech, spoken = _web_spoken_text(web, language)
     return send_chat_response(
         user_message=user_message,
         reply_text=web['reply'],
@@ -145,9 +146,31 @@ def _try_web_answer(user_message, detected_intent, intent_th, confidence, langua
         source=f"web_search:{web['model']}",
         language=language,
         base_emotion='happy',
-        speech=web['speech'],
-        extra={'sources': web['sources'], 'search_html': web['search_html']}
+        speech=spoken,
+        extra={'sources': web['sources'], 'search_html': web['search_html'], 'speech_full': full_speech}
     )
+
+
+def _web_spoken_text(web, language):
+    """
+    เลือกบทพูดของคำตอบจากเว็บ คืน (บทพูดสรุปเต็ม, บทพูดที่จะพูดตอนนี้)
+    - มีเสียงสรุปเต็มอัดไว้แล้ว: พูดสรุปเต็ม (ทันที)
+    - ยังไม่มี (โหมด short): พูดประโยคสั้นที่อัดไว้แล้ว ให้อ่านรายละเอียดบนจอ / กด "ฟังเสียง" ฟังสรุปเต็ม
+    - คำถามซ้ำ (คำตอบตายตัวที่บันทึกไว้): อัดเสียงสรุปเต็มเบื้องหลัง ครั้งหน้าจะพูดสรุปเต็มได้ทันที
+    """
+    full = web.get('speech') or ''
+    if not web.get('grounded') or web_answer_service.speech_mode() == 'full':
+        return full, full
+    lang = language if language in web_answer_service.WEB_SCREEN_SPEECH else 'th'
+    try:
+        from services import tts_service
+        if tts_service.is_text_baked(full, lang):
+            return full, full
+        if web.get('repeat'):
+            tts_service.bake_text_in_background(full, lang)
+    except Exception as e:
+        logger.debug(f"Web speech bake note: {e}")
+    return full, web_answer_service.WEB_SCREEN_SPEECH[lang]
 
 
 @chat_bp.route('/chat', methods=['POST'])
@@ -216,10 +239,30 @@ def chat():
             context_entry_id=last_topic_id
         )
         # คะแนน RAG ต่ำ = ไม่แน่ใจว่าตรงหัวข้อ (เช่น ถามสถานที่ที่ไม่มีในฐานความรู้) -> ลองค้นเว็บก่อน
-        if rag_match and rag_match['score'] < web_answer_service.prefer_web_below():
+        # ถามชื่อสถานที่ที่ไม่มีในหัวข้อที่จับได้ ("วัดเขาตะเครา" จับได้ "วัดเขาบันไดอิฐ") -> ค้นเว็บก่อนเสมอ
+        unknown_place = rag_match.get('unknown_place') if rag_match else None
+        if rag_match and (unknown_place or rag_match['score'] < web_answer_service.prefer_web_below()):
             web_resp = _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion)
             if web_resp is not None:
                 return web_resp
+            if unknown_place:
+                # ค้นเว็บไม่ได้: บอกตรงๆ ว่ายังไม่มีข้อมูล ไม่ตอบเรื่องสถานที่อื่นแทน (ผิดที่)
+                logger.info(f"⚡ [Semantic RAG] ไม่ใช้ [{rag_match['id']}]: ไม่รู้จักสถานที่ '{unknown_place}'")
+                record_interaction(user_message, detected_intent, confidence, 'unknown_place', language)
+                fallback = web_answer_service.UNKNOWN_PLACE_REPLY
+                return send_chat_response(
+                    user_message=user_message,
+                    reply_text=fallback['reply'],
+                    suggestions=fallback['suggestions'],
+                    engine='unknown_place',
+                    detected_intent=detected_intent,
+                    intent_th=intent_th,
+                    confidence=confidence,
+                    source=f"unknown_place:{rag_match['id']}",
+                    language=language,
+                    base_emotion='thinking',
+                    speech=fallback['speech'],
+                )
         if rag_match:
             if len(state.SESSION_LAST_TOPIC) >= state.MAX_SESSION_TOPICS:
                 state.SESSION_LAST_TOPIC.popitem(last=False)
@@ -300,7 +343,28 @@ def chat():
         pass
 
     # 5. Pure Offline Intelligent Knowledge & Semantic RAG Response
-    reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
+    reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent,
+                                           allow_generic=(language != 'th'))
+    if not reply_text:
+        # ตอบไม่ได้จริงๆ: บอกตรงๆ (ไม่ตอบข้อความต้อนรับทั่วไปแทน ไม่เดา) เรื่องวิทยาลัยส่งต่อให้วิทยาลัย
+        # ใช้คำในคำถามเท่านั้น (เจตนาที่โมเดลเดาอาจพลาดเป็น admission กับคำถามแปลกๆ)
+        college = web_answer_service.is_college_topic(user_message)
+        fallback = cant_answer_reply(language, college=college)
+        record_interaction(user_message, detected_intent, confidence, 'cant_answer', language)
+        logger.info(f"🤷 [Chat] ตอบไม่ได้ -> แจ้งผู้ใช้ตรงๆ (college={college})")
+        return send_chat_response(
+            user_message=user_message,
+            reply_text=fallback['reply'],
+            suggestions=fallback['suggestions'],
+            engine='cant_answer',
+            detected_intent=detected_intent,
+            intent_th=intent_th,
+            confidence=confidence,
+            source='cant_answer',
+            language=language,
+            base_emotion='thinking',
+            speech=fallback['speech'],
+        )
     suggestions = extract_suggestions(reply_text)
     record_interaction(user_message, detected_intent, confidence, 'offline_local_ai', language)
 

@@ -92,14 +92,17 @@ window.preloadedFillers = [];
 
 async function preloadFillerAudios() {
     try {
-        const fillers = [0, 1, 2, 3, 4];
-        for (const idx of fillers) {
-            fetch(`/api/tts/filler?index=${idx}`)
+        // think = "ขอน้องเพชรคิดแป๊บนึงนะคะ" (5 แบบ), long = "ขอเวลาอีกนิดนะคะ กำลังค้นข้อมูลให้อยู่ค่ะ" (3 แบบ)
+        const fillers = [['think', 0], ['think', 1], ['think', 2], ['think', 3], ['think', 4],
+                         ['long', 0], ['long', 1], ['long', 2]];
+        for (const [kind, idx] of fillers) {
+            fetch(`/api/tts/filler?index=${idx}&kind=${kind}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.audio_base64) {
                         const mime = (data.audio_format === 'wav') ? 'audio/wav' : 'audio/mp3';
                         window.preloadedFillers.push({
+                            kind,
                             text: data.text,
                             uri: `data:${mime};base64,` + data.audio_base64
                         });
@@ -111,11 +114,12 @@ async function preloadFillerAudios() {
 }
 window.preloadFillerAudios = preloadFillerAudios;
 
-function playInstantFiller(onEndedCallback) {
+function playInstantFiller(onEndedCallback, kind = 'think') {
     try {
         let uri = null;
-        if (window.preloadedFillers && window.preloadedFillers.length > 0) {
-            const randomItem = window.preloadedFillers[Math.floor(Math.random() * window.preloadedFillers.length)];
+        const pool = (window.preloadedFillers || []).filter(f => (f.kind || 'think') === kind);
+        if (pool.length > 0) {
+            const randomItem = pool[Math.floor(Math.random() * pool.length)];
             uri = randomItem.uri;
         }
 
@@ -153,7 +157,7 @@ function playInstantFiller(onEndedCallback) {
                 finishFiller();
             });
         } else {
-            fetch('/api/tts/filler')
+            fetch('/api/tts/filler?kind=' + kind)
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.audio_base64 && isWaitingChatResponse) {
@@ -556,6 +560,10 @@ function switchViewMode(mode) {
     const phoneDecors = document.querySelectorAll('.phone-decor');
     const mobileBottomNav = document.getElementById('mobile-bottom-nav');
     
+    // หน้า /kiosk เป็นเลย์เอาต์จอ 10.1" แบบเดียว ไม่มีกรอบโทรศัพท์/โปสเตอร์ให้สลับ
+    // (เดิม error ตรงนี้ทำให้คำสั่งเริ่มต้นที่ตามมา เช่น initCrossScreenGazeTracking ไม่ได้ทำงาน)
+    if (!appStage || !phoneContainer || !posterContainer) return;
+
     const btnKiosk = document.getElementById('btn-mode-kiosk');
     const btnDesktop = document.getElementById('btn-mode-desktop');
     const btnPhone = document.getElementById('btn-mode-phone');
@@ -744,6 +752,7 @@ function formatMarkdown(text) {
 // -----------------------------------------------------------------------------
 // Robot Emotion Display Sync Helper
 // -----------------------------------------------------------------------------
+let lastPostedEmotion = { state: null, at: 0 };
 function setEmotion(state) {
     if (!state) return;
     try {
@@ -752,6 +761,10 @@ function setEmotion(state) {
             lipSyncBroadcast.postMessage({ type: 'emotion', state: state });
         }
         // 2. ซิงค์สถานะเข้าสู่ Flask Backend และกระจายผ่าน SSE
+        // สถานะเดิมซ้ำภายใน 2 วินาที ไม่ต้องส่งซ้ำ (กันยิงคำขอถี่ๆ ใส่ Pi)
+        const now = Date.now();
+        if (lastPostedEmotion.state === state && now - lastPostedEmotion.at < 2000) return;
+        lastPostedEmotion = { state, at: now };
         fetch('/api/emotion/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1462,12 +1475,13 @@ if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || '
             }
         } else {
             // In Real-time Hands-free mode, auto restart listening when idle
+            // ไมค์ใช้ไม่ได้ (ไม่อนุญาต/ไม่ได้เสียบ): รอ MIC_RETRY_MS ก่อนลองใหม่ ไม่วนเริ่มใหม่ทุก 200ms
             if (!isSpeakingTTS && !isWaitingChatResponse) {
                 setTimeout(() => {
                     if (isRealtimeVoiceActive && !isSpeakingTTS && !isWaitingChatResponse) {
                         startRecognitionSafe();
                     }
-                }, 200);
+                }, Math.max(200, micRetryAfter - Date.now()));
             }
         }
     };
@@ -1477,6 +1491,9 @@ if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || '
         console.warn('Speech recognition event:', e.error);
         if (!isWaitingChatResponse && !isSpeakingTTS) {
             setEmotion('idle');
+        }
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') {
+            micRetryAfter = Date.now() + MIC_RETRY_MS;
         }
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
             console.warn('🎙️ [Mic Permission Required] เบราว์เซอร์ต้องการการอนุญาตไมโครโฟนจากผู้ใช้');
@@ -1493,6 +1510,10 @@ if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || '
         }
     };
 }
+
+// ไมค์ใช้ไม่ได้ (ไม่อนุญาต / ไม่ได้เสียบ): ลองเปิดใหม่ทุก MIC_RETRY_MS (เสียบไมค์ทีหลังได้)
+const MIC_RETRY_MS = 5000;
+let micRetryAfter = 0;
 
 function startRecognitionSafe() {
     if (!recognition) return;

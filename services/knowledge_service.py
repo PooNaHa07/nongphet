@@ -164,7 +164,60 @@ def match_local_knowledge(user_message, intent, confidence, language='th'):
 
     return None
 
-def get_local_knowledge_reply(user_message, language='th', intent=None):
+# -----------------------------------------------------------------------------
+# ตอบไม่ได้: ไม่มีข้อมูลในเครื่อง และค้นเว็บไม่ได้ (ไม่มีเน็ต / เรื่องวิทยาลัยที่ไม่มีข้อมูลทางการ)
+# บอกตรงๆ ไม่เดา ไม่แต่งข้อมูล (บทพูดอัดไว้ล่วงหน้าใน prebake_tts.py พูดได้ทันที)
+# -----------------------------------------------------------------------------
+CANT_ANSWER = {
+    'th': [
+        {'reply': ('อุ๊ย คำถามนี้น้องเพชรยังตอบไม่ได้ค่ะ 🙏\n\n'
+                   'ตอนนี้ยังไม่มีข้อมูลเรื่องนี้ในเครื่อง และค้นจากเว็บไม่ได้ น้องเพชรไม่อยากเดาให้ผิดนะคะ\n\n'
+                   'ลองถามเรื่องที่เที่ยว ของกิน หรือสาขาเรียนในเพชรบุรีได้เลยค่ะ ✨'),
+         'speech': 'อุ๊ย คำถามนี้น้องเพชรยังตอบไม่ได้ค่ะ ไม่อยากเดาให้ผิด ลองถามเรื่องที่เที่ยว ของกิน หรือสาขาเรียนได้เลยนะคะ'},
+        {'reply': ('ขอโทษนะคะ เรื่องนี้น้องเพชรยังไม่รู้จริงๆ ค่ะ 🙈\n\n'
+                   'ถ้าเป็นเรื่องด่วน ลองสอบถามเจ้าหน้าที่ที่บูธได้เลยนะคะ '
+                   'ส่วนเรื่องเที่ยวเมืองเพชร ของอร่อย และการเรียนที่ PBPVC น้องเพชรตอบได้เต็มที่ค่ะ 💎'),
+         'speech': 'ขอโทษนะคะ เรื่องนี้น้องเพชรยังไม่รู้จริงๆ ค่ะ ลองสอบถามเจ้าหน้าที่ที่บูธได้นะคะ'},
+        {'reply': ('คำถามนี้ยากไปนิดสำหรับน้องเพชรค่ะ 😅\n\n'
+                   'ลองถามใหม่แบบสั้นๆ อีกครั้ง หรือแตะปุ่มคำถามด้านล่างได้เลยนะคะ ✨'),
+         'speech': 'คำถามนี้ยากไปนิดสำหรับน้องเพชรค่ะ ลองถามใหม่แบบสั้นๆ หรือแตะปุ่มคำถามด้านล่างได้เลยนะคะ'},
+    ],
+    # เรื่องวิทยาลัยที่ไม่มีข้อมูลทางการ: ห้ามเดา ส่งต่อให้วิทยาลัยตอบ
+    'college_th': [
+        {'reply': ('เรื่องนี้น้องเพชรยังไม่มีข้อมูลทางการค่ะ 🙏 โปรดตรวจสอบกับวิทยาลัยโดยตรงนะคะ\n\n'
+                   '📞 โทร 032-425-557 (จันทร์ - ศุกร์ 08:00 - 16:00 น.)\n'
+                   '🌐 www.pbpvc.ac.th\n'
+                   '📘 facebook.com/PBPVC'),
+         'speech': 'เรื่องนี้น้องเพชรยังไม่มีข้อมูลทางการค่ะ โปรดตรวจสอบกับวิทยาลัย เบอร์โทรอยู่บนหน้าจอแล้วนะคะ'},
+    ],
+    'en': [
+        {'reply': ("Sorry, I don't have information on that yet, and I can't search the web right now. 🙏\n\n"
+                   "Try asking me about places to visit, local food, or the college programs!"),
+         'speech': "Sorry, I don't have information on that yet. Try asking me about places to visit or local food."},
+    ],
+    'zh': [
+        {'reply': '抱歉，这个问题我暂时还不知道，现在也无法上网查询。🙏\n\n可以问我佛丕府的景点、美食或学院专业哦！',
+         'speech': '抱歉，这个问题我暂时还不知道。可以问我佛丕府的景点和美食哦！'},
+    ],
+}
+CANT_ANSWER_SUGGESTIONS = {
+    'th': ['แนะนำที่เที่ยวไฮไลท์ในเพชรบุรี', 'ของกินเมืองเพชรที่ไม่ควรพลาด', 'วิทยาลัยเปิดสอนกี่สาขา'],
+    'college_th': ['วิทยาลัยเปิดสอนกี่สาขา', 'สมัครเรียนต้องใช้เอกสารอะไร', 'ติดต่อวิทยาลัยได้ที่ไหน'],
+    'en': ['What famous food is in Phetchaburi?', 'Where is Khao Wang?'],
+    'zh': ['佛丕府有什么好吃的？', '拷汪宫在哪里？'],
+}
+
+
+def cant_answer_reply(language='th', college=False):
+    """คำตอบตอนตอบไม่ได้ (สุ่มแบบ) คืน {'reply', 'speech', 'suggestions'}"""
+    import random
+    key = 'college_th' if (college and language not in ('en', 'zh')) else (language if language in ('en', 'zh') else 'th')
+    choice = dict(random.choice(CANT_ANSWER[key]))
+    choice['suggestions'] = list(CANT_ANSWER_SUGGESTIONS[key])
+    return choice
+
+
+def get_local_knowledge_reply(user_message, language='th', intent=None, allow_generic=True):
     """ฟังก์ชันสำรองข้อมูลอัจฉริยะในเครื่อง (Offline Smart Fallback พร้อมน้ำเสียงมีชีวิตชีวา 3 ภาษา)"""
     msg = (user_message or '').lower().strip()
 
@@ -233,6 +286,8 @@ def get_local_knowledge_reply(user_message, language='th', intent=None):
     matched = match_local_knowledge(user_message, intent or 'general_faq', 0.95, language)
     if matched:
         return matched
+    if not allow_generic:
+        return None             # ให้ผู้เรียกใช้คำตอบ "ตอบไม่ได้" (cant_answer_reply) แทนข้อความต้อนรับทั่วไป
 
     # Fallback กรณีทั่วไป: ตอบอย่างมีชีวิตชีวา อบอุ่น และชวนคุยต่อ
     return (

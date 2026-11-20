@@ -317,6 +317,79 @@ class TestRepeatQuestions(WebCase):
         self.assertEqual(len(self.calls), 2)
 
 
+class TestShortWebSpeech(WebCase):
+    """คำตอบจากเว็บ: พูดประโยคสั้นที่อัดไว้ทันที ให้อ่านบนจอ ปุ่ม "ฟังเสียง" เล่นสรุปเต็ม
+    ถามซ้ำ: อัดเสียงสรุปเต็มเบื้องหลัง พออัดเสร็จแล้วครั้งต่อไปพูดสรุปเต็มทันที"""
+    Q = 'ตลาดน้ำอัมพวาเปิดวันไหนบ้าง'
+
+    def setUp(self):
+        super().setUp()
+        mock.patch('local_slm.is_ollama_running', return_value=False).start()
+        from app_new import app
+        app.config['TESTING'] = True
+        self.client = app.test_client()
+        self.bake = mock.patch('services.tts_service.bake_text_in_background').start()
+
+    def ask(self):
+        return self.client.post('/chat', json={'message': self.Q, 'language': 'th'}).get_json()
+
+    def test_first_answer_speaks_short_phrase(self):
+        self.replies(fake_response())
+        with mock.patch('services.tts_service.is_text_baked', return_value=False):
+            data = self.ask()
+        self.assertEqual(data['engine'], 'web_search')
+        self.assertEqual(data['speech'], was.WEB_SCREEN_SPEECH['th'])
+        self.assertTrue(data['speech_full'].startswith('น้องเพชรค้นจากเว็บมาให้แล้วค่ะ'))
+        self.assertIn('ตลาดน้ำอัมพวา', data['speech_full'])
+        self.bake.assert_not_called()              # ถามครั้งแรก ยังไม่อัดเสียงเบื้องหลัง
+
+    def test_repeat_bakes_full_speech_in_background(self):
+        self.replies(fake_response())
+        with mock.patch('services.tts_service.is_text_baked', return_value=False):
+            first = self.ask()
+            was._cache.clear()
+            again = self.ask()
+        self.assertEqual(again['speech'], was.WEB_SCREEN_SPEECH['th'])
+        self.bake.assert_called_once_with(first['speech_full'], 'th')
+
+    def test_baked_full_speech_is_spoken(self):
+        self.replies(fake_response())
+        with mock.patch('services.tts_service.is_text_baked', return_value=True):
+            data = self.ask()
+        self.assertEqual(data['speech'], data['speech_full'])
+
+    def test_full_mode_speaks_summary(self):
+        self.replies(fake_response())
+        with mock.patch.dict(os.environ, {'WEB_SPEECH_MODE': 'full'}),              mock.patch('services.tts_service.is_text_baked', return_value=False):
+            data = self.ask()
+        self.assertEqual(data['speech'], data['speech_full'])
+
+    def test_screen_phrases_are_polite_and_prebaked(self):
+        import prebake_tts
+        self.assertTrue(was.WEB_SCREEN_SPEECH['th'].endswith(('ค่ะ', 'นะคะ')))
+        baked = {(l, t) for l, label, t in prebake_tts.collect_items() if label == 'web-screen'}
+        self.assertEqual(baked, set(was.WEB_SCREEN_SPEECH.items()))
+
+
+class TestBakeHelpers(unittest.TestCase):
+    def test_no_duplicate_background_bake(self):
+        from services import tts_service
+        started = []
+        with mock.patch.object(tts_service, 'get_cached_tts', return_value=(None, None)),              mock.patch.object(tts_service.threading, 'Thread') as T:
+            T.return_value.start = lambda: started.append(1)
+            tts_service._baking_keys.clear()
+            tts_service.bake_text_in_background('ข้อความทดสอบซ้ำค่ะ')
+            tts_service.bake_text_in_background('ข้อความทดสอบซ้ำค่ะ')
+        self.assertEqual(len(started), 1)
+        tts_service._baking_keys.clear()
+
+    def test_is_text_baked_uses_tts_cache_key(self):
+        from services import tts_service
+        with mock.patch.object(tts_service, 'get_cached_tts', return_value=('abc', 'mp3')):
+            self.assertTrue(tts_service.is_text_baked('สวัสดีค่ะ'))
+        self.assertFalse(tts_service.is_text_baked('   '))
+
+
 class TestWebLeadIsBaked(unittest.TestCase):
     def test_prebake_includes_web_lead_phrases(self):
         import prebake_tts

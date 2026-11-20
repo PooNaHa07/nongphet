@@ -37,10 +37,11 @@ sys.path.insert(0, BASE_DIR)
 from services import tts_service  # noqa: E402
 from services.azure_speech import azure_enabled  # noqa: E402
 from services.voice_server_client import omnivoice_enabled  # noqa: E402
-from services.tts_service import NO_VOICE_PHRASES, FILLER_PHRASES  # noqa: E402
+from services.tts_service import NO_VOICE_PHRASES, FILLER_PHRASES, LONG_WAIT_PHRASES  # noqa: E402
+from services.knowledge_service import CANT_ANSWER  # noqa: E402
 from services.text_utils import spoken_text_of  # noqa: E402
 from semantic_retriever import answer_variants_of  # noqa: E402
-from services.web_answer_service import WEB_NOTE  # noqa: E402
+from services.web_answer_service import WEB_NOTE, WEB_SCREEN_SPEECH, UNKNOWN_PLACE_REPLY  # noqa: E402
 from services.voice_command_service import COMMAND_PHRASES  # noqa: E402
 from services.tts_service import (  # noqa: E402
     clean_text_for_speech, generate_speech, save_cached_tts, voice_profile,
@@ -117,8 +118,16 @@ def collect_items():
     except Exception as e:
         print(f"⚠️ อ่านฐานความรู้ไม่ได้: {e}")
     items += [('th', 'filler', t) for t in FILLER_PHRASES]
+    items += [('th', 'long-wait', t) for t in LONG_WAIT_PHRASES]
+    # ตอบไม่ได้ (ไม่มีข้อมูล และค้นเว็บไม่ได้): บอกตรงๆ ทันที
+    items += [(('th' if key.endswith('th') else key), 'cant-answer', v['speech'])
+              for key, variants in CANT_ANSWER.items() for v in variants]
     # ประโยคนำของคำตอบจากเว็บ ("น้องเพชรค้นจากเว็บมาให้แล้วค่ะ") หน้าจอขอเป็นท่อนแรกแยก: อัดไว้ให้พูดได้ทันที
     items += [(lang, 'web-lead', lead.strip()) for lang, (lead, _) in WEB_NOTE.items() if lead.strip()]
+    # คำตอบจากเว็บ (โหมด short): "น้องเพชรค้นจากเว็บมาให้แล้วค่ะ รายละเอียดอยู่บนหน้าจอนะคะ" พูดทันที
+    items += [(lang, 'web-screen', t) for lang, t in WEB_SCREEN_SPEECH.items()]
+    # ถามสถานที่ที่ไม่มีข้อมูล และค้นเว็บไม่ได้
+    items += [('th', 'unknown-place', UNKNOWN_PLACE_REPLY['speech'])]
     # ประโยคตอบรับคำสั่งเสียง ("เปิดหน้าสถานที่ท่องเที่ยวให้แล้วค่ะ" ...) ต้องพูดได้ทันที
     items += [('th', 'command', t) for t in COMMAND_PHRASES]
     items += [('th', 'phrase', t) for t in THAI_PHRASES]

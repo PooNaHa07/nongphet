@@ -25,6 +25,11 @@ class TestAnalyticsWrites(unittest.TestCase):
         self.path = os.path.join(self.tmpdir, 'analytics.json')
         self._orig_file = analytics_service.ANALYTICS_FILE
         self._orig_delay = analytics_service.SAVE_DEBOUNCE_SEC
+        # เทสต์ก่อนหน้า (ที่เรียก /chat) อาจทิ้งการบันทึกที่รอเขียนไว้: ยกเลิกก่อน เทสต์นี้จะได้นับได้ถูก
+        with analytics_service._save_lock:
+            if analytics_service._save_timer is not None:
+                analytics_service._save_timer.cancel()
+                analytics_service._save_timer = None
         analytics_service.ANALYTICS_FILE = self.path
 
     def tearDown(self):

@@ -15,7 +15,7 @@ from services.tts_service import (
     get_cached_tts, save_cached_tts, voice_profile, speech_cache_key, prepare_speech_input,
     extract_first_sentence_for_speech, clean_text_for_speech,
     generate_speech, run_coroutine, iter_audio_stream, edge_wait_budget, edge_tts_available,
-    no_voice_phrase_audio, FILLER_PHRASES
+    no_voice_phrase_audio, FILLER_PHRASES, LONG_WAIT_PHRASES
 )
 from services.azure_speech import azure_enabled, azure_status
 from services.voice_server_client import (omnivoice_enabled, voice_server_status, stt_status,
@@ -120,11 +120,13 @@ def tts_filler():
     ส่งเสียง Filler Audio สำหรับเล่นคั่นเวลาทันที (0ms Standalone)
     เมื่อระบบต้องประมวลผลคำถามสดยาวๆ ช่วยให้ผู้ใช้งานไม่รู้สึกว่าหุ่นยนต์ค้าง
     """
+    # kind=long: ประโยคตอนรอนาน ("ขอเวลาอีกนิดนะคะ ...") / ค่าเริ่มต้น: ประโยคกำลังคิด
+    phrases = LONG_WAIT_PHRASES if request.args.get('kind') == 'long' else FILLER_PHRASES
     idx_param = request.args.get('index')
     if idx_param is not None and idx_param.isdigit():
-        filler_text = FILLER_PHRASES[int(idx_param) % len(FILLER_PHRASES)]
+        filler_text = phrases[int(idx_param) % len(phrases)]
     else:
-        filler_text = random.choice(FILLER_PHRASES)
+        filler_text = random.choice(phrases)
 
     clean_text = clean_text_for_speech(prepare_speech_input(filler_text), max_len=2500, voice_gender='female', lang='th')
     voice, pitch, rate = voice_profile('th')
