@@ -1,3 +1,19 @@
+// ===== QR Code ในเครื่อง (static/vendor/qrcode, qrcode-generator) ใช้ได้แม้ไม่มีอินเทอร์เน็ต =====
+function makeQrDataUrl(text, cellSize = 6) {
+    if (typeof qrcode === 'undefined') return '';
+    const qr = qrcode(0, 'M');
+    qr.addData(String(text || ''));
+    qr.make();
+    return qr.createDataURL(cellSize, 2);
+}
+
+function renderStaticQrCodes(root = document) {
+    root.querySelectorAll('img[data-qr]').forEach(img => {
+        if (!img.src) img.src = makeQrDataUrl(img.dataset.qr);
+    });
+}
+document.addEventListener('DOMContentLoaded', () => renderStaticQrCodes());
+
 
 const clientAudioCache = new Map();
 let quickFeedbackAudioCtx = null;
@@ -76,14 +92,17 @@ window.preloadedFillers = [];
 
 async function preloadFillerAudios() {
     try {
-        const fillers = [0, 1, 2, 3, 4];
-        for (const idx of fillers) {
-            fetch(`/api/tts/filler?index=${idx}`)
+        // think = "ขอน้องเพชรคิดแป๊บนึงนะคะ" (5 แบบ), long = "ขอเวลาอีกนิดนะคะ กำลังค้นข้อมูลให้อยู่ค่ะ" (3 แบบ)
+        const fillers = [['think', 0], ['think', 1], ['think', 2], ['think', 3], ['think', 4],
+                         ['long', 0], ['long', 1], ['long', 2]];
+        for (const [kind, idx] of fillers) {
+            fetch(`/api/tts/filler?index=${idx}&kind=${kind}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.audio_base64) {
                         const mime = (data.audio_format === 'wav') ? 'audio/wav' : 'audio/mp3';
                         window.preloadedFillers.push({
+                            kind,
                             text: data.text,
                             uri: `data:${mime};base64,` + data.audio_base64
                         });
@@ -95,11 +114,12 @@ async function preloadFillerAudios() {
 }
 window.preloadFillerAudios = preloadFillerAudios;
 
-function playInstantFiller(onEndedCallback) {
+function playInstantFiller(onEndedCallback, kind = 'think') {
     try {
         let uri = null;
-        if (window.preloadedFillers && window.preloadedFillers.length > 0) {
-            const randomItem = window.preloadedFillers[Math.floor(Math.random() * window.preloadedFillers.length)];
+        const pool = (window.preloadedFillers || []).filter(f => (f.kind || 'think') === kind);
+        if (pool.length > 0) {
+            const randomItem = pool[Math.floor(Math.random() * pool.length)];
             uri = randomItem.uri;
         }
 
@@ -110,7 +130,7 @@ function playInstantFiller(onEndedCallback) {
 
         const audio = new Audio();
         window.currentFillerAudio = audio;
-        audio.volume = 1.0;
+        audio.volume = kioskVolume;
 
         let hasEnded = false;
         const finishFiller = () => {
@@ -137,7 +157,7 @@ function playInstantFiller(onEndedCallback) {
                 finishFiller();
             });
         } else {
-            fetch('/api/tts/filler')
+            fetch('/api/tts/filler?kind=' + kind)
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.audio_base64 && isWaitingChatResponse) {
@@ -253,6 +273,15 @@ window.showAppToast = showAppToast;
 let currentVisionIndex = 0;
 let uploadedVisionFile = null;
 let autoSpeak = true;
+// ระดับเสียงของน้องเพชร (คำสั่งเสียง "เสียงดังขึ้น" / "เสียงเบาลง") 0.2 - 1.0
+let kioskVolume = 1.0;
+function setKioskVolume(v) {
+    kioskVolume = Math.round(Math.min(1.0, Math.max(0.2, v)) * 10) / 10;
+    const p = document.getElementById('audioPlayer');
+    if (p) p.volume = kioskVolume;
+    if (window.currentFillerAudio) window.currentFillerAudio.volume = kioskVolume;
+    return kioskVolume;
+}
 let currentLang = 'th';
 let currentVoiceGender = 'female'; // 'female' (Premwadee - Default Female Voice)
 let isSpeakingTTS = false;
@@ -326,7 +355,8 @@ function startLipSyncAnalysis() {
         }
         const t = performance.now() / 140;
         const normAmp = 0.35 + 0.45 * Math.abs(Math.sin(t) * Math.cos(t * 1.6));
-        lipSyncBroadcast.postMessage({ type: 'lipsync', amp: normAmp });
+        // ช่วงรอเสียงประโยคถัดไป: ปิดปากไว้ แต่ยังถือว่ากำลังพูด (ไมค์ยังปิด กันเสียงสะท้อน)
+        lipSyncBroadcast.postMessage({ type: 'lipsync', amp: ttsGapActive ? 0 : normAmp });
         lipSyncAnimFrame = requestAnimationFrame(update);
     }
     update();
@@ -530,6 +560,10 @@ function switchViewMode(mode) {
     const phoneDecors = document.querySelectorAll('.phone-decor');
     const mobileBottomNav = document.getElementById('mobile-bottom-nav');
     
+    // หน้า /kiosk เป็นเลย์เอาต์จอ 10.1" แบบเดียว ไม่มีกรอบโทรศัพท์/โปสเตอร์ให้สลับ
+    // (เดิม error ตรงนี้ทำให้คำสั่งเริ่มต้นที่ตามมา เช่น initCrossScreenGazeTracking ไม่ได้ทำงาน)
+    if (!appStage || !phoneContainer || !posterContainer) return;
+
     const btnKiosk = document.getElementById('btn-mode-kiosk');
     const btnDesktop = document.getElementById('btn-mode-desktop');
     const btnPhone = document.getElementById('btn-mode-phone');
@@ -681,7 +715,7 @@ function selectPlace(placeName) {
 
 function selectCourse(courseName) {
     navigateTo('screen-chat');
-    sendQuickMessage(`อยากทราบว่าสาขา "${courseName}" ของวิทยาลัยอาชีวศึกษาเพชรบุรี เรียนเกี่ยวกับอะไรบ้าง ทักษะที่จะได้รับ และโอกาสในการทำงานในอนาคตครับ`);
+    sendQuickMessage(`สาขาวิชา${courseName} เรียนอะไร`);
 }
 
 function openGoogleMapsSearch(query) {
@@ -718,6 +752,7 @@ function formatMarkdown(text) {
 // -----------------------------------------------------------------------------
 // Robot Emotion Display Sync Helper
 // -----------------------------------------------------------------------------
+let lastPostedEmotion = { state: null, at: 0 };
 function setEmotion(state) {
     if (!state) return;
     try {
@@ -726,6 +761,10 @@ function setEmotion(state) {
             lipSyncBroadcast.postMessage({ type: 'emotion', state: state });
         }
         // 2. ซิงค์สถานะเข้าสู่ Flask Backend และกระจายผ่าน SSE
+        // สถานะเดิมซ้ำภายใน 2 วินาที ไม่ต้องส่งซ้ำ (กันยิงคำขอถี่ๆ ใส่ Pi)
+        const now = Date.now();
+        if (lastPostedEmotion.state === state && now - lastPostedEmotion.at < 2000) return;
+        lastPostedEmotion = { state, at: now };
         fetch('/api/emotion/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -742,77 +781,8 @@ function setEmotion(state) {
 // Voice Synthesis Engine (Edge Neural TTS & Browser Fallback)
 // -----------------------------------------------------------------------------
 function fallbackBrowserSpeechMain(text, lang, btnElement, onEndedCallback) {
-    // ตรวจจับระบบปฏิบัติการ Linux / Raspberry Pi OS
-    // เนื่องจากบน Pi/Linux ไม่มี Thai Voice Pack ใน Browser ทำให้เกิดเสียงเพี้ยนหรือเงียบค้าง
-    const isLinuxOrPi = typeof navigator !== 'undefined' && (/linux|arm|aarch64/i.test(navigator.userAgent || navigator.platform) || /Linux/i.test(navigator.userAgent));
-    if (isLinuxOrPi && (lang === 'th' || !lang || lang.startsWith('th'))) {
-        console.warn('⚠️ [TTS Fallback] ตรวจพบ Linux/Raspberry Pi: ปิดใช้งาน Browser SpeechSynthesis (ภาษาไทย) เพื่อป้องกันเสียงเพี้ยนหรือระบบค้าง');
-        setTimeout(() => {
-            isSpeakingTTS = false;
-            setEmotion('idle');
-            if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-            if (typeof onEndedCallback === 'function') onEndedCallback();
-        }, 350);
-        return;
-    }
-
-    // ล็อกไมค์ทันทีเมื่อเริ่มการสังเคราะห์เสียง
-    stopRecognitionSafe();
-    isSpeakingTTS = true;
-
-    if ('speechSynthesis' in window) {
-        try {
-            window.speechSynthesis.cancel();
-            const clean = stripEmojiAndIcons(text);
-            const u = new SpeechSynthesisUtterance(clean || text);
-            u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
-            // เลือกเฉพาะเสียงผู้หญิง บังคับปิดเสียงผู้ชาย (Pattara/Niwat)
-            const availableVoices = window.speechSynthesis.getVoices();
-            const femaleVoice = availableVoices.find(v => v.lang.startsWith('th') && (v.name.includes('Premwadee') || v.name.includes('Achara') || v.name.includes('Google ภาษาไทย') || /female/i.test(v.name))) || availableVoices.find(v => v.lang.startsWith('th') && !v.name.includes('Niwat') && !v.name.includes('Pattara'));
-            if (femaleVoice) u.voice = femaleVoice;
-            u.rate = 1.05;
-            u.pitch = 1.15;
-            let keepAliveTimer = setInterval(() => {
-                if (!window.speechSynthesis.speaking) {
-                    clearInterval(keepAliveTimer);
-                } else {
-                    window.speechSynthesis.pause();
-                    window.speechSynthesis.resume();
-                }
-            }, 10000);
-
-            u.onstart = () => {
-                isSpeakingTTS = true;
-                setEmotion('speaking');
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'speaking' })
-                }).catch(() => {});
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
-            };
-            const finishSpeech = () => {
-                clearInterval(keepAliveTimer);
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'idle' })
-                }).catch(() => {});
-                if (btnElement) btnElement.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-                setTimeout(() => {
-                    isSpeakingTTS = false;
-                    setEmotion('idle');
-                    if (typeof onEndedCallback === 'function') onEndedCallback();
-                }, 350);
-            };
-            u.onend = finishSpeech;
-            u.onerror = finishSpeech;
-            window.speechSynthesis.speak(u);
-            return;
-        } catch (err) {
-            console.warn('speechSynthesis fallback error:', err);
-        }
-    }
+    // นโยบายเสียงเดียวทั้งระบบ: ไม่ใช้เสียงของเบราว์เซอร์ (speechSynthesis) เพราะเป็นคนละเสียงกับน้องเพชร
+    // แสดงข้อความอย่างเดียว แล้วจบรอบการพูดตามปกติ
     setTimeout(() => {
         isSpeakingTTS = false;
         setEmotion('idle');
@@ -828,6 +798,7 @@ let ttsQueue = [];
 let ttsQueueIndex = 0;
 let ttsQueueAbortController = null;
 let isPlayingQueue = false;
+let ttsGapActive = false;       // กำลังรอเสียงประโยคถัดไป (ปากหยุดขยับ)
 
 function splitTextIntoSentences(text, maxSentenceLen = 140) {
     if (!text) return [];
@@ -868,43 +839,53 @@ function splitTextIntoSentences(text, maxSentenceLen = 140) {
     return merged.length > 0 ? merged : [cleaned];
 }
 
-async function fetchSentenceAudio(text, lang, gender) {
-    const cacheKey = lang + '_' + text;
-    if (clientAudioCache.has(cacheKey)) {
-        return clientAudioCache.get(cacheKey);
-    }
+// เซิร์ฟเวอร์เสียงในบูธใช้เวลาขั้นต่ำ ~6 วินาทีต่อคำขอ ไม่ว่าข้อความสั้นแค่ไหน
+// จึงขอเสียงแค่ 2 ท่อน: ประโยคแรก (มักเป็นประโยคที่อัดไว้แล้ว เช่น "น้องเพชรค้นจากเว็บมาให้แล้วค่ะ")
+// กับประโยคที่เหลือรวมกัน แทนการขอทีละประโยค (ข้อความเดิมจะได้ท่อนเดิม เสียงที่สร้างแล้วจึงใช้ซ้ำจากแคชได้)
+function speechChunks(sentences) {
+    if (!sentences || sentences.length <= 2) return sentences || [];
+    return [sentences[0], sentences.slice(1).join(' ')];
+}
+
+// ขอเสียงจาก /tts คืน JSON (หรือ null) — cacheOnly=true ถามแค่ว่ามีเสียงที่อัดเก็บไว้หรือไม่
+async function requestTTS(text, lang, signal, cacheOnly = false) {
     try {
         const response = await fetch('/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                text: text,
-                lang: lang,
-                gender: gender,
-                fast_mode: false
-            }),
-            signal: ttsQueueAbortController ? ttsQueueAbortController.signal : null
+            body: JSON.stringify({ text: text, lang: lang, gender: 'female', fast_mode: false, cache_only: cacheOnly }),
+            signal: signal
         });
-        const data = await response.json();
-        if (data.audio_base64) {
-            const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
-            const uri = `data:${mime};base64,` + data.audio_base64;
-            if (clientAudioCache.size < 128) {
-                clientAudioCache.set(cacheKey, uri);
-            }
-            return uri;
-        }
+        return await response.json();
     } catch (e) {
-        if (e.name !== 'AbortError') {
-            console.warn('Sentence audio fetch error:', e);
-        }
+        if (e.name !== 'AbortError') console.warn('TTS fetch error:', e);
+        return null;
     }
-    return null;
+}
+
+function ttsDataToUri(data) {
+    const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
+    return `data:${mime};base64,` + data.audio_base64;
+}
+
+// ความยาวเสียง (วินาที) จาก metadata ถ้าอ่านไม่ได้ ประมาณจากจำนวนตัวอักษร (~12 ตัว/วินาที)
+function audioDurationSec(uri, fallbackSec) {
+    return new Promise(resolve => {
+        const probe = new Audio();
+        let settled = false;
+        const done = (v) => { if (settled) return; settled = true; resolve(v); };
+        setTimeout(() => done(fallbackSec), 1500);
+        probe.preload = 'metadata';
+        probe.onloadedmetadata = () => done(isFinite(probe.duration) ? probe.duration : fallbackSec);
+        probe.onerror = () => done(fallbackSec);
+        probe.src = uri;
+    });
 }
 
 function stopAllSpeech() {
     lastBotSpeechEndTime = Date.now();
     isPlayingQueue = false;
+    ttsGapActive = false;
     ttsQueue = [];
     ttsQueueIndex = 0;
     if (ttsQueueAbortController) {
@@ -968,7 +949,7 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
     if (clientAudioCache.has(cacheKey)) {
         const cachedUri = clientAudioCache.get(cacheKey);
         audioPlayer.src = cachedUri;
-        audioPlayer.volume = 1.0;
+        audioPlayer.volume = kioskVolume;
         audioPlayer.muted = false;
         audioPlayer.onended = handlePlaybackFinished;
         audioPlayer.onerror = handlePlaybackFinished;
@@ -1004,60 +985,147 @@ async function playTTS(text, btnElement = null, onEndedCallback = null, forcedLa
     setEmotion('thinking');
 
     ttsQueueAbortController = new AbortController();
+    const signal = ttsQueueAbortController.signal;
 
-    try {
-        const response = await fetch('/tts', {
+    const markSpeaking = () => {
+        isSpeakingTTS = true;
+        ttsGapActive = false;
+        setEmotion('speaking');
+        fetch('/api/iot/led', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            body: JSON.stringify({ state: 'speaking' })
+        }).catch(() => {});
+        if (btnElement) {
+            btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+        }
+        startLipSyncAnalysis();
+    };
+
+    const handleAutoplayBlock = (playErr) => {
+        if (playErr && (playErr.name === 'NotAllowedError' || playErr.name === 'NotSupportedError')) {
+            console.warn('🔇 [Autoplay Shield] เบราว์เซอร์บล็อกเสียง รอการแตะหน้าจอเพื่อปลดล็อก');
+            pendingAutoplayTTS = {
                 text: speechText,
-                lang: activeLang,
-                gender: 'female',
-                fast_mode: false
-            }),
-            signal: ttsQueueAbortController.signal
+                btnElement: btnElement,
+                onEndedCallback: onEndedCallback,
+                forcedLang: activeLang
+            };
+            showAudioUnlockPrompt('👆 แตะหน้าจอ 1 ครั้ง เพื่อเปิดระบบเสียงและไมโครโฟนอัตโนมัติ');
+        }
+    };
+
+    // เล่นเสียงหนึ่งท่อนจนจบ: true = เล่นจบ/ถูกหยุด, false = เบราว์เซอร์บล็อกเสียง
+    const playUriToEnd = (uri) => new Promise(resolve => {
+        if (signal.aborted) return resolve(true);
+        const onAbort = () => finish(true);
+        const finish = (v) => { signal.removeEventListener('abort', onAbort); resolve(v); };
+        signal.addEventListener('abort', onAbort);
+        audioPlayer.src = uri;
+        audioPlayer.volume = kioskVolume;
+        audioPlayer.muted = false;
+        audioPlayer.onended = () => finish(true);
+        audioPlayer.onerror = () => finish(true);
+        audioPlayer.play().then(markSpeaking).catch((playErr) => {
+            handleAutoplayBlock(playErr);
+            finish(false);
         });
-        const data = await response.json();
-        if (data && data.audio_base64) {
-            const mime = (data.audio_format === 'wav' || data.audio_base64.startsWith('UklGR')) ? 'audio/wav' : 'audio/mp3';
-            const uri = `data:${mime};base64,` + data.audio_base64;
-            if (clientAudioCache.size < 128) {
-                clientAudioCache.set(cacheKey, uri);
-            }
-            audioPlayer.src = uri;
-            audioPlayer.volume = 1.0;
-            audioPlayer.muted = false;
-            audioPlayer.onended = handlePlaybackFinished;
-            audioPlayer.onerror = handlePlaybackFinished;
-            try {
-                await audioPlayer.play();
-                isSpeakingTTS = true;
-                setEmotion('speaking');
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'speaking' })
-                }).catch(() => {});
-                if (btnElement) {
-                    btnElement.innerHTML = '<i class="fa-solid fa-circle-stop text-rose-500 animate-pulse"></i> หยุดเสียง';
+    });
+
+    // คำตอบที่ไม่มีเสียงอัดไว้: ขอเสียงทีละประโยค แล้วเริ่มพูดเมื่อเสียงที่ได้มาพอให้พูดต่อเนื่อง
+    // (เซิร์ฟเวอร์เสียงในบูธสร้างเสียงช้ากว่าเวลาพูดจริง ~2 เท่า จึงสะสมก่อนเล็กน้อย)
+    const MAX_PREBUFFER_MS = 6000;   // หลังได้ประโยคแรก รอสะสมเสียงเพิ่มไม่เกินนี้
+    const playSentenceQueue = async (sentences) => {
+        const queue = [];
+        let producing = true;
+        let producedChars = 0, genMs = 0, genChars = 0;
+        const totalChars = sentences.reduce((n, x) => n + x.length, 0);
+        let wake = null;
+        const notify = () => { if (wake) { const w = wake; wake = null; w(); } };
+        const waitChange = (ms) => new Promise(r => {
+            wake = r;
+            setTimeout(() => { if (wake === r) wake = null; r(); }, ms);
+        });
+
+        (async () => {
+            for (const sentence of sentences) {
+                if (signal.aborted) break;
+                const t0 = performance.now();
+                const d = await requestTTS(sentence, activeLang, signal);
+                if (signal.aborted) break;
+                producedChars += sentence.length;
+                // สร้างเสียงไม่ได้เลย (ไม่มีประโยคกลางอัดไว้): หยุด ไม่ต้องรอประโยคถัดไปอีก
+                if (d && d.status === 'no_voice') break;
+                if (!d || !d.audio_base64) continue;
+                if (!String(d.engine || '').startsWith('cache')) {
+                    genMs += performance.now() - t0;
+                    genChars += sentence.length;
                 }
-                startLipSyncAnalysis();
-            } catch (playErr) {
-                if (playErr && (playErr.name === 'NotAllowedError' || playErr.name === 'NotSupportedError')) {
-                    console.warn('🔇 [Autoplay Shield] เบราว์เซอร์บล็อกเสียง รอการแตะหน้าจอเพื่อปลดล็อก');
-                    pendingAutoplayTTS = {
-                        text: speechText,
-                        btnElement: btnElement,
-                        onEndedCallback: onEndedCallback,
-                        forcedLang: activeLang
-                    };
-                    showAudioUnlockPrompt('👆 แตะหน้าจอ 1 ครั้ง เพื่อเปิดระบบเสียงและไมโครโฟนอัตโนมัติ');
-                }
-                handlePlaybackFinished();
+                const uri = ttsDataToUri(d);
+                queue.push({ uri, dur: await audioDurationSec(uri, sentence.length / 12) });
+                notify();
+                // เซิร์ฟเวอร์เสียงใช้ไม่ได้: พูดประโยคกลางครั้งเดียวพอ ไม่ต้องขอประโยคถัดไป
+                if (d.fallback) break;
             }
-        } else {
+            producing = false;
+            notify();
+        })();
+
+        // รอจนเสียงที่สะสมไว้ยาวพอให้พูดต่อเนื่องจนจบ หรือรอครบ MAX_PREBUFFER_MS
+        let firstReadyAt = null;
+        while (!signal.aborted && producing) {
+            if (queue.length) {
+                if (firstReadyAt === null) firstReadyAt = performance.now();
+                const bufferedSec = queue.reduce((n, q) => n + q.dur, 0);
+                const remainingGenSec = genChars ? (totalChars - producedChars) * (genMs / genChars) / 1000 : 0;
+                if (bufferedSec >= remainingGenSec || performance.now() - firstReadyAt >= MAX_PREBUFFER_MS) break;
+            }
+            await waitChange(400);
+        }
+
+        isPlayingQueue = true;
+        while (!signal.aborted) {
+            if (!queue.length) {
+                if (!producing) break;
+                ttsGapActive = true;          // ยังสร้างเสียงประโยคถัดไปไม่เสร็จ
+                setEmotion('thinking');
+                await waitChange(400);
+                continue;
+            }
+            const ok = await playUriToEnd(queue.shift().uri);
+            if (!ok) break;
+        }
+        if (!signal.aborted) {
+            ttsGapActive = false;
             handlePlaybackFinished();
         }
+    };
+
+    try {
+        // 1) เสียงคำตอบเต็มที่อัดเก็บไว้แล้ว (prebake) เล่นได้ทันที
+        let data = await requestTTS(speechText, activeLang, signal, true);
+        if (signal.aborted) return;
+        const sentences = splitTextIntoSentences(speechText);
+        // 2) ไม่มีเสียงอัดไว้ และเป็นข้อความประโยคเดียว: ขอทั้งก้อน
+        if (!(data && data.audio_base64) && sentences.length <= 1) {
+            data = await requestTTS(speechText, activeLang, signal);
+            if (signal.aborted) return;
+        }
+        if (data && data.audio_base64) {
+            const uri = ttsDataToUri(data);
+            if (!data.fallback && clientAudioCache.size < 128) {
+                clientAudioCache.set(cacheKey, uri);
+            }
+            await playUriToEnd(uri);
+            if (!signal.aborted) handlePlaybackFinished();   // ถูกขัดจังหวะ: คำตอบใหม่จัดการสถานะเอง
+            return;
+        }
+        // 3) ไม่มีเสียงอัดไว้ และมีหลายประโยค: ขอเสียงแค่ 2 ท่อน แล้วพูดต่อกัน
+        if (sentences.length > 1) {
+            await playSentenceQueue(speechChunks(sentences));
+            return;
+        }
+        handlePlaybackFinished();
     } catch (err) {
         if (err.name !== 'AbortError') {
             console.warn('⚠️ [Audio Playback] TTS error:', err);
@@ -1215,8 +1283,10 @@ function parseWakeWord(transcript) {
     return { isWakeWord: false, isWakeOnly: false, query: raw, detectedLang: detectedLang };
 }
 
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+// ใช้ตัวฟังเสียงของน้องเพชร (local_stt.js): Whisper ในบูธถ้ามี ไม่งั้นใช้ Web Speech ของเบราว์เซอร์
+// (Chromium บน Raspberry Pi ใช้ Web Speech ไม่ได้ -> error: network)
+if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.NongPhetSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
     recognition.lang = getRecognitionLang();
     recognition.interimResults = true;
@@ -1405,12 +1475,13 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             }
         } else {
             // In Real-time Hands-free mode, auto restart listening when idle
+            // ไมค์ใช้ไม่ได้ (ไม่อนุญาต/ไม่ได้เสียบ): รอ MIC_RETRY_MS ก่อนลองใหม่ ไม่วนเริ่มใหม่ทุก 200ms
             if (!isSpeakingTTS && !isWaitingChatResponse) {
                 setTimeout(() => {
                     if (isRealtimeVoiceActive && !isSpeakingTTS && !isWaitingChatResponse) {
                         startRecognitionSafe();
                     }
-                }, 200);
+                }, Math.max(200, micRetryAfter - Date.now()));
             }
         }
     };
@@ -1420,6 +1491,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         console.warn('Speech recognition event:', e.error);
         if (!isWaitingChatResponse && !isSpeakingTTS) {
             setEmotion('idle');
+        }
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed' || e.error === 'audio-capture') {
+            micRetryAfter = Date.now() + MIC_RETRY_MS;
         }
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
             console.warn('🎙️ [Mic Permission Required] เบราว์เซอร์ต้องการการอนุญาตไมโครโฟนจากผู้ใช้');
@@ -1436,6 +1510,10 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         }
     };
 }
+
+// ไมค์ใช้ไม่ได้ (ไม่อนุญาต / ไม่ได้เสียบ): ลองเปิดใหม่ทุก MIC_RETRY_MS (เสียบไมค์ทีหลังได้)
+const MIC_RETRY_MS = 5000;
+let micRetryAfter = 0;
 
 function startRecognitionSafe() {
     if (!recognition) return;

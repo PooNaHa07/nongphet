@@ -5,16 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>น้องเพชร AI Smart Guide - จอสัมผัส 10.1 นิ้ว // KIOSK MODE</title>
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{{ url_for('static', filename='vendor/tailwind/tailwind.js') }}"></script>
     <!-- FontAwesome 6 Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <!-- Google Fonts: Prompt & JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/fonts.css') }}" rel="stylesheet">
     <!-- Google MediaPipe Hands & Camera Utils (Lazy loaded with defer) -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous" defer></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/camera_utils/camera_utils.js') }}" crossorigin="anonymous" defer></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/hands/hands.js') }}" crossorigin="anonymous" defer></script>
     <!-- Modular Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.3">
     <style>
@@ -55,7 +53,7 @@
         <!-- Screen 1: The 10.1" Kiosk Hero Screen (หน้าจอ 4 ช่องใหญ่ตรงตามรูป 1:1) -->
         {% include 'components/screens/welcome.html' %}
 
-        <!-- Screen 2: Courses Guide (9 สาขาวิชา อาชีวะเพชรบุรี) -->
+        <!-- Screen 2: Courses Guide (11 สาขาวิชา อาชีวะเพชรบุรี) -->
         {% include 'components/screens/courses.html' %}
 
         <!-- Screen 3: Places Grid (แนะนำวิทยาลัย & ที่เที่ยวเมืองเพชร) -->
@@ -77,11 +75,13 @@
     {% include 'components/modals.html' %}
 
     <!-- Kiosk Scripts -->
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=1.0.5"></script>
-    <script src="{{ url_for('static', filename='js/chat.js') }}?v=1.0.5"></script>
-    <script src="{{ url_for('static', filename='js/modals.js') }}?v=1.0.5"></script>
+    <script src="{{ url_for('static', filename='vendor/qrcode/qrcode.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/local_stt.js') }}?v=1.0.2"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=1.0.12"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}?v=1.0.10"></script>
+    <script src="{{ url_for('static', filename='js/modals.js') }}?v=1.0.6"></script>
     <script src="{{ url_for('static', filename='js/iot.js') }}?v=1.0.5"></script>
-    <script src="{{ url_for('static', filename='js/sign_language.js') }}?v=1.0.5"></script>
+    <script src="{{ url_for('static', filename='js/sign_language.js') }}?v=1.0.6"></script>
 
     <!-- Kiosk Navigation Helper & Inactivity Watchdog -->
     <script>

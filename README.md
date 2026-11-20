@@ -8,7 +8,7 @@
 
 **"น้องเพชร AI Smart Guide"** คือหุ่นยนต์ประชาสัมพันธ์และไกด์นำเที่ยวอัจฉริยะ (AI Interactive Robot Kiosk) ผลงานนวัตกรรมสิ่งประดิษฐ์ของ**วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC)** ออกแบบตามมาตรฐานเกณฑ์การประเมินสิ่งประดิษฐ์คนรุ่นใหม่ สอศ. ประเภทหุ่นยนต์และปัญญาประดิษฐ์
 
-ระบบผสานพลังระหว่าง **Edge Computing บน Raspberry Pi 5** สำหรับงานที่ต้องการความเร็วสูงและทำงานแบบออฟไลน์ได้ (Local ML Intent Classifier, Semantic Retrieval, YuNet Face & Gaze Tracking, Universal Design Thai Sign Language) ร่วมกับ **Cloud Multimodal AI (Google Gemini 2.5 Flash)** สำหรับการวิเคราะห์ภาพสถานที่ท่องเที่ยวเชิงลึกและการสนทนาแบบเปิดอย่างเป็นธรรมชาติ
+ระบบผสานพลังระหว่าง **Edge Computing บน Raspberry Pi 5** สำหรับงานที่ต้องการความเร็วสูงและทำงานแบบออฟไลน์ได้ (Local ML Intent Classifier, Semantic Retrieval, YuNet Face & Gaze Tracking, Universal Design Thai Sign Language) และ **Local SLM ผ่าน Ollama** สำหรับการสนทนาแบบเปิด ทำงานในเครื่องทั้งหมดโดยไม่พึ่ง Cloud AI
 
 ---
 
@@ -26,10 +26,10 @@
 - **Voice Barge-In**: ผู้ใช้สามารถพูดแทรกหรือแตะหน้าจอเพื่อขัดจังหวะการเล่าเรื่องยาวๆ ได้ทันที
 - **Earcon Feedback**: สัญญาณเสียงนุ่มนวล ปิ๊ง! (Listen Chime) และ ปุ๊ง! (Done Chime) ช่วยให้ผู้ใช้ทราบจังหวะเริ่มพูด
 
-### 3. 🧠 สถาปัตยกรรม Hybrid AI & Semantic RAG (Offline + Cloud)
+### 3. 🧠 สถาปัตยกรรม Local AI & Semantic RAG (Offline 100%)
 - **Local Machine Learning**: Scikit-Learn Multilingual Intent Classifier จำแนกเจตนาคำถาม (ท่องเที่ยว, อาหาร, หลักสูตรวิทยาลัย, การเดินทาง, ทักทาย)
 - **Dynamic Semantic RAG**: ค้นหาคำตอบจากคลังความรู้ `knowledge_base.json` ด้วย TF-IDF Cosine Similarity และ Synonym Expansion แม่นยำ รวดเร็ว และรองรับ Hot-Reload โดยไม่ต้องรีสตาร์ทแอป
-- **Google Gemini 2.5 Flash / 2.0 Flash**: ตอบคำถามเชิงลึก วางแผนทริปท่องเที่ยว 1-2 วัน และวิเคราะห์รูปภาพถ่ายสถานที่
+- **Local SLM (Ollama, เช่น Qwen 2.5 1.5B)**: ตอบคำถามปลายเปิดที่ฐานความรู้ไม่ครอบคลุม พร้อมบริบทจาก RAG (ไม่บังคับ ถ้าไม่ได้ติดตั้งจะตอบจากฐานความรู้ในเครื่อง)
 
 ### 4. 🤟 Universal Design — ภาษามือไทย (Thai Sign Language: TSL)
 - ตรวจจับจุดข้อต่อนิ้วมือ 21 จุดผ่านกล้อง เพื่อแปลภาษามือพื้นฐานสำหรับผู้บกพร่องทางการได้ยิน ส่งเสริมความเท่าเทียมในการเข้าถึงข้อมูลท่องเที่ยวและสถานศึกษา
@@ -69,13 +69,13 @@
 |   └── MJPEG Live Video Stream (/video_feed, /snapshot.jpg, /status)               |
 +-----------------------------------------------------------------------------------+
              │                                             │
-             ▼ (Offline Edge)                              ▼ (Cloud AI)
+             ▼ (Offline Edge)                              ▼ (Offline LLM, ไม่บังคับ)
 +---------------------------------------+   +---------------------------------------+
-|          LOCAL EDGE AI ENGINE         |   |         CLOUD MULTIMODAL ENGINE       |
-|  - Semantic Retriever (TF-IDF +       |   |  - Google Gemini 2.5 Flash            |
-|    Cosine Similarity with Hot Reload) |   |  - Fallback: Gemini 2.0 Flash         |
-|  - Local ML Intent Classifier         |   |  - Deep Cultural & Travel Knowledge   |
-|  - TSL 21-Joint Geometric Classifier  |   |  - Multimodal Photo Verification      |
+|          LOCAL EDGE AI ENGINE         |   |        LOCAL SLM (OLLAMA)             |
+|  - Semantic Retriever (TF-IDF +       |   |  - Qwen 2.5 1.5B / nongphet-custom    |
+|    Cosine Similarity with Hot Reload) |   |  - RAG Context Injection              |
+|  - Local ML Intent Classifier         |   |  - Open-domain Conversation           |
+|  - TSL 21-Joint Geometric Classifier  |   |                                       |
 |  - Pre-baked Audio Cache (0ms)        |   |                                       |
 +---------------------------------------+   +---------------------------------------+
 ```
@@ -108,7 +108,8 @@ nongphet/
 │
 ├── services/                   # Business Logic & External Services
 │   ├── tts_service.py          # Edge-TTS, Cache Manager, Text Normalizer
-│   ├── gemini_service.py       # Gemini API SDK Client
+│   ├── text_utils.py           # ดึงคำถามต่อยอด / ตรวจจับภาษา / คำถามลองภูมิ
+│   ├── arm_service.py          # ท่าทางแขนหุ่นยนต์ (เซอร์โวไหล่)
 │   └── analytics_service.py    # บันทึกสถิติผู้เข้าชม
 │
 ├── models/                     # Deep Learning Models
@@ -164,14 +165,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. ตั้งค่า API Key
-เปิดไฟล์ `config.py` หรือกำหนดผ่าน Environment Variable:
+### 2. ตั้งค่า (ไม่ต้องใช้ API Key)
+ระบบทำงานในเครื่องทั้งหมด ค่าที่ควรตั้งในไฟล์ `.env` ก่อนใช้งานจริง:
 ```bash
-# Windows PowerShell
-$env:GEMINI_API_KEY="AIzaSy..."
-
-# Linux / Raspberry Pi
-export GEMINI_API_KEY="AIzaSy..."
+SECRET_KEY=<สุ่มข้อความยาวๆ>
+ADMIN_PIN=<รหัสผู้ดูแล>
 ```
 
 ### 3. รันโปรแกรมแบบ One-Click

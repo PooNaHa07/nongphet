@@ -1,6 +1,6 @@
 /**
  * nongphet AI Smart Guide - Thai Sign Language (TSL) & Accessibility Engine
- * MediaPipe Hands 21-Points Skeleton Tracker + Edge Gesture Recognition + Gemini Vision TSL
+ * MediaPipe Hands 21-Points Skeleton Tracker + Edge Gesture Recognition + Local Snapshot TSL
  */
 
 let signCameraStream = null;
@@ -43,7 +43,7 @@ function initMediaPipeHands() {
 
     try {
         signHands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            locateFile: (file) => `/static/vendor/mediapipe/hands/${file}`
         });
 
         signHands.setOptions({
@@ -449,16 +449,16 @@ async function simulateGesture(gestureKey) {
 }
 
 /**
- * Capture High-Res Snapshot from Video and send to Gemini 2.5 Flash Vision
+ * Capture High-Res Snapshot from Video and analyze with the local TSL rule engine
  */
-async function analyzeSignWithGemini() {
+async function analyzeSignSnapshot() {
     const video = document.getElementById('signVideo');
     if (!video || !signIsCameraActive || video.videoWidth === 0) {
         if (typeof showAppToast === 'function') showAppToast('กรุณาเปิดกล้องก่อนทำการวิเคราะห์ภาษามือค่ะ', 'warning'); else alert('กรุณาเปิดกล้องก่อน');
         return;
     }
 
-    const btn = document.getElementById('btnTriggerGeminiSign');
+    const btn = document.getElementById('btnTriggerSignSnapshot');
     const origHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-amber-300"></i> กำลังวิเคราะห์ภาพ...';
     btn.disabled = true;
@@ -537,7 +537,7 @@ function displaySignLanguageResult(data, engine) {
     if (emotionText) emotionText.textContent = emoInfo.label;
 
     if (engineBadge) {
-        const engineLabel = engine.includes('gemini') || engine.includes('local') ? 'Local AI Vision TSL' : 'Edge AI Real-time';
+        const engineLabel = engine.includes('local') ? 'Local AI Vision TSL' : 'Edge AI Real-time';
         engineBadge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> ${engineLabel}`;
     }
 

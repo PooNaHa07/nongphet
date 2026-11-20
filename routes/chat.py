@@ -9,14 +9,13 @@ import datetime
 import logging
 from flask import Blueprint, request, jsonify, session
 from intent_classifier import NongPhetIntentClassifier
-from services.gemini_service import (
-    SYSTEM_PROMPT, extract_suggestions, detect_message_language,
-    generate_gemini_response, is_gemini_available
-)
+from services.text_utils import extract_suggestions, detect_message_language
+from services import web_answer_service
 from services.knowledge_service import (
-    semantic_retriever, match_local_knowledge, get_local_knowledge_reply
+    semantic_retriever, match_local_knowledge, get_local_knowledge_reply, cant_answer_reply
 )
 from services.analytics_service import record_interaction
+from services.arm_service import extract_gesture_tag
 import state
 
 logger = logging.getLogger("nongphet.chat")
@@ -78,7 +77,7 @@ def resolve_living_emotion(user_message: str, reply_text: str, default_emotion: 
         
     return default_emotion if default_emotion in ['smile', 'happy', 'excited', 'love', 'wink', 'surprised', 'thinking'] else 'smile'
 
-def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None):
+def send_chat_response(user_message, reply_text, suggestions, engine, detected_intent, intent_th, confidence, source, language, base_emotion, rag_score=None, gesture=None, speech=None, extra=None):
     """ส่งต่อคำตอบพร้อมซิงค์อารมณ์ใบหน้าน้องเพชร (Screen 2) และบันทึกลง State"""
     final_emotion = resolve_living_emotion(user_message, reply_text, base_emotion)
     state.emotion_state['current'] = final_emotion
@@ -93,7 +92,18 @@ def send_chat_response(user_message, reply_text, suggestions, engine, detected_i
         })
     except Exception as e:
         logger.debug(f"Emotion broadcast note: {e}")
-        
+
+    # ท่าทางแขนประกอบอารมณ์/เจตนา (ไม่ขัดขวางการตอบแชทหากระบบแขนมีปัญหา)
+    try:
+        from services import arm_service
+        if gesture:
+            # ท่าที่ LLM เลือกเองผ่านแท็ก [gesture:x] มาก่อนการเดาจากอารมณ์
+            arm_service.trigger_gesture(gesture, source='llm_tag')
+        else:
+            arm_service.react_to_chat(detected_intent, final_emotion)
+    except Exception as e:
+        logger.debug(f"Arm gesture note: {e}")
+
     resp = {
         'reply': reply_text,
         'suggestions': suggestions,
@@ -109,16 +119,70 @@ def send_chat_response(user_message, reply_text, suggestions, engine, detected_i
     }
     if rag_score is not None:
         resp['rag_score'] = rag_score
+    if speech:
+        # บทพูดสั้นของหัวข้อนี้: หน้าจอแสดง reply เต็ม แต่น้องเพชรพูดแค่ speech
+        resp['speech'] = speech
+    if extra:
+        resp.update(extra)
     return jsonify(resp)
+
+def _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion):
+    """ชั้นสำรอง: ค้นคำตอบจากเว็บ (Gemini + Google Search) คืน response หรือ None ถ้าใช้ไม่ได้"""
+    if not web_answer_service.should_use_web(user_message, detected_intent):
+        return None
+    web = web_answer_service.answer(user_message, language)
+    if not web:
+        return None
+    record_interaction(user_message, detected_intent, confidence, 'web_search', language)
+    full_speech, spoken = _web_spoken_text(web, language)
+    return send_chat_response(
+        user_message=user_message,
+        reply_text=web['reply'],
+        suggestions=extract_suggestions(web['reply']),
+        engine='web_search',
+        detected_intent=detected_intent,
+        intent_th=intent_th,
+        confidence=confidence,
+        source=f"web_search:{web['model']}",
+        language=language,
+        base_emotion='happy',
+        speech=spoken,
+        extra={'sources': web['sources'], 'search_html': web['search_html'], 'speech_full': full_speech}
+    )
+
+
+def _web_spoken_text(web, language):
+    """
+    เลือกบทพูดของคำตอบจากเว็บ คืน (บทพูดสรุปเต็ม, บทพูดที่จะพูดตอนนี้)
+    - มีเสียงสรุปเต็มอัดไว้แล้ว: พูดสรุปเต็ม (ทันที)
+    - ยังไม่มี (โหมด short): พูดประโยคสั้นที่อัดไว้แล้ว ให้อ่านรายละเอียดบนจอ / กด "ฟังเสียง" ฟังสรุปเต็ม
+    - คำถามซ้ำ (คำตอบตายตัวที่บันทึกไว้): อัดเสียงสรุปเต็มเบื้องหลัง ครั้งหน้าจะพูดสรุปเต็มได้ทันที
+    """
+    full = web.get('speech') or ''
+    if not web.get('grounded') or web_answer_service.speech_mode() == 'full':
+        return full, full
+    lang = language if language in web_answer_service.WEB_SCREEN_SPEECH else 'th'
+    try:
+        from services import tts_service
+        if tts_service.is_text_baked(full, lang):
+            return full, full
+        if web.get('repeat'):
+            tts_service.bake_text_in_background(full, lang)
+    except Exception as e:
+        logger.debug(f"Web speech bake note: {e}")
+    return full, web_answer_service.WEB_SCREEN_SPEECH[lang]
+
 
 @chat_bp.route('/chat', methods=['POST'])
 def chat():
     """
-    Route สำหรับประมวลผลข้อความแชทด้วย Hybrid AI Architecture:
+    Route สำหรับประมวลผลข้อความแชท (ในเครื่องเป็นหลัก เว็บเป็นชั้นสำรอง):
     1. Local Machine Learning Model: จำแนก Intent และคำนวณ Confidence ในเครื่อง
-    2. Local Knowledge Base: ตอบคำถามเฉพาะทางทันทีเมื่อพบความมั่นใจสูงเพื่อความเร็วระดับมิลลิวินาที
-    3. Google Gemini 2.5 Flash: ส่งต่อเพื่อตอบบทสนทนาเชิงลึก พร้อมทำ Context Steering ด้วย Intent จาก ML
-    4. Two-tier Fallbacks: มีระบบสำรองทั้ง Gemini Flash-Lite และ Local Knowledge เมื่อออฟไลน์
+    2. Semantic RAG / Local Knowledge Base: ตอบคำถามเฉพาะทางทันทีเมื่อพบความมั่นใจสูง
+       (คะแนนต่ำกว่า WEB_PREFER_BELOW = ไม่แน่ใจ ลองค้นเว็บก่อน ถ้าค้นไม่ได้ใช้คำตอบนี้)
+    3. Web Search (Gemini + Google Search): เฉพาะคำถามที่ฐานความรู้ตอบไม่ได้ และไม่ใช่เรื่องวิทยาลัย
+    4. Local SLM (Ollama): ตอบบทสนทนาเปิดพร้อมบริบทจากฐานความรู้ (ถ้าติดตั้งและเปิดใช้งาน)
+    5. Offline Fallback: คำตอบจากฐานความรู้ในเครื่องเมื่อทุกชั้นข้างต้นตอบไม่ได้
     """
     data = request.json or {}
     user_message = data.get('message', '').strip()
@@ -174,6 +238,31 @@ def chat():
             intent=detected_intent,
             context_entry_id=last_topic_id
         )
+        # คะแนน RAG ต่ำ = ไม่แน่ใจว่าตรงหัวข้อ (เช่น ถามสถานที่ที่ไม่มีในฐานความรู้) -> ลองค้นเว็บก่อน
+        # ถามชื่อสถานที่ที่ไม่มีในหัวข้อที่จับได้ ("วัดเขาตะเครา" จับได้ "วัดเขาบันไดอิฐ") -> ค้นเว็บก่อนเสมอ
+        unknown_place = rag_match.get('unknown_place') if rag_match else None
+        if rag_match and (unknown_place or rag_match['score'] < web_answer_service.prefer_web_below()):
+            web_resp = _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion)
+            if web_resp is not None:
+                return web_resp
+            if unknown_place:
+                # ค้นเว็บไม่ได้: บอกตรงๆ ว่ายังไม่มีข้อมูล ไม่ตอบเรื่องสถานที่อื่นแทน (ผิดที่)
+                logger.info(f"⚡ [Semantic RAG] ไม่ใช้ [{rag_match['id']}]: ไม่รู้จักสถานที่ '{unknown_place}'")
+                record_interaction(user_message, detected_intent, confidence, 'unknown_place', language)
+                fallback = web_answer_service.UNKNOWN_PLACE_REPLY
+                return send_chat_response(
+                    user_message=user_message,
+                    reply_text=fallback['reply'],
+                    suggestions=fallback['suggestions'],
+                    engine='unknown_place',
+                    detected_intent=detected_intent,
+                    intent_th=intent_th,
+                    confidence=confidence,
+                    source=f"unknown_place:{rag_match['id']}",
+                    language=language,
+                    base_emotion='thinking',
+                    speech=fallback['speech'],
+                )
         if rag_match:
             if len(state.SESSION_LAST_TOPIC) >= state.MAX_SESSION_TOPICS:
                 state.SESSION_LAST_TOPIC.popitem(last=False)
@@ -182,14 +271,6 @@ def chat():
             suggestions = rag_match.get('suggestions') or extract_suggestions(reply_text)
             logger.info(f"⚡ [Semantic RAG] Local Hit [{rag_match['id']}] (Score: {rag_match['score']:.4f}, Intent: {detected_intent})")
             record_interaction(user_message, detected_intent, confidence, 'semantic_rag', language)
-
-            # บันทึกประวัติสนทนาเพื่อความต่อเนื่องของบริบทข้ามรอบ (Multi-turn Context Buffer)
-            if session_id not in state.chat_histories:
-                state.chat_histories[session_id] = []
-            state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-            state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': reply_text}]})
-            if len(state.chat_histories[session_id]) > 12:
-                state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
             return send_chat_response(
                 user_message=user_message,
                 reply_text=reply_text,
@@ -201,7 +282,8 @@ def chat():
                 source=f"semantic_rag:{rag_match['id']}",
                 language=language,
                 base_emotion=target_emotion,
-                rag_score=rag_match['score']
+                rag_score=rag_match['score'],
+                speech=rag_match.get('speech')
             )
 
         local_reply = match_local_knowledge(user_message, detected_intent, confidence, language)
@@ -209,14 +291,6 @@ def chat():
             logger.info(f"⚡ [Hybrid AI] Direct Local Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
             record_interaction(user_message, detected_intent, confidence, 'local_model', language)
             suggestions = extract_suggestions(local_reply)
-
-            # บันทึกประวัติสนทนาเพื่อความต่อเนื่องของบริบทข้ามรอบ (Multi-turn Context Buffer)
-            if session_id not in state.chat_histories:
-                state.chat_histories[session_id] = []
-            state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-            state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': local_reply}]})
-            if len(state.chat_histories[session_id]) > 12:
-                state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
             return send_chat_response(
                 user_message=user_message,
                 reply_text=local_reply,
@@ -230,87 +304,69 @@ def chat():
                 base_emotion=target_emotion
             )
 
-    # 3. RAG-Augmented Local SLM (Ollama)
-    if not force_llm:
-        try:
-            from local_slm import generate_local_response, is_ollama_running
-            if is_ollama_running():
-                rag_contexts = [] if is_creative else semantic_retriever.retrieve_top_k(user_message, k=2, intent=detected_intent, min_score=0.38)
-                slm_result = generate_local_response(
-                    user_message,
-                    rag_contexts=rag_contexts,
-                    language=language,
-                    intent=intent_th
-                )
-                if slm_result:
-                    reply_text = slm_result['reply']
-                    suggestions = extract_suggestions(reply_text)
-                    logger.info(f"🦙 [Local SLM+RAG] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
-                    record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
-                    return send_chat_response(
-                        user_message=user_message,
-                        reply_text=reply_text,
-                        suggestions=suggestions,
-                        engine='local_slm',
-                        detected_intent=detected_intent,
-                        intent_th=intent_th,
-                        confidence=confidence,
-                        source=slm_result.get('source', 'local_slm'),
-                        language=language,
-                        base_emotion=target_emotion
-                    )
-        except ImportError:
-            pass
+    # 3. ฐานความรู้ในเครื่องตอบไม่ได้ -> ค้นจากเว็บ (Gemini + Google Search) ถ้ามีเน็ตและตั้งค่าไว้
+    if not is_creative:
+        web_resp = _try_web_answer(user_message, detected_intent, intent_th, confidence, language, target_emotion)
+        if web_resp is not None:
+            return web_resp
 
-    # 4. Google Gemini 2.5 Flash Cloud AI (ประมวลผลคำตอบและการสนทนาขั้นสูง)
-    if is_gemini_available():
-        try:
-            rag_top = semantic_retriever.retrieve(user_message, intent=detected_intent)
-            rag_ctx = rag_top['reply'] if rag_top else None
-            gemini_reply = generate_gemini_response(
-                user_message=user_message,
-                history=state.chat_histories.get(session_id),
-                rag_context=rag_ctx,
-                language=language
+    # 4. RAG-Augmented Local SLM (Ollama) — force_llm ข้ามฐานความรู้มาที่นี่โดยตรง
+    try:
+        from local_slm import generate_local_response, is_ollama_running
+        if is_ollama_running():
+            rag_contexts = [] if is_creative else semantic_retriever.retrieve_top_k(user_message, k=2, intent=detected_intent, min_score=0.38)
+            slm_result = generate_local_response(
+                user_message,
+                rag_contexts=rag_contexts,
+                language=language,
+                intent=intent_th
             )
-            if gemini_reply:
-                suggestions = extract_suggestions(gemini_reply)
-                logger.info(f"✨ [Gemini 2.5 Flash] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
-                record_interaction(user_message, detected_intent, confidence, 'gemini_flash', language)
-
-                if session_id not in state.chat_histories:
-                    state.chat_histories[session_id] = []
-                state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-                state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': gemini_reply}]})
-                if len(state.chat_histories[session_id]) > 12:
-                    state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
-
+            if slm_result:
+                reply_text, llm_gesture = extract_gesture_tag(slm_result['reply'])
+                suggestions = extract_suggestions(reply_text)
+                logger.info(f"🦙 [Local SLM+RAG] Response (Intent: {detected_intent}, Conf: {confidence:.2f})")
+                record_interaction(user_message, detected_intent, confidence, 'local_slm', language)
                 return send_chat_response(
                     user_message=user_message,
-                    reply_text=gemini_reply,
+                    reply_text=reply_text,
                     suggestions=suggestions,
-                    engine='gemini_flash',
+                    engine='local_slm',
                     detected_intent=detected_intent,
                     intent_th=intent_th,
                     confidence=confidence,
-                    source='gemini_2.5_flash',
+                    source=slm_result.get('source', 'local_slm'),
                     language=language,
-                    base_emotion=target_emotion
+                    base_emotion=target_emotion,
+                    gesture=llm_gesture
                 )
-        except Exception as ge:
-            logger.warning(f"⚠️ Gemini chat processing error ({ge}) -> fallback to offline")
+    except ImportError:
+        pass
 
     # 5. Pure Offline Intelligent Knowledge & Semantic RAG Response
-    reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent)
+    reply_text = get_local_knowledge_reply(user_message, language, intent=detected_intent,
+                                           allow_generic=(language != 'th'))
+    if not reply_text:
+        # ตอบไม่ได้จริงๆ: บอกตรงๆ (ไม่ตอบข้อความต้อนรับทั่วไปแทน ไม่เดา) เรื่องวิทยาลัยส่งต่อให้วิทยาลัย
+        # ใช้คำในคำถามเท่านั้น (เจตนาที่โมเดลเดาอาจพลาดเป็น admission กับคำถามแปลกๆ)
+        college = web_answer_service.is_college_topic(user_message)
+        fallback = cant_answer_reply(language, college=college)
+        record_interaction(user_message, detected_intent, confidence, 'cant_answer', language)
+        logger.info(f"🤷 [Chat] ตอบไม่ได้ -> แจ้งผู้ใช้ตรงๆ (college={college})")
+        return send_chat_response(
+            user_message=user_message,
+            reply_text=fallback['reply'],
+            suggestions=fallback['suggestions'],
+            engine='cant_answer',
+            detected_intent=detected_intent,
+            intent_th=intent_th,
+            confidence=confidence,
+            source='cant_answer',
+            language=language,
+            base_emotion='thinking',
+            speech=fallback['speech'],
+        )
     suggestions = extract_suggestions(reply_text)
     record_interaction(user_message, detected_intent, confidence, 'offline_local_ai', language)
-
-    if session_id not in state.chat_histories:
-        state.chat_histories[session_id] = []
-    state.chat_histories[session_id].append({'role': 'user', 'parts': [{'text': user_message}]})
-    state.chat_histories[session_id].append({'role': 'model', 'parts': [{'text': reply_text}]})
-    if len(state.chat_histories[session_id]) > 12:
-        state.chat_histories[session_id] = state.chat_histories[session_id][-12:]
 
     return send_chat_response(
         user_message=user_message,
@@ -324,6 +380,36 @@ def chat():
         language=language,
         base_emotion=target_emotion
     )
+
+@chat_bp.route('/api/voice/command', methods=['POST'])
+def voice_command():
+    """
+    คำสั่งเสียง/พิมพ์สั้นๆ (เปิดหน้า หยุดพูด ยิ้ม โบกมือ กี่โมง ...) ตรวจก่อนส่งเข้าแชต ทำงานในเครื่องทันที
+    คืน {'command': {...}} หรือ {'command': None} ถ้าไม่ใช่คำสั่ง (หน้าจอส่งต่อให้ /chat ตอบตามปกติ)
+    """
+    from services import voice_command_service
+    data = request.json or {}
+    cmd = voice_command_service.parse(data.get('text', ''))
+    if not cmd:
+        return jsonify({'status': 'success', 'command': None})
+    if cmd.get('gesture'):
+        try:
+            from services import arm_service
+            cmd['arm'] = arm_service.trigger_gesture(cmd['gesture'], source='voice_command', force=True).get('status')
+        except Exception as e:
+            logger.debug(f"Voice command arm note: {e}")
+    if cmd['ui'].get('help'):
+        cmd['help'] = voice_command_service.help_list()
+    logger.info(f"🎙️ [Voice Command] {cmd['name']} <- {data.get('text', '')!r}")
+    return jsonify({'status': 'success', 'command': cmd})
+
+
+@chat_bp.route('/api/voice/commands', methods=['GET'])
+def voice_command_list():
+    """ตัวอย่างคำสั่งเสียงสำหรับการ์ด "ลองพูดว่า..." """
+    from services import voice_command_service
+    return jsonify({'status': 'success', 'groups': voice_command_service.help_list()})
+
 
 @chat_bp.route('/plan_trip', methods=['POST'])
 def plan_trip():
@@ -366,69 +452,85 @@ def plan_trip():
         )
     return jsonify({'plan': plan, 'status': 'success', 'engine': 'offline_local_planner'})
 
+# ตัวแนะนำสาขา: จับคู่ความสนใจกับ 11 สาขาที่เปิดสอนจริง แล้วดึงรายละเอียดจากฐานความรู้ (ข้อมูลทางการ)
+# ไม่ใส่คะแนนความเหมาะสมหรือเงินเดือน เพราะไม่มีแหล่งข้อมูลรองรับ
+COURSE_RULES = [
+    ('admission_dbt_001', 'เทคโนโลยีธุรกิจดิจิทัลและคอมพิวเตอร์ธุรกิจ',
+     ['คอม', 'ไอที', 'โปรแกรม', 'เขียนโค้ด', 'เว็บ', 'แอป', 'เกม', 'it', 'computer', 'ai', 'ดิจิทัล', 'เทคโน', 'เครือข่าย']),
+    ('admission_digital_graphic_001', 'ดิจิทัลกราฟิก',
+     ['กราฟิก', 'ออกแบบ', 'ตัดต่อ', 'วิดีโอ', 'ภาพเคลื่อนไหว', 'แอนิเมชัน', 'โปสเตอร์', 'design', 'graphic']),
+    ('admission_fine_arts_001', 'วิจิตรศิลป์', ['วาดรูป', 'วาดภาพ', 'ศิลปะ', 'ระบายสี', 'ปั้น', 'จิตรกรรม', 'art']),
+    ('admission_acct_001', 'การบัญชี', ['บัญชี', 'ตัวเลข', 'คำนวณ', 'การเงิน', 'ภาษี', 'คณิต', 'account']),
+    ('admission_mkt_001', 'การตลาด', ['ขาย', 'ค้าขาย', 'ออนไลน์', 'การตลาด', 'โฆษณา', 'ธุรกิจ', 'แม่ค้า', 'marketing']),
+    ('admission_office_001', 'การจัดการสำนักงาน', ['เอกสาร', 'สำนักงาน', 'เลขา', 'ธุรการ', 'ประสานงาน', 'office']),
+    ('admission_culinary_001', 'อาหารและโภชนาการ', ['อาหาร', 'ทำอาหาร', 'ขนม', 'ครัว', 'เชฟ', 'เบเกอรี่', 'cook', 'chef', 'food']),
+    ('admission_home_econ_001', 'คหกรรม', ['ดอกไม้', 'แกะสลัก', 'ใบตอง', 'งานฝีมือ', 'ประดิษฐ์', 'ดูแลเด็ก', 'ผู้สูงอายุ']),
+    ('admission_fashion_001', 'แฟชั่นและสิ่งทอ', ['แฟชั่น', 'เสื้อผ้า', 'ตัดเย็บ', 'เย็บผ้า', 'แต่งตัว', 'ผ้า', 'fashion']),
+    ('admission_hotel_001', 'การโรงแรม', ['โรงแรม', 'บริการ', 'ต้อนรับ', 'เครื่องดื่ม', 'บาร์', 'hotel']),
+    ('admission_tourism_001', 'การท่องเที่ยว', ['ท่องเที่ยว', 'ไกด์', 'มัคคุเทศก์', 'เที่ยว', 'ภาษาอังกฤษ', 'ทัวร์', 'อีเวนต์', 'tour']),
+]
+
+
+def _course_summary(entry_id):
+    """ดึงบรรทัดหลักสูตรและอาชีพจากคำตอบในฐานความรู้ (แหล่งเดียวกับที่น้องเพชรตอบในแชท)"""
+    try:
+        from services.knowledge_manager import kb_manager
+        entry = kb_manager.get_entry(entry_id) or {}
+    except Exception:
+        entry = {}
+    keep = []
+    for line in (entry.get('answer') or '').split('\n'):
+        s = line.strip()
+        if s.startswith(('- ปวช', '- ปวส', '- ปริญญา', '• **อาชีพ', '• **หลักสูตร', '• มีนักเรียน')):
+            keep.append(line)
+    return '\n'.join(keep)
+
+
 @chat_bp.route('/match_course', methods=['POST'])
 def match_course():
     data = request.json or {}
-    interests = data.get('interests', '')
-    strengths = data.get('strengths', '')
-    dream_job = data.get('dream_job', '')
-    
-    text = (interests + " " + strengths + " " + dream_job).lower()
-    if any(k in text for k in ['คอม', 'ไอที', 'โปรแกรม', 'เกม', 'เว็บ', 'it', 'computer', 'ai', 'ดิจิทัล', 'เทคโน', 'กราฟิก']):
+    text = ' '.join(str(data.get(k, '')) for k in ('interests', 'strengths', 'dream_job')).lower()
+
+    scored = []
+    for entry_id, name, words in COURSE_RULES:
+        hits = [w for w in words if w in text]
+        if hits:
+            scored.append((len(hits), entry_id, name, hits))
+    scored.sort(key=lambda x: -x[0])
+
+    if not scored:
         rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาเทคโนโลยีธุรกิจดิจิทัล / เทคโนโลยีสารสนเทศ (Match Score: 98%)**\n\n"
-            "🎯 **[Why You Fit]:** คุณมีความสนใจและจุดเด่นด้านเทคโนโลยี ดิจิทัล และคอมพิวเตอร์ ซึ่งตรงกับทักษะศตวรรษที่ 21 ที่ตลาดแรงงานต้องการสูงสุด\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• พัฒนาเว็บไซต์ แอปพลิเคชัน และระบบ AI อัจฉริยะ\n"
-            "• การบริหารจัดการข้อมูล การตลาดดิจิทัล และอีคอมเมิร์ซ\n"
-            "• กราฟิกดีไซน์ มัลติมีเดีย และคอนเทนต์สร้างสรรค์\n\n"
-            "💼 **[Career Paths & Salaries]:** นักพัฒนาเว็บ/ซอฟต์แวร์, นักการตลาดดิจิทัล, เจ้าหน้าที่ไอที (เงินเดือนเริ่มต้น 18,000 - 35,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาการบัญชีดิจิทัล (Digital Accounting)"
+            "🎓 **น้องเพชรช่วยแนะนำสาขาให้ค่ะ**\n\n"
+            "ยังจับคู่ความสนใจกับสาขาไม่ได้ ลองบอกสิ่งที่ชอบเพิ่มอีกนิดนะคะ เช่น คอมพิวเตอร์ วาดรูป ทำอาหาร ค้าขาย หรืองานบริการ\n\n"
+            "วิทยาลัยอาชีวศึกษาเพชรบุรี (PBPVC) เปิดสอน 11 สาขา: " + ', '.join(name for _, name, _ in COURSE_RULES)
         )
-    elif any(k in text for k in ['อาหาร', 'ทำอาหาร', 'ขนม', 'ครัว', 'เชฟ', 'cook', 'chef', 'เบเกอรี่', 'food']):
-        rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาอาหารและโภชนาการ (Match Score: 97%)**\n\n"
-            "🎯 **[Why You Fit]:** เพชรบุรีคือเมืองสร้างสรรค์ด้านอาหารของ UNESCO (City of Gastronomy) การเรียนด้านอาหารที่ PBVC จะปลดล็อกศักยภาพสู่การเป็นเชฟมืออาชีพ\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• ศิลปะการประกอบอาหารไทยฟิวชั่น และอาหารตะวันตก\n"
-            "• เทคนิคการทำเบเกอรี่ ขนมไทย และของหวานชาววังชั้นสูง\n"
-            "• การจัดการธุรกิจร้านอาหารและการควบคุมต้นทุน\n\n"
-            "💼 **[Career Paths & Salaries]:** เชฟภัตตาคาร, ผู้เชี่ยวชาญด้านอาหาร, เจ้าของคาเฟ่/ธุรกิจอาหาร (เงินเดือนเริ่มต้น 18,000 - 40,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาการโรงแรม (Hotel Management)"
-        )
-    elif any(k in text for k in ['โรงแรม', 'บริการ', 'ท่องเที่ยว', 'มัคคุเทศก์', 'ไกด์', 'tour', 'hotel']):
-        rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาการโรงแรมและการท่องเที่ยว (Match Score: 96%)**\n\n"
-            "🎯 **[Why You Fit]:** เหมาะกับผู้มีใจรักงานบริการ มนุษยสัมพันธ์ยอดเยี่ยม และต้องการทำงานในอุตสาหกรรมการท่องเที่ยวระดับสากล\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• การบริหารงานส่วนหน้าโรงแรมและงานบริการลูกค้าระดับ 5 ดาว\n"
-            "• ทักษะการสื่อสารภาษาต่างประเทศ (อังกฤษ จีน)\n"
-            "• การจัดนำเที่ยวและมัคคุเทศก์มืออาชีพ\n\n"
-            "💼 **[Career Paths & Salaries]:** ผู้จัดการงานโรงแรม, เจ้าหน้าที่สายการบิน, มัคคุเทศก์ (เงินเดือนเริ่มต้น 17,000 - 35,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาการตลาด (Digital Marketing)"
-        )
-    else:
-        rec = (
-            "🎓 **ผลการวิเคราะห์หลักสูตรที่เหมาะสมกับคุณ (Future Career Blueprint)**\n\n"
-            "🏆 **[Top Recommended Major]:** **สาขาวิชาการบัญชี / การตลาดดิจิทัล (Match Score: 95%)**\n\n"
-            "🎯 **[Why You Fit]:** เป็นสาขาวิชาหลักที่ทุกองค์กรและทุกธุรกิจต้องการตัวมากที่สุด พร้อมโอกาสต่อยอดเป็นผู้ประกอบการรุ่นใหม่\n\n"
-            "🚀 **[Core Superpowers]:**\n"
-            "• การวางแผนกลยุทธ์ธุรกิจและบริหารการเงินอย่างเป็นระบบ\n"
-            "• การใช้ระบบคอมพิวเตอร์และ AI ช่วยวิเคราะห์ข้อมูลการตลาด\n"
-            "• การสร้างแบรนด์และการค้าออนไลน์ในยุคดิจิทัล\n\n"
-            "💼 **[Career Paths & Salaries]:** นักการเงินการบัญชี, ที่ปรึกษาธุรกิจ, ผู้ประกอบการออนไลน์ (เงินเดือนเริ่มต้น 16,000 - 30,000+ บาท)\n\n"
-            "🥈 **[Alternative Major]:** สาขาวิชาเทคโนโลยีธุรกิจดิจิทัล"
-        )
-    return jsonify({'recommendation': rec, 'status': 'success', 'engine': 'offline_course_matcher'})
+        return jsonify({'recommendation': rec, 'status': 'success', 'engine': 'offline_course_matcher', 'matches': []})
+
+    _, best_id, best_name, best_hits = scored[0]
+    parts = [
+        "🎓 **สาขาที่น้องเพชรแนะนำ**\n",
+        f"🏆 **สาขาวิชา{best_name}**",
+        f"🎯 เพราะคุณสนใจเรื่อง: {', '.join(best_hits)}",
+    ]
+    summary = _course_summary(best_id)
+    if summary:
+        parts += ['', summary]
+    if len(scored) > 1:
+        parts += ['', '🥈 **สาขาที่น่าสนใจรองลงมา**: ' + ', '.join(f"สาขาวิชา{n}" for _, _, n, _ in scored[1:3])]
+    parts += ['', '📌 ข้อมูลจากเว็บไซต์วิทยาลัย (พ.ย. 2569) สอบถามเพิ่มเติม โทร 032-425-557']
+    return jsonify({
+        'recommendation': '\n'.join(parts),
+        'status': 'success',
+        'engine': 'offline_course_matcher',
+        'matches': [{'id': i, 'name': n} for _, i, n, _ in scored[:3]],
+    })
+
 
 @chat_bp.route('/reset', methods=['POST'])
 def reset():
     session_id = session.get('session_id')
-    if session_id and session_id in state.chat_histories:
-        del state.chat_histories[session_id]
+    if session_id:
+        state.SESSION_LAST_TOPIC.pop(session_id, None)
     session['session_id'] = str(uuid.uuid4())
     return jsonify({'status': 'reset_complete'})
 

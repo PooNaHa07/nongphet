@@ -4,22 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>น้องเพชร - Emotion Display (จอแสดงอารมณ์ส่วนหัว)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="{{ url_for('static', filename='vendor/tailwind/tailwind.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <link rel="icon" type="image/svg+xml" href="/static/img/robot.svg">
     <!-- Google MediaPipe Hands & Camera Utils for Sign Language Tracking -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/camera_utils/camera_utils.js') }}" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='vendor/mediapipe/hands/hands.js') }}" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="/static/css/emotion.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap');
+        @import url('{{ url_for('static', filename='vendor/fonts/fonts.css') }}');
         body {
             font-family: 'Prompt', sans-serif;
             background: #020617;
         }
+        /* โหมดหน้าตู้: เหลือแค่ใบหน้า (ตา ปาก แสงไฟ) และปุ่มไมค์ ซ่อนข้อความ/ป้าย/แถบควบคุมทั้งหมด
+           เปิดข้อความกลับมาตอนทดสอบได้ด้วย /emotion?hud=1 */
+        body.face-only .hud-corner,
+        body.face-only .status-indicator,
+        body.face-only #cameraStatusBadge,
+        body.face-only #signLanguageStatusBadge,
+        body.face-only #camPreviewBox,
+        body.face-only #voiceSubtitleBox,
+        body.face-only #quickEmotionDock,
+        body.face-only #btnToggleDock,
+        body.face-only #demoControls {
+            display: none !important;
+        }
     </style>
 </head>
-<body class="h-full w-full flex items-center justify-center p-0 m-0 bg-black cursor-default select-none" id="emotionBody">
+<body class="face-only h-full w-full flex items-center justify-center p-0 m-0 bg-black cursor-default select-none" id="emotionBody">
+    <script>if (new URLSearchParams(location.search).get('hud') === '1') document.body.classList.remove('face-only');</script>
 
     <!-- Robot Visor Screen Container -->
     <div class="robot-face-stage relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
@@ -51,7 +65,7 @@
 
         <!-- Sci-Fi Corner Telemetry Brackets -->
         <div class="hud-corner hud-top-left absolute top-3 left-3 text-[10px] font-mono text-cyan-400/60 pointer-events-none select-none hidden sm:flex flex-col gap-0.5 z-30">
-            <span class="tracking-wider">◤ PBVC // ROBOTICS AI</span>
+            <span class="tracking-wider">◤ PBPVC // ROBOTICS AI</span>
             <span class="text-cyan-500/40 text-[9px]">SYS: NONGPHET_v2.5</span>
         </div>
         <div class="hud-corner hud-top-right absolute top-3 right-3 text-[10px] font-mono text-cyan-400/60 pointer-events-none select-none hidden sm:flex flex-col items-end gap-0.5 z-30">
@@ -270,6 +284,8 @@
 
     </div>
 
-    <script src="/static/js/emotion.js?v=1.0.5"></script>
+    <script src="/static/js/local_stt.js?v=1.0.2"></script>
+    <script src="/static/js/emotion.js?v=1.0.8"></script>
+    <script src="/static/js/user_speech_box.js?v=1.0.0"></script>
 </body>
 </html>

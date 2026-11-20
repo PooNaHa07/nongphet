@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ฐานข้อมูลความรู้ RAG (Retrainable Knowledge Base) — น้องเพชร AI</title>
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script src="{{ url_for('static', filename='vendor/tailwind/tailwind.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <link href="{{ url_for('static', filename='vendor/fonts/fonts.css') }}" rel="stylesheet">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -186,6 +186,22 @@
             </div>
         </div>
 
+        <!-- SECTION: คำตอบจากเว็บรออนุมัติ (เรียนรู้ซ้ำจากคำถามจริง) -->
+        <div class="glass-panel rounded-2xl p-5 border-amber-500/30">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-globe text-amber-400"></i>
+                    คำถามที่น้องเพชรค้นจากเว็บ รออนุมัติเข้าฐานความรู้
+                </h2>
+                <span class="ml-auto text-xs font-mono text-amber-300" id="webStatusText">-</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+                คำถามที่ฐานความรู้ตอบไม่ได้ น้องเพชรค้นคำตอบจากเว็บ (Gemini + Google Search) แล้วเก็บไว้ที่นี่
+                ครูตรวจความถูกต้องแล้วกด "เพิ่มเข้าฐานความรู้" เพื่อให้ AI เรียนรู้ซ้ำ ครั้งต่อไปจะตอบได้ทันทีโดยไม่ต้องใช้เน็ต
+            </p>
+            <div id="webPendingList" class="flex flex-col gap-2 text-xs text-slate-400">กำลังโหลด...</div>
+        </div>
+
         <!-- Filter & Search Controls -->
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-1.5" id="intentFilterPills">
@@ -193,7 +209,7 @@
                     ทั้งหมด (<span id="countAll">0</span>)
                 </button>
                 <button onclick="setFilterIntent('admission')" class="filter-pill px-3.5 py-1.5 rounded-xl text-xs font-semibold transition border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600">
-                    🎓 หลักสูตร PBVC (<span id="countAdmission">0</span>)
+                    🎓 หลักสูตร PBPVC (<span id="countAdmission">0</span>)
                 </button>
                 <button onclick="setFilterIntent('travel')" class="filter-pill px-3.5 py-1.5 rounded-xl text-xs font-semibold transition border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600">
                     🏰 ท่องเที่ยว 8 อำเภอ (<span id="countTravel">0</span>)
@@ -253,7 +269,7 @@
                     <div>
                         <label class="block text-slate-400 mb-1 font-medium">หมวดหมู่ (Intent)</label>
                         <select id="formIntent" class="w-full bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 focus:outline-none">
-                            <option value="admission">🎓 แนะแนวศึกษาต่อ PBVC (admission)</option>
+                            <option value="admission">🎓 แนะแนวศึกษาต่อ PBPVC (admission)</option>
                             <option value="travel">🏰 การท่องเที่ยวเพชรบุรี (travel)</option>
                             <option value="food">🍧 อาหาร/ของฝาก UNESCO (food)</option>
                             <option value="greeting">👋 ทักทาย/แนะนำตัว (greeting)</option>
@@ -283,6 +299,16 @@
                 <div>
                     <label class="block text-slate-400 mb-1 font-medium">คำตอบของน้องเพชร (Answer Content) <span class="text-rose-400">*</span></label>
                     <textarea id="formAnswer" rows="4" required placeholder="ระบุข้อมูลที่ต้องการให้น้องเพชรตอบ สุภาพ กระชับ น่ารัก..."
+                        class="w-full bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 focus:outline-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-slate-400 mb-1 font-medium">
+                        บทพูดสั้น (Speech) — น้องเพชรพูดแค่ส่วนนี้ หน้าจอแสดงคำตอบเต็ม
+                        <span id="formSpeechCount" class="ml-2 font-mono text-slate-500">0 ตัวอักษร</span>
+                    </label>
+                    <textarea id="formSpeech" rows="2" placeholder="สรุปให้ฟังใน 1-2 ประโยค ~100-150 ตัวอักษร (ประมาณ 10 วินาที) ลงท้ายด้วย ค่ะ/นะคะ ถ้าเว้นว่างจะพูดคำตอบเต็ม"
+                        oninput="updateSpeechCount()"
                         class="w-full bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded-xl px-3 py-2 text-slate-100 focus:outline-none"></textarea>
                 </div>
 
@@ -319,7 +345,64 @@
         document.addEventListener('DOMContentLoaded', () => {
             fetchStats();
             fetchEntries();
+            fetchWebPending();
         });
+
+        // ===== คำตอบจากเว็บรออนุมัติ =====
+        function escapeHtml(t) {
+            return String(t || '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+        }
+
+        async function fetchWebPending() {
+            const box = document.getElementById('webPendingList');
+            try {
+                const data = await (await fetch('/api/kb/web-pending')).json();
+                const w = data.web || {};
+                document.getElementById('webStatusText').textContent = w.enabled
+                    ? `เปิดใช้งาน • ตอบแล้ว ${w.answers} ครั้ง${w.cooling_down_sec ? ` • พัก ${w.cooling_down_sec}s` : ''}`
+                    : 'ปิดอยู่ (ไม่มี GEMINI_API_KEY)';
+                if (!data.items || data.items.length === 0) {
+                    box.innerHTML = '<div class="text-slate-500">ยังไม่มีคำถามที่ต้องค้นจากเว็บ</div>';
+                    return;
+                }
+                box.innerHTML = data.items.map(it => `
+                    <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                        <div class="flex items-start gap-2">
+                            <div class="flex-1">
+                                <div class="text-slate-100 font-semibold text-sm">❓ ${escapeHtml(it.question)}
+                                    <span class="ml-1 text-[10px] font-mono text-amber-300">ถาม ${it.count || 1} ครั้ง</span></div>
+                                <div class="mt-1 whitespace-pre-line text-slate-300">${escapeHtml(it.reply)}</div>
+                                <div class="mt-1 text-cyan-300">🗣️ ${escapeHtml(it.speech)}</div>
+                                <div class="mt-1 text-slate-500">แหล่งที่มา: ${(it.sources || []).map(s => escapeHtml(s.title)).join(', ') || '-'}</div>
+                            </div>
+                            <div class="flex flex-col gap-1.5 shrink-0">
+                                <button onclick="approveWebPending('${it.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">
+                                    <i class="fa-solid fa-check"></i> เพิ่มเข้าฐานความรู้</button>
+                                <button onclick="rejectWebPending('${it.id}')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-700 text-slate-200">
+                                    <i class="fa-solid fa-xmark"></i> ไม่ใช้</button>
+                            </div>
+                        </div>
+                    </div>`).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-rose-400">โหลดรายการไม่สำเร็จ</div>';
+            }
+        }
+
+        async function approveWebPending(id) {
+            if (!confirm('ตรวจข้อมูลแล้ว ต้องการเพิ่มคำตอบนี้เข้าฐานความรู้ใช่ไหม?')) return;
+            const res = await fetch(`/api/kb/web-pending/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const data = await res.json();
+            if (res.ok) {
+                fetchWebPending(); fetchStats(); fetchEntries();
+            } else {
+                alert(data.message || 'เพิ่มไม่สำเร็จ');
+            }
+        }
+
+        async function rejectWebPending(id) {
+            await fetch(`/api/kb/web-pending/${id}`, { method: 'DELETE' });
+            fetchWebPending();
+        }
 
         async function fetchStats() {
             try {
@@ -373,7 +456,7 @@
             }
 
             const intentBadges = {
-                'admission': '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">🎓 หลักสูตร PBVC</span>',
+                'admission': '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">🎓 หลักสูตร PBPVC</span>',
                 'travel': '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">🏰 ท่องเที่ยว</span>',
                 'food': '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-pink-500/20 text-pink-300 border border-pink-500/40">🍧 อาหาร UNESCO</span>',
                 'greeting': '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40">👋 ทักทาย</span>',
@@ -461,7 +544,7 @@
                             </div>
                         </div>
 
-                        <div class="text-xs text-slate-300 whitespace-pre-line leading-relaxed mb-3" id="currentTestAnswer">${data.reply}</div>
+                        <div class="text-xs text-slate-300 whitespace-pre-line leading-relaxed mb-3" id="currentTestAnswer" data-speech="${(data.speech || '').replace(/"/g, '&quot;')}">${data.reply}</div>
 
                         <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
                             <div class="flex flex-wrap items-center gap-1.5">
@@ -490,10 +573,18 @@
             }
         }
 
+        // ตัวนับความยาวบทพูด: ~12 ตัวอักษรต่อวินาที เกิน 200 ตัวอักษรขึ้นสีส้ม
+        function updateSpeechCount() {
+            const n = document.getElementById('formSpeech').value.trim().length;
+            const el = document.getElementById('formSpeechCount');
+            el.textContent = `${n} ตัวอักษร (~${Math.round(n / 12)} วินาที)`;
+            el.className = 'ml-2 font-mono ' + (n > 200 ? 'text-amber-400' : 'text-slate-500');
+        }
+
         function speakCurrentAnswer() {
             const ansElem = document.getElementById('currentTestAnswer');
             if (!ansElem) return;
-            const text = ansElem.innerText;
+            const text = ansElem.dataset.speech || ansElem.innerText;   // พูดบทพูดสั้นถ้ามี
             const audio = new Audio(`/api/tts/stream?text=${encodeURIComponent(text)}&lang=th`);
             audio.play();
         }
@@ -537,6 +628,8 @@
             document.getElementById('formKeywords').value = entry && entry.keywords ? entry.keywords.join(', ') : "";
             document.getElementById('formQuestions').value = entry && entry.questions ? entry.questions.join('\n') : "";
             document.getElementById('formAnswer').value = entry ? entry.answer : "";
+            document.getElementById('formSpeech').value = entry && entry.speech ? entry.speech : "";
+            updateSpeechCount();
             document.getElementById('formSuggestions').value = entry && entry.suggestions ? entry.suggestions.join(', ') : "";
 
             modal.classList.remove('hidden');
@@ -569,6 +662,7 @@
             const kws = document.getElementById('formKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
             const questions = document.getElementById('formQuestions').value.split('\n').map(s => s.trim()).filter(Boolean);
             const answer = document.getElementById('formAnswer').value.trim();
+            const speech = document.getElementById('formSpeech').value.trim();
             const suggestions = document.getElementById('formSuggestions').value.split(',').map(s => s.trim()).filter(Boolean);
 
             const payload = {
@@ -578,6 +672,7 @@
                 keywords: kws,
                 questions,
                 answer,
+                speech,
                 suggestions
             };
 

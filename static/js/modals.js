@@ -7,28 +7,28 @@ const visionSamples = [
     {
         name: "พระนครคีรี (เขาวัง)",
         accuracy: "ความแม่นยำ 96%",
-        img: "https://images.unsplash.com/photo-1598218967926-0e1014cc9f7c?q=80&w=800&auto=format&fit=crop",
+        img: "/static/img/places/khaowang.jpg",
         desc: "พระราชวังฤดูร้อนบนยอดเขาสมัย ร.4 โดดเด่นด้วยสถาปัตยกรรมผสมผสานไทย-นีโอคลาสสิก-จีน ชมวิวเมืองเพชรได้แบบ 360 องศาครับ",
         mapsQuery: "พระนครคีรี เขาวัง เพชรบุรี"
     },
     {
         name: "ถ้ำเขาหลวง",
         accuracy: "ความแม่นยำ 98%",
-        img: "https://images.unsplash.com/photo-1525926478800-7f28eece6b50?q=80&w=800&auto=format&fit=crop",
+        img: "/static/img/places/khaoluang.jpg",
         desc: "ถ้ำหินงอกหินย้อยอันวิจิตร ไฮไลท์คือลำแสงอาทิตย์ส่องลงสู่พระพุทธรูปหลวงพ่อโต (แสงสวรรค์) ช่วงเวลา 09:30 - 11:30 น. ครับ",
         mapsQuery: "ถ้ำเขาหลวง เพชรบุรี"
     },
     {
         name: "หาดชะอำ",
         accuracy: "ความแม่นยำ 94%",
-        img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop",
+        img: "/static/img/places/chaam.jpg",
         desc: "ชายหาดยอดนิยม ทรายขาวยาวสุดสายตา มีกิจกรรมขี่ม้า บานาน่าโบ๊ท และซีฟู้ดสดใหม่อร่อยราคาเป็นกันเองครับ",
         mapsQuery: "หาดชะอำ เพชรบุรี"
     },
     {
         name: "วัดมหาธาตุวรวิหาร",
         accuracy: "ความแม่นยำ 97%",
-        img: "https://images.unsplash.com/photo-1582291583070-55e28cd6f233?q=80&w=800&auto=format&fit=crop",
+        img: "/static/img/places/mahathat.jpg",
         desc: "ปูชนียสถานคู่บ้านคู่เมือง มีพระปรางค์ 5 ยอดอันวิจิตรงดงามด้วยศิลปกรรมช่างเมืองเพชรที่มีชื่อเสียงระดับประเทศครับ",
         mapsQuery: "วัดมหาธาตุวรวิหาร เพชรบุรี"
     }

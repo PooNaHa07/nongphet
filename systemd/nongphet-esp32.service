@@ -1,0 +1,20 @@
+[Unit]
+Description=Nong Phet AI Smart Guide - ESP32 Serial Bridge (Arm / LED / Ultrasonic)
+After=nongphet.service
+Wants=nongphet.service
+
+[Service]
+Type=simple
+User=pi
+# ต้องอยู่ในกลุ่ม dialout จึงจะเปิดพอร์ต /dev/ttyUSB* ได้
+SupplementaryGroups=dialout
+WorkingDirectory=/home/pi/nongphet
+Environment="PATH=/home/pi/nongphet/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+# --wait: ถ้ายังไม่เสียบบอร์ด ให้รอและสแกนซ้ำเอง ไม่ล้มและไม่ถามคำถาม
+ExecStart=/home/pi/nongphet/.venv/bin/python esp32_listener.py --wait
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

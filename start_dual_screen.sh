@@ -67,6 +67,13 @@ if ! curl -s http://127.0.0.1:5002/status > /dev/null; then
     fi
 fi
 
+# 3.2 เริ่มบริดจ์ ESP32 (แขน/ไฟ LED/อัลตราโซนิก) ถ้ายังไม่ได้รันและไม่ได้ใช้ systemd
+# --wait: ยังไม่เสียบบอร์ดก็รอเงียบๆ ไม่กระทบระบบอื่น
+if ! pgrep -f "esp32_listener.py" > /dev/null && ! systemctl is-active --quiet nongphet-esp32 2>/dev/null; then
+    echo "🦾 เริ่มต้นบริดจ์ ESP32 (รอบอร์ดอัตโนมัติ)..."
+    python esp32_listener.py --wait > /tmp/nongphet_esp32.log 2>&1 &
+fi
+
 # 4. ปิดการพักหน้าจอ
 xset s noblank 2>/dev/null || true
 xset s off 2>/dev/null || true

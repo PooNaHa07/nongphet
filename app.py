@@ -2,19 +2,20 @@
 """
 ==============================================================================
 น้องเพชร AI Smart Guide — Main Flask Application (Modular 2026 Edition)
-วิทยาลัยอาชีวศึกษาเพชรบุรี (PBVC) — นวัตกรรมสิ่งประดิษฐ์คนรุ่นใหม่ สอศ.
+วิทยาลัยอาชีวศึกษาเพชรบุรี (PBPVC) — นวัตกรรมสิ่งประดิษฐ์คนรุ่นใหม่ สอศ.
 ==============================================================================
 สถาปัตยกรรม Modularized:
 - routes/:
     * chat.py      — Conversational AI, Semantic RAG & Itinerary Planning
     * vision.py    — Vision Analysis & Thai Sign Language (TSL)
-    * media.py     — Neural Voice TTS, Weather & Gemini Live Multimodal
+    * media.py     — Neural Voice TTS & Weather
     * iot.py       — ESP32 Hardware Integration & Sensor SSE Stream
     * admin.py     — Telemetry Dashboard & Mission Control
     * display.py   — Dual-Screen Emotion Display & QR Mobile Handoff
     * knowledge.py — Dynamic RAG Knowledge Base CRUD & Retrain APIs
 - services/:
-    * gemini_service.py    — GenAI SDK & Comprehensive System Knowledge
+    * text_utils.py        — Suggestion / Language / Trap-query Helpers
+    * arm_service.py       — Shoulder Servo Arm Gestures
     * knowledge_service.py — Local Knowledge & Fast Offline Fallback
     * analytics_service.py — Visitor Analytics Engine
     * tts_service.py       — Edge-TTS & PyThaiTTS Neural Engine
@@ -70,6 +71,13 @@ def setup_logging():
 
 logger = setup_logging()
 
+# ชนิดไฟล์ของไลบรารีที่เก็บในเครื่อง (static/vendor): Windows / Pi บางเครื่องไม่รู้จัก
+# ถ้าส่งผิดชนิด เบราว์เซอร์อาจไม่ยอมโหลดฟอนต์ หรือโหลด WebAssembly ของ MediaPipe ไม่ได้
+import mimetypes
+mimetypes.add_type('font/woff2', '.woff2')
+mimetypes.add_type('font/ttf', '.ttf')
+mimetypes.add_type('application/wasm', '.wasm')
+
 # Initialize Flask App
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -83,7 +91,9 @@ from routes.iot import iot_bp
 from routes.admin import admin_bp
 from routes.display import display_bp
 from routes.knowledge import knowledge_bp
+from routes.arm import arm_bp
 
+app.register_blueprint(arm_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(vision_bp)
 app.register_blueprint(media_bp)

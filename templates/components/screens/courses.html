@@ -19,22 +19,34 @@
         </div>
     </div>
 
-    <!-- Courses Grid (3 Columns on Desktop) -->
+    <!-- Courses Grid: 11 สาขาวิชาตามเว็บไซต์วิทยาลัย (data/college_official.json, พ.ย. 2569)
+         แก้รายละเอียดสาขาที่ tools/build_college_kb.py แล้วแก้รายการด้านล่างให้ตรงกัน -->
+    {% set majors = [
+        ('เทคโนโลยีธุรกิจดิจิทัลและคอมพิวเตอร์ธุรกิจ', 'fa-laptop-code', 'from-blue-600 to-cyan-500', 'ปวช. / ปวส. / ป.ตรี', 'โปรแกรมเมอร์, นักวิเคราะห์ระบบ, เว็บมาสเตอร์', 'เขียนโปรแกรม เครือข่ายคอมพิวเตอร์ และใช้งานระบบคอมพิวเตอร์ในธุรกิจ'),
+        ('ดิจิทัลกราฟิก', 'fa-pen-nib', 'from-fuchsia-500 to-purple-600', 'โปรดตรวจสอบกับวิทยาลัย', 'งานออกแบบกราฟิกและสื่อดิจิทัล', 'นักเรียนสาขานี้ได้รับรางวัลพระราชทาน ปีการศึกษา 2568'),
+        ('การบัญชี', 'fa-calculator', 'from-pink-500 to-rose-600', 'ปวช. / ปวส.', 'นักบัญชี, ผู้ตรวจสอบบัญชี, ที่ปรึกษาทางบัญชี', 'บันทึกบัญชีธุรกิจ บัญชีภาษี และใช้เทคโนโลยีสารสนเทศเพื่องานบัญชี'),
+        ('การตลาด', 'fa-chart-line', 'from-red-500 to-amber-600', 'ปวช. / ปวส. / ป.ตรี', 'เจ้าหน้าที่การตลาด, ฝ่ายโฆษณาประชาสัมพันธ์', 'การขายออนไลน์ การโฆษณาและส่งเสริมการขาย และการดำเนินธุรกิจขนาดย่อม'),
+        ('การจัดการสำนักงาน', 'fa-folder-open', 'from-slate-500 to-slate-700', 'ปวช. / ปวส.', 'เลขานุการ, พนักงานต้อนรับประชาสัมพันธ์', 'งานสำนักงาน การจัดประชุม และระบบสารสนเทศในงานสำนักงาน'),
+        ('การโรงแรม', 'fa-hotel', 'from-amber-500 to-yellow-600', 'ปวช. / ปวส. / ป.ตรี', 'พนักงานโรงแรม, ผู้ช่วยกุ๊ก, พนักงานผสมเครื่องดื่ม', 'งานส่วนหน้าโรงแรม งานแม่บ้าน และการบริการอาหารและเครื่องดื่ม'),
+        ('การท่องเที่ยว', 'fa-compass', 'from-sky-500 to-teal-600', 'ปวช. / ปวส.', 'มัคคุเทศก์ท้องถิ่น, เจ้าหน้าที่ธุรกิจท่องเที่ยว', 'มัคคุเทศก์ การจัดนำเที่ยว และภาษาอังกฤษสำหรับการท่องเที่ยว'),
+        ('อาหารและโภชนาการ', 'fa-utensils', 'from-emerald-500 to-teal-600', 'ปวช. / ปวส.', 'โภชนากร, ผู้ช่วยกุ๊ก, พนักงานห้องอาหาร', 'อาหารไทย ขนมไทย เบเกอรี่ และอาหารนานาชาติ'),
+        ('คหกรรม', 'fa-spa', 'from-rose-400 to-pink-600', 'ปวช. / ปวส.', 'ผู้ช่วยช่างจัดดอกไม้, พี่เลี้ยงเด็กและผู้สูงอายุ', 'งานดอกไม้สด งานใบตอง งานแกะสลัก และงานประดิษฐ์'),
+        ('แฟชั่นและสิ่งทอ', 'fa-shirt', 'from-violet-500 to-indigo-600', 'ปวช. / ปวส.', 'ช่างออกแบบเสื้อผ้า, ช่างตัดเย็บ', 'ออกแบบ สร้างแบบตัด ตัดเย็บและตกแต่งเสื้อผ้า'),
+        ('วิจิตรศิลป์', 'fa-palette', 'from-orange-500 to-red-600', 'ปวช.', 'ช่างศิลป์, ศิลปินและนักออกแบบ', 'วาดเขียน จิตรกรรม ประติมากรรม และภาพพิมพ์'),
+    ] %}
     <div class="p-4 md:p-6 lg:p-8 flex-1">
         <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            
-            <!-- Course 1: เทคโนโลยีธุรกิจดิจิทัล -->
-            <div onclick="selectCourse('เทคโนโลยีธุรกิจดิจิทัล')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
+            {% for name, icon, gradient, levels, careers, summary in majors %}
+            <div onclick="selectCourse('{{ name }}')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
                 <div class="space-y-3.5">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-blue-500/30 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-mobile-screen"></i>
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr {{ gradient }} text-white flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition">
+                        <i class="fa-solid {{ icon }}"></i>
                     </div>
                     <div>
-                        <h3 class="font-black text-base md:text-lg text-white">สาขาเทคโนโลยีธุรกิจดิจิทัล</h3>
-                        <p class="text-xs text-cyan-400 font-semibold mt-1">AI Developer, Full-stack Web/App, Content Creator</p>
-                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                            เรียนรู้การประยุกต์ใช้ AI ในธุรกิจ, ออกแบบ UX/UI, เขียนโปรแกรม, การตลาดดิจิทัล และผลิตสื่อคอนเทนต์สร้างรายได้
-                        </p>
+                        <h3 class="font-black text-base md:text-lg text-white">สาขาวิชา{{ name }}</h3>
+                        <p class="text-[11px] text-slate-400 font-semibold mt-1">{{ levels }}</p>
+                        <p class="text-xs text-cyan-400 font-semibold mt-1">{{ careers }}</p>
+                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">{{ summary }}</p>
                     </div>
                 </div>
                 <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
@@ -42,108 +54,9 @@
                     <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
                 </div>
             </div>
-
-            <!-- Course 2: คอมพิวเตอร์ธุรกิจ -->
-            <div onclick="selectCourse('สาขาคอมพิวเตอร์ธุรกิจ')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
-                <div class="space-y-3.5">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-sky-500/30 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-desktop"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-black text-base md:text-lg text-white">สาขาคอมพิวเตอร์ธุรกิจ</h3>
-                        <p class="text-xs text-sky-400 font-semibold mt-1">IT Specialist, Database Admin, Enterprise Systems</p>
-                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                            เชี่ยวชาญการดูแลระบบสารสนเทศองค์กร ความปลอดภัยเครือข่าย การบริหารฐานข้อมูล และซอฟต์แวร์สำนักงานอัจฉริยะ
-                        </p>
-                    </div>
-                </div>
-                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
-                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
-                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
-                </div>
-            </div>
-
-            <!-- Course 3: การบัญชี -->
-            <div onclick="selectCourse('การบัญชี')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
-                <div class="space-y-3.5">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-pink-500/30 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-calculator"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-black text-base md:text-lg text-white">สาขาการบัญชี</h3>
-                        <p class="text-xs text-pink-400 font-semibold mt-1">Digital Accountant, Financial Analyst, Tax Auditor</p>
-                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                            บัญชีดิจิทัลยุคใหม่ วิเคราะห์งบการเงิน วางแผนภาษี และการใช้งานระบบ ERP มาตรฐานสากล
-                        </p>
-                    </div>
-                </div>
-                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
-                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
-                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
-                </div>
-            </div>
-
-            <!-- Course 4: การตลาด -->
-            <div onclick="selectCourse('การตลาด')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
-                <div class="space-y-3.5">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-500 to-amber-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-amber-500/30 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-chart-line"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-black text-base md:text-lg text-white">สาขาการตลาด</h3>
-                        <p class="text-xs text-orange-400 font-semibold mt-1">Digital Marketing, Live Stream Commerce, Brand Strategist</p>
-                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                            กลยุทธ์การขายออนไลน์ ไลฟ์สตรีมคอมเมิร์ซ ยิงแอดโฆษณา และการสร้างแบรนด์สู่ตลาดโลก
-                        </p>
-                    </div>
-                </div>
-                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
-                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
-                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
-                </div>
-            </div>
-
-            <!-- Course 5: การท่องเที่ยวและการโรงแรม -->
-            <div onclick="selectCourse('การท่องเที่ยวและการโรงแรม')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
-                <div class="space-y-3.5">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-amber-500/30 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-hotel"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-black text-base md:text-lg text-white">สาขาการท่องเที่ยวและการโรงแรม</h3>
-                        <p class="text-xs text-amber-400 font-semibold mt-1">International Hotelier, Event Organizer, Tour Guide</p>
-                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                            บริการโรงแรมระดับ 5 ดาว มัคคุเทศก์มืออาชีพ การจัดเลี้ยง และภาษาต่างประเทศเพื่องานบริการ
-                        </p>
-                    </div>
-                </div>
-                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
-                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
-                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
-                </div>
-            </div>
-
-            <!-- Course 6: อาหารและโภชนาการ -->
-            <div onclick="selectCourse('สาขาวิชาอาหารและโภชนาการ')" class="bg-slate-800 p-6 rounded-3xl border border-slate-700 hover:border-blue-500 shadow-xl flex flex-col justify-between cursor-pointer hover:bg-slate-750 transition group">
-                <div class="space-y-3.5">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-teal-500/30 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-utensils"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-black text-base md:text-lg text-white">สาขาอาหารและโภชนาการ</h3>
-                        <p class="text-xs text-emerald-400 font-semibold mt-1">Chef de Cuisine, Pastry Chef, Food Entrepreneur</p>
-                        <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
-                            ศิลปะการประกอบอาหารไทยและนานาชาติ เบเกอรี่ ขนมหวานเมืองเพชร และการจัดการธุรกิจร้านอาหาร
-                        </p>
-                    </div>
-                </div>
-                <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between text-xs font-bold text-blue-400">
-                    <span>คลิกดูแนวทางอาชีพ & สมัคร</span>
-                    <i class="fa-solid fa-chevron-right group-hover:translate-x-1.5 transition"></i>
-                </div>
-            </div>
-
+            {% endfor %}
         </div>
+        <p class="max-w-6xl mx-auto mt-4 text-[11px] text-slate-500">📌 ข้อมูลจากเว็บไซต์วิทยาลัยอาชีวศึกษาเพชรบุรี (พ.ย. 2569) สอบถามเพิ่มเติม โทร 032-425-557</p>
     </div>
 
     <!-- Bottom Bar -->

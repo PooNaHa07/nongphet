@@ -6,9 +6,9 @@ After=network.target sound.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/nongphet
-Environment="PATH=/home/pi/nongphet/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=/home/pi/nongphet/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/home/pi/nongphet/venv/bin/python app_new.py
+ExecStart=/home/pi/nongphet/.venv/bin/gunicorn --config gunicorn.conf.py app:app
 Restart=always
 RestartSec=3
 

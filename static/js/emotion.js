@@ -347,15 +347,22 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', primeAudioPlayback, { once: true });
 
     // ตรวจสอบสถานะ Vision Daemon เพื่อซิงค์กล้องอัตโนมัติ โดยไม่แย่งสิทธิ์กล้อง
-    checkVisionDaemonStatus().then(isActive => {
-        if (!isActive && !isDualScreenSlave && !isCameraTracking && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            setTimeout(() => {
-                startCameraTracking(true).catch(err => {
-                    console.log('Standby camera tracking:', err);
-                });
-            }, 1200);
+    // ตอนบูตเครื่อง Chromium อาจขึ้นก่อน vision_daemon: ถ้าเปิดกล้องฝั่งเบราว์เซอร์เลย daemon จะเปิดกล้องไม่ได้
+    // จึงเช็กซ้ำหลายครั้ง (รวมประมาณ 20 วินาที) ก่อนจะยอมใช้กล้องในเบราว์เซอร์เป็นทางสำรอง
+    (async () => {
+        const MAX_CHECKS = 10;
+        const CHECK_INTERVAL_MS = 2000;
+        for (let i = 0; i < MAX_CHECKS; i++) {
+            if (await checkVisionDaemonStatus()) return;
+            if (isDualScreenSlave || isCameraTracking) return;
+            await new Promise(r => setTimeout(r, CHECK_INTERVAL_MS));
         }
-    });
+        if (!isDualScreenSlave && !isCameraTracking && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            startCameraTracking(true).catch(err => {
+                console.log('Standby camera tracking:', err);
+            });
+        }
+    })();
 });
 
 let emotionSafetyWatchdog = null;
@@ -1279,7 +1286,7 @@ const EMOTION_SIGN_RESPONSES = {
         emoji: '☝️',
         emotion: 'thinking',
         sfx: 'thinking',
-        speech: 'แนะนำศึกษาต่อ 9 สาขาวิชาชั้นนำ ณ วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ 🎓'
+        speech: 'แนะนำศึกษาต่อ 11 สาขาวิชาชั้นนำ ณ วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ 🎓'
     },
     'fist': {
         name: 'ของกิน & ขนมหวาน (Fist)',
@@ -1367,7 +1374,7 @@ function initEmotionSignHands() {
 
     try {
         emotionSignHands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            locateFile: (file) => `/static/vendor/mediapipe/hands/${file}`
         });
 
         emotionSignHands.setOptions({
@@ -1827,7 +1834,7 @@ const NONGPHET_SPOKEN_GREETINGS = [
     'สวัสดีค่ะ! น้องเพชร AI Smart Guide ยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีนะคะ 😊',
     'วันนี้อากาศเมืองเพชรบุรีแจ่มใสมากค่ะ อยากให้น้องเพชรแนะนำที่เที่ยวหรือร้านของหวานดีคะ',
     'แวะมาชิมขนมหม้อแกงเตาฟืนและก๋วยเตี๋ยวน้ำแดงสูตรเพชรบุรีแท้ๆ นะคะ อร่อยติดใจแน่นอนค่ะ 🍧',
-    'วิทยาลัยอาชีวศึกษาเพชรบุรีมี 9 สาขาวิชาแห่งอนาคต พร้อมต้อนรับทุกคนนะคะ 🎓',
+    'วิทยาลัยอาชีวศึกษาเพชรบุรีมี 11 สาขาวิชาแห่งอนาคต พร้อมต้อนรับทุกคนนะคะ 🎓',
     'แตะปากแบบนี้ อยากคุยกับน้องเพชรใช่ไหมคะ กดปุ่มไมค์ด้านขวาล่างคุยสดกับน้องเพชรได้เลยนะคะ!'
 ];
 
@@ -2119,8 +2126,8 @@ function initDirectVoiceEngine() {
         console.log('🔇 [Audio Arbitration] ปิดไมค์จอใบหน้าตาม URL Slave parameter');
         return;
     }
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (window.NongPhetSpeechRecognition || 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRec = window.NongPhetSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
         emotionRecognition = new SpeechRec();
         emotionRecognition.lang = 'th-TH';
         emotionRecognition.interimResults = true;
@@ -2305,7 +2312,7 @@ async function processDirectVoiceQuery(queryText, forcedLang = null) {
         const replyLang = chatData.language || forcedLang || 'th';
 
         showVoiceSubtitle(reply);
-        playDirectVoiceTTS(reply, replyLang);
+        playDirectVoiceTTS(chatData.speech || reply, replyLang);
     } catch (e) {
         isEmotionSpeaking = false;
         showVoiceSubtitle('ขออภัยค่ะ เกิดข้อผิดพลาดในการเชื่อมต่อ AI', 3000);
@@ -2318,89 +2325,21 @@ async function processDirectVoiceQuery(queryText, forcedLang = null) {
 }
 
 function fallbackBrowserSpeech(text, lang = 'th') {
+    // นโยบายเสียงเดียวทั้งระบบ: ไม่ใช้เสียงของเบราว์เซอร์ (speechSynthesis) เพราะเป็นคนละเสียงกับน้องเพชร
+    // ถ้าดึงเสียงจากเซิร์ฟเวอร์ไม่ได้ ให้แสดงข้อความบนจอแล้วกลับไปโหมดฟังตามปกติ (เงียบดีกว่าเสียงคนอื่น)
     clearTimeout(emotionSafetyWatchdog);
-    // ตรวจจับระบบปฏิบัติการ Linux / Raspberry Pi OS
-    const isLinuxOrPi = typeof navigator !== 'undefined' && (/linux|arm|aarch64/i.test(navigator.userAgent || navigator.platform) || /Linux/i.test(navigator.userAgent));
-    if (isLinuxOrPi && (lang === 'th' || !lang || lang.startsWith('th'))) {
-        console.warn('⚠️ [Emotion TTS] Linux/Raspberry Pi detected: suppressing browser Thai speechSynthesis');
-        setTimeout(() => {
-            isEmotionSpeaking = false;
-            applyEmotion('idle');
-            fetch('/api/iot/led', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ state: 'idle' })
-            }).catch(() => {});
-            if (autoVoiceMode) {
-                showVoiceSubtitle('🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยค่ะ)');
-                setTimeout(() => startAutoListening(), 200);
-            }
-        }, 350);
-        return;
-    }
-
-    if ('speechSynthesis' in window) {
-        try {
-            window.speechSynthesis.cancel();
-            // ตัดเฉพาะส่วน interactive suggestion footer ออก แต่คงเนื้อหาหลักครบถ้วน
-            let clean = text;
-            for (const delim of ['---', '💡 ถามต่อยอด', 'ถามต่อยอดกับน้องเพชร', '💡 แนะนำคำถาม', 'คำถามที่น่าสนใจ', '💡 Follow-up', '💡 推荐问题', '❓ คำถาม']) {
-                if (clean.includes(delim)) {
-                    clean = clean.split(delim)[0].trim();
-                }
-            }
-            clean = clean.replace(/[*#_~`>•\-=|]/g, ' ').replace(/\n+/g, ', ').replace(/\s+/g, ' ').trim();
-            const u = new SpeechSynthesisUtterance(clean);
-            u.lang = lang === 'en' ? 'en-US' : (lang === 'zh' ? 'zh-CN' : 'th-TH');
-            // เลือกเฉพาะเสียงผู้หญิง บังคับปิดเสียงผู้ชาย (Pattara/Niwat)
-            const availableVoices = window.speechSynthesis.getVoices();
-            const femaleVoice = availableVoices.find(v => v.lang.startsWith('th') && (v.name.includes('Premwadee') || v.name.includes('Achara') || v.name.includes('Google ภาษาไทย') || /female/i.test(v.name))) || availableVoices.find(v => v.lang.startsWith('th') && !v.name.includes('Niwat') && !v.name.includes('Pattara'));
-            if (femaleVoice) u.voice = femaleVoice;
-            u.rate = 1.05;
-            u.pitch = 1.25;
-            u.onstart = () => {
-                isEmotionSpeaking = true;
-                applyEmotion('speaking');
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'speaking' })
-                }).catch(() => {});
-                startLocalLipSyncPulse();
-            };
-            const finishSpeechFallback = () => {
-                setLipSyncAmplitude(0);
-                lastEmotionSpeechEndTime = Date.now();
-                fetch('/api/iot/led', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ state: 'idle' })
-                }).catch(() => {});
-                setTimeout(() => {
-                    isEmotionSpeaking = false;
-                    startAutoVoiceMode();
-                    applyEmotion('listening');
-                    showVoiceSubtitle('🎙️ น้องเพชรพร้อมฟังแล้วค่ะ... พูดต่อได้เลยนะคะ ✨');
-                    startAutoListening();
-                }, 350);
-            };
-            u.onend = finishSpeechFallback;
-            u.onerror = finishSpeechFallback;
-            window.speechSynthesis.speak(u);
-            return;
-        } catch (e) {
-            console.warn('SpeechSynthesis error:', e);
-        }
-    }
+    console.info('🔇 [Emotion TTS] ไม่มีเสียงน้องเพชรสำหรับประโยคนี้ -> แสดงข้อความอย่างเดียว');
     setTimeout(() => {
+        setLipSyncAmplitude(0);
+        lastEmotionSpeechEndTime = Date.now();
         isEmotionSpeaking = false;
-        startAutoVoiceMode();
-        applyEmotion('listening');
         fetch('/api/iot/led', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ state: 'idle' })
         }).catch(() => {});
+        startAutoVoiceMode();
+        applyEmotion('listening');
         showVoiceSubtitle('🎙️ น้องเพชรพร้อมฟังแล้วค่ะ... พูดต่อได้เลยนะคะ ✨');
         startAutoListening();
     }, 350);
@@ -2491,9 +2430,10 @@ async function playDirectVoiceTTS(text, lang = 'th') {
             return;
         }
 
-        // ใช้ AbortController จำกัดเวลาเชื่อมต่อ (25 วินาที สำหรับคำตอบที่มีเนื้อหายาว)
+        // จำกัดเวลารอเสียง: เผื่อเท่ากับเซิร์ฟเวอร์เสียง OmniVoice 32 รอบ (15 วินาที + 0.3 วินาที/ตัวอักษร) + 5 วินาที
         const abortCtrl = new AbortController();
-        const timeoutId = setTimeout(() => abortCtrl.abort(), 25000);
+        const ttsWaitMs = Math.min(185000, 20000 + (speakText || '').length * 300);
+        const timeoutId = setTimeout(() => abortCtrl.abort(), ttsWaitMs);
 
         const ttsRes = await fetch('/tts', {
             method: 'POST',

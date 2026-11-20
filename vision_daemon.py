@@ -70,9 +70,26 @@ CONSECUTIVE_ATTENTION_TRIGGER = 2
 TARGET_WIDTH = 640
 TARGET_HEIGHT = 480
 
+# --- การจำกัดภาระ CPU (สำคัญบน Raspberry Pi 5 ที่ต้องแบ่ง CPU ให้ Chromium/Flask/TTS) ---
+# ตรวจจับใบหน้า N ครั้ง/วินาที (กล้องยังอ่านเต็มความเร็วเพื่อให้ได้ภาพล่าสุดเสมอ แต่ถอดรหัส+ตรวจจับเฉพาะรอบที่ถึงเวลา)
+DETECT_FPS = max(1.0, float(os.environ.get('VISION_DETECT_FPS', '10')))
+# เข้ารหัส JPEG สำหรับสตรีมสูงสุด N ครั้ง/วินาที และเฉพาะตอนมีคนดูสตรีม/ขอ snapshot เท่านั้น
+STREAM_FPS = max(1.0, float(os.environ.get('VISION_STREAM_FPS', '10')))
+SNAPSHOT_KEEPALIVE_SEC = 5.0
+# จำนวนเธรดที่ OpenCV ใช้ (ค่าเริ่มต้นของ OpenCV คือทุกคอร์ ซึ่งแย่ง CPU กับระบบอื่น)
+CV_THREADS = int(os.environ.get('VISION_CV_THREADS', '2'))
+if CV2_AVAILABLE:
+    try:
+        cv2.setNumThreads(CV_THREADS)
+    except Exception:
+        pass
+
 # คลังภาพและสตรีมล่าสุดสำหรับ Web Streaming
 LATEST_FRAME_JPEG = None
+LATEST_FRAME_TS = 0.0
 FRAME_LOCK = threading.Lock()
+STREAM_CLIENTS = 0                 # จำนวนผู้ชม /video_feed ที่เปิดอยู่
+LAST_SNAPSHOT_REQUEST = 0.0        # เวลาที่มีคนขอ /snapshot.jpg ล่าสุด
 VISION_STATE = {
     "active": False,
     "backend": "none",
@@ -87,8 +104,15 @@ VISION_STATE = {
     "auto_greeting_enabled": True,
     "is_looking_at_screen": False,
     "attention_score": 0.0,
-    "head_yaw_deg": 0.0
+    "head_yaw_deg": 0.0,
+    # "connected" = ใช้กล้องจริง, "searching" = ยังไม่พบกล้อง (ลองหาใหม่เรื่อยๆ), "simulate" = โหมดจำลอง (--simulate)
+    "camera": "searching",
 }
+
+# ไม่พบกล้อง / กล้องหลุด: ลองหากล้องใหม่ทุกกี่วินาที (เสียบกล้องทีหลังได้ ไม่ต้องรันระบบใหม่)
+CAMERA_RETRY_SEC = max(1.0, float(os.environ.get('VISION_CAMERA_RETRY_SEC', '3')))
+# อ่านภาพจากกล้องไม่ได้ต่อเนื่องนานเท่านี้ = กล้องหลุด (ถอดสาย) -> กลับไปหากล้องใหม่
+CAMERA_LOST_SEC = 2.0
 
 
 # -----------------------------------------------------------------------------
@@ -130,7 +154,7 @@ class StreamingServer(ThreadingMixIn, HTTPServer):
 class VideoStreamHandler(BaseHTTPRequestHandler):
     """HTTP Request Handler สำหรับส่งต่อ Live MJPEG Video Stream ไปยังหน้าเว็บแดชบอร์ด"""
     def do_GET(self):
-        global LATEST_FRAME_JPEG
+        global LATEST_FRAME_JPEG, STREAM_CLIENTS, LAST_SNAPSHOT_REQUEST
         if self.path == '/video_feed':
             self.send_response(200)
             self.send_header('Age', '0')
@@ -138,22 +162,40 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
             self.send_header('Pragma', 'no-cache')
             self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
             self.end_headers()
+            with FRAME_LOCK:
+                STREAM_CLIENTS += 1   # ลูปหลักจะเริ่มเข้ารหัส JPEG เมื่อมีผู้ชมอย่างน้อย 1 คน
+            last_sent_ts = 0.0
             try:
                 while True:
                     with FRAME_LOCK:
                         frame = LATEST_FRAME_JPEG
-                    if frame:
+                        frame_ts = LATEST_FRAME_TS
+                    # ส่งเฉพาะเฟรมใหม่ ไม่ส่งภาพซ้ำเปลืองแบนด์วิดท์
+                    if frame and frame_ts > last_sent_ts:
+                        last_sent_ts = frame_ts
                         self.wfile.write(b'--FRAME\r\n')
                         self.send_header('Content-Type', 'image/jpeg')
                         self.send_header('Content-Length', str(len(frame)))
                         self.end_headers()
                         self.wfile.write(frame)
                         self.wfile.write(b'\r\n')
-                    time.sleep(0.04)  # ~25 FPS
+                    time.sleep(1.0 / STREAM_FPS / 2)
             except Exception:
                 pass
+            finally:
+                with FRAME_LOCK:
+                    STREAM_CLIENTS = max(0, STREAM_CLIENTS - 1)
 
         elif self.path == '/snapshot.jpg':
+            # ปลุกการเข้ารหัส JPEG แล้วรอเฟรมใหม่สั้นๆ (ถ้าไม่มีใครดูสตรีม ลูปหลักจะไม่ได้เข้ารหัสไว้)
+            requested_at = time.time()
+            LAST_SNAPSHOT_REQUEST = requested_at
+            deadline = requested_at + 0.8
+            while time.time() < deadline:
+                with FRAME_LOCK:
+                    if LATEST_FRAME_TS >= requested_at:
+                        break
+                time.sleep(0.02)
             with FRAME_LOCK:
                 frame = LATEST_FRAME_JPEG
             if frame:
@@ -576,9 +618,75 @@ class VisionDetector:
         return detections, gaze_target, estimated_distance, is_attentive, attention_score, yaw_deg
 
 
+def _camera_candidates(camera_idx):
+    """รายการ (index, backend) ที่ลองเปิดกล้อง: Windows ใช้ DSHOW (รองรับทั้งแบบ 2 อาร์กิวเมนต์ และแบบ domain ของ OpenCV 5.x)"""
+    if os.name == 'nt' and hasattr(cv2, 'CAP_DSHOW'):
+        return [
+            (camera_idx, cv2.CAP_DSHOW),
+            (cv2.CAP_DSHOW + camera_idx, None),
+            (1, cv2.CAP_DSHOW),
+            (cv2.CAP_DSHOW + 1, None),
+            (camera_idx, None),
+        ]
+    return [(camera_idx, None), (1, None)]
+
+
+def open_camera(camera_idx=0, quiet=False):
+    """
+    ลองเปิดกล้องที่อ่านภาพได้จริง คืน cv2.VideoCapture หรือ None (ไม่พบกล้อง)
+    quiet=True: ปิดคำเตือนของ OpenCV ระหว่างลอง (ใช้ตอนลองหากล้องซ้ำๆ จะได้ไม่ท่วม log)
+    """
+    if not CV2_AVAILABLE:
+        return None
+    old_level = None
+    if quiet:
+        try:
+            old_level = cv2.utils.logging.getLogLevel()
+            cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+        except Exception:
+            old_level = None
+    cap = None
+    try:
+        for test_idx, test_backend in _camera_candidates(camera_idx):
+            try:
+                temp_cap = cv2.VideoCapture(test_idx, test_backend) if test_backend is not None else cv2.VideoCapture(test_idx)
+                if temp_cap.isOpened():
+                    ret, test_frame = temp_cap.read()
+                    if ret and test_frame is not None:
+                        cap = temp_cap
+                        break
+                temp_cap.release()
+            except Exception:
+                pass
+    finally:
+        if old_level is not None:
+            try:
+                cv2.utils.logging.setLogLevel(old_level)
+            except Exception:
+                pass
+    if cap is not None:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, TARGET_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        if hasattr(cv2, 'CAP_PROP_BUFFERSIZE'):
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
+
+
+def no_camera_frame(t=0.0):
+    """ภาพบนสตรีมตอนยังไม่มีกล้อง (แทนภาพผู้มาเยือนจำลอง ซึ่งทำให้หุ่นทักทายคนที่ไม่มีอยู่จริง)"""
+    frame = np.zeros((TARGET_HEIGHT, TARGET_WIDTH, 3), dtype=np.uint8)
+    dots = '.' * (int(t) % 4)
+    cv2.putText(frame, "NO CAMERA", (TARGET_WIDTH // 2 - 110, TARGET_HEIGHT // 2 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.1, (148, 163, 184), 2)
+    cv2.putText(frame, f"plug in the webcam - searching{dots}", (TARGET_WIDTH // 2 - 175, TARGET_HEIGHT // 2 + 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 116, 139), 1)
+    return frame
+
+
 def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_port=5002, headless=True):
     """ลูปการทำงานหลักของระบบประมวลผลภาพบน Raspberry Pi 5"""
-    global LATEST_FRAME_JPEG, VISION_STATE
+    global LATEST_FRAME_JPEG, LATEST_FRAME_TS, VISION_STATE
 
     start_stream_server(port=stream_port)
     detector = VisionDetector(preferred_backend=backend_choice)
@@ -586,55 +694,21 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
     VISION_STATE["active"] = True
 
     cap = None
-    if not simulate and CV2_AVAILABLE:
-        try:
-            print(f"📷 [Camera] กำลังเชื่อมต่อกล้อง Webcam (Index: {camera_idx})...")
-            # รายการ Candidate Configurations สำหรับเชื่อมต่อกล้องบน Windows (DSHOW / Native)
-            # รองรับทั้งโหมด 2 อาร์กิวเมนต์ และโหมด DSHOW Domain ของ OpenCV 5.x
-            candidates = []
-            if os.name == 'nt' and hasattr(cv2, 'CAP_DSHOW'):
-                candidates.extend([
-                    (camera_idx, cv2.CAP_DSHOW),
-                    (cv2.CAP_DSHOW + camera_idx, None),
-                    (1, cv2.CAP_DSHOW),
-                    (cv2.CAP_DSHOW + 1, None),
-                    (camera_idx, None)
-                ])
-            else:
-                candidates.extend([
-                    (camera_idx, None),
-                    (1, None)
-                ])
-
-            for test_idx, test_backend in candidates:
-                try:
-                    if test_backend is not None:
-                        temp_cap = cv2.VideoCapture(test_idx, test_backend)
-                    else:
-                        temp_cap = cv2.VideoCapture(test_idx)
-
-                    if temp_cap.isOpened():
-                        ret, test_frame = temp_cap.read()
-                        if ret and test_frame is not None:
-                            cap = temp_cap
-                            break
-                        temp_cap.release()
-                except Exception:
-                    pass
-
-            if cap and cap.isOpened():
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, TARGET_WIDTH)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_HEIGHT)
-                cap.set(cv2.CAP_PROP_FPS, 30)
-                if hasattr(cv2, 'CAP_PROP_BUFFERSIZE'):
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                print("✅ [Camera] เปิดกล้องเว็บแคมจริงสำเร็จพร้อมทำงาน")
-            else:
-                print(f"⚠️ [Camera Warning] ไม่สามารถเปิดกล้อง index {camera_idx} ได้ -> สลับเข้าโหมด Simulate อัตโนมัติ")
-                simulate = True
-        except Exception as e:
-            print(f"⚠️ [Camera Error] {e} -> สลับเข้าโหมด Simulate")
-            simulate = True
+    last_camera_try = 0.0
+    camera_fail_since = 0.0
+    if simulate:
+        VISION_STATE["camera"] = "simulate"
+        print("🧪 [Camera] โหมดจำลอง (--simulate): ใช้ผู้มาเยือนจำลอง ไม่ใช้กล้องจริง")
+    elif CV2_AVAILABLE:
+        print(f"📷 [Camera] กำลังเชื่อมต่อกล้อง Webcam (Index: {camera_idx})...")
+        cap = open_camera(camera_idx)
+        last_camera_try = time.time()
+        if cap is not None:
+            VISION_STATE["camera"] = "connected"
+            print("✅ [Camera] เปิดกล้องเว็บแคมจริงสำเร็จพร้อมทำงาน")
+        else:
+            VISION_STATE["camera"] = "searching"
+            print(f"⚠️ [Camera] ไม่พบกล้อง -> รอเสียบกล้อง (ลองหาใหม่ทุก {CAMERA_RETRY_SEC:g} วินาที ไม่ทักทายจนกว่าจะเจอกล้อง)")
 
     consecutive_person_count = 0
     consecutive_attention_count = 0
@@ -649,20 +723,40 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
     fps_counter = 0
     fps_timer = time.time()
     sim_t = 0.0
+    detect_interval = 1.0 / DETECT_FPS
+    encode_interval = 1.0 / STREAM_FPS
+    last_detect_time = 0.0
+    last_encode_time = 0.0
 
     print("=" * 65)
     print("👁️ [Nong Phet Vision Daemon] ระบบมองเห็นและทักทายพร้อมทำงานเต็มรูปแบบ!")
     print(f"   - Backend Model : {detector.backend.upper()}")
     print(f"   - Live Stream   : http://localhost:{stream_port}/video_feed")
     print(f"   - Auto Greeting : Cooldown {GREETING_COOLDOWN_SEC}s, Attention Threshold {CONSECUTIVE_ATTENTION_TRIGGER} frames")
+    print(f"   - CPU Budget    : detect {DETECT_FPS:g} fps, stream {STREAM_FPS:g} fps (on demand), OpenCV threads {CV_THREADS}")
     print("=" * 65)
 
     try:
         while True:
             t0 = time.time()
 
-            if simulate or not cap or not cap.isOpened():
-                # สร้างเฟรมภาพจำลองแบบ Cyberpunk สำหรับโหมด Test/Simulate
+            if not simulate and (cap is None or not cap.isOpened()):
+                # ยังไม่มีกล้อง: ลองหากล้องใหม่เป็นระยะ ระหว่างนี้ไม่มีคน (ไม่ทักทาย ไม่หันตาม)
+                if CV2_AVAILABLE and t0 - last_camera_try >= CAMERA_RETRY_SEC:
+                    last_camera_try = t0
+                    cap = open_camera(camera_idx, quiet=True)
+                    if cap is not None:
+                        VISION_STATE["camera"] = "connected"
+                        camera_fail_since = 0.0
+                        print("✅ [Camera] พบกล้องแล้ว -> เริ่มตรวจจับใบหน้า")
+                        continue
+                VISION_STATE["camera"] = "searching"
+                detections, gaze_target, estimated_distance = [], None, None
+                is_attentive, attention_score, yaw_deg = False, 0.0, 0.0
+                frame = no_camera_frame(t0) if CV2_AVAILABLE else None
+                time.sleep(detect_interval)
+            elif simulate:
+                # สร้างเฟรมภาพจำลองแบบ Cyberpunk สำหรับโหมด Test/Simulate (--simulate เท่านั้น)
                 if CV2_AVAILABLE:
                     frame = np.zeros((TARGET_HEIGHT, TARGET_WIDTH, 3), dtype=np.uint8)
                     # พื้นหลังตาราง Grid
@@ -671,8 +765,8 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
                     for y in range(0, TARGET_HEIGHT, 40):
                         cv2.line(frame, (0, y), (TARGET_WIDTH, y), (15, 23, 42), 1)
 
-                    # วาดเป้าหมายบุคคลจำลองที่เดินไปมา
-                    sim_t += 0.05
+                    # วาดเป้าหมายบุคคลจำลองที่เดินไปมา (ความเร็วตามเวลาจริง ไม่ขึ้นกับ fps)
+                    sim_t += 1.5 * detect_interval
                     person_x = int(TARGET_WIDTH / 2.0 + math.sin(sim_t * 0.8) * 160)
                     person_y = int(TARGET_HEIGHT / 2.0 + math.cos(sim_t * 0.4) * 40)
                     pw, ph = 100, 130
@@ -700,13 +794,37 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
                     detections, gaze_target, estimated_distance = [], None, None
                     is_attentive, attention_score, yaw_deg = False, 0.0, 0.0
                     frame = None
-                time.sleep(0.033)
+                time.sleep(detect_interval)
             else:
-                ret, frame = cap.read()
+                # grab() ดึงเฟรมออกจากบัฟเฟอร์กล้องโดยยังไม่ถอดรหัส (ถูกมาก) เพื่อให้ภาพล่าสุดไม่ค้างในบัฟเฟอร์
+                # ถอดรหัส + ตรวจจับเฉพาะรอบที่ถึงเวลาตาม DETECT_FPS เท่านั้น
+                if not cap.grab():
+                    # อ่านภาพไม่ได้ต่อเนื่อง = กล้องหลุด (ถอดสาย): ปล่อยกล้องแล้วกลับไปหากล้องใหม่
+                    camera_fail_since = camera_fail_since or t0
+                    if t0 - camera_fail_since >= CAMERA_LOST_SEC:
+                        print("⚠️ [Camera] กล้องหลุด -> รอเสียบกล้องใหม่")
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
+                        cap = None
+                        camera_fail_since = 0.0
+                        last_camera_try = t0
+                        VISION_STATE["camera"] = "searching"
+                    time.sleep(0.01)
+                    continue
+                camera_fail_since = 0.0
+                if (t0 - last_detect_time) < detect_interval:
+                    time.sleep(0.001)
+                    continue
+                ret, frame = cap.retrieve()
                 if not ret or frame is None:
                     time.sleep(0.01)
                     continue
                 detections, gaze_target, estimated_distance, is_attentive, attention_score, yaw_deg = detector.detect(frame)
+
+            frame_dt = (t0 - last_detect_time) if last_detect_time else detect_interval
+            last_detect_time = t0
 
             has_person = len(detections) > 0
             VISION_STATE["person_detected"] = has_person
@@ -721,8 +839,10 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
             if gaze_target:
                 gx, gy = gaze_target
                 # กรองความสั่นไหวด้วย Exponential Moving Average (EMA) เพื่อให้ดวงตาเคลื่อนไหวอย่างนุ่มนวล
-                smoothed_gx = round(0.65 * smoothed_gx + 0.35 * gx, 3)
-                smoothed_gy = round(0.65 * smoothed_gy + 0.35 * gy, 3)
+                # ปรับน้ำหนักตามเวลาจริง: ให้ความหน่วงเท่าเดิม (0.65 ต่อเฟรมที่ 30 fps) ไม่ว่า DETECT_FPS จะเท่าไร
+                keep = 0.65 ** min(frame_dt * 30.0, 30.0)
+                smoothed_gx = round(keep * smoothed_gx + (1.0 - keep) * gx, 3)
+                smoothed_gy = round(keep * smoothed_gy + (1.0 - keep) * gy, 3)
                 VISION_STATE["gaze_x"] = smoothed_gx
                 VISION_STATE["gaze_y"] = smoothed_gy
                 # ส่งเฉพาะเมื่อตำแหน่งเคลื่อนไหวเกินเกณฑ์ (threshold 0.08) และเว้นระยะอย่างน้อย 350ms
@@ -786,8 +906,15 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
 
             # -----------------------------------------------------------------
             # 3. วาด Bounding Box & HUD Telemetry บนเฟรมภาพสตรีมมิ่ง
+            #    ทำเฉพาะตอนมีคนดูสตรีม/ขอ snapshot (หรือเปิดหน้าต่าง --gui) และไม่เกิน STREAM_FPS
+            #    ตอนไม่มีใครดู จะไม่เสีย CPU กับการวาดและเข้ารหัส JPEG เลย
             # -----------------------------------------------------------------
-            if frame is not None and CV2_AVAILABLE:
+            stream_wanted = (STREAM_CLIENTS > 0
+                             or (t0 - LAST_SNAPSHOT_REQUEST) < SNAPSHOT_KEEPALIVE_SEC
+                             or not headless)
+            if (frame is not None and CV2_AVAILABLE and stream_wanted
+                    and (t0 - last_encode_time) >= encode_interval):
+                last_encode_time = t0
                 for d in detections:
                     bx, by, bw, bh = d['bbox']
                     att = d.get('is_attentive', False)
@@ -836,6 +963,7 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
                 if ret_jpg:
                     with FRAME_LOCK:
                         LATEST_FRAME_JPEG = jpeg_buf.tobytes()
+                        LATEST_FRAME_TS = time.time()
 
                 if not headless:
                     cv2.imshow("Nong Phet Vision - Debug Preview", frame)

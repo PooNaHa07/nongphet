@@ -36,6 +36,103 @@ function sendQuickMessage(text) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// คำสั่งเสียง: ประโยคสั้นๆ เช่น "เปิดหน้าที่เที่ยว" "หยุดพูด" "ยิ้มหน่อย" ทำทันที ไม่ส่งเข้าแชต
+// (เซิร์ฟเวอร์ตัดสินว่าเป็นคำสั่งหรือไม่: services/voice_command_service.py)
+// -----------------------------------------------------------------------------
+let lastAnswerSpeech = null;   // {text, lang} คำตอบล่าสุด สำหรับคำสั่ง "พูดอีกครั้ง"
+const VOICE_COMMAND_MAX_CHARS = 60;
+
+async function tryVoiceCommand(text) {
+    if (!text || text.length > VOICE_COMMAND_MAX_CHARS) return false;
+    let cmd = null;
+    try {
+        const res = await fetch('/api/voice/command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        cmd = (await res.json()).command;
+    } catch (e) {
+        return false;            // เช็กไม่ได้: ส่งเข้าแชตตามปกติ
+    }
+    if (!cmd) return false;
+    applyVoiceCommand(cmd);
+    return true;
+}
+
+function resumeListeningAfterCommand() {
+    if (typeof isRealtimeVoiceActive === 'undefined' || !isRealtimeVoiceActive) return;
+    if (typeof setEmotion === 'function') setEmotion('listening');
+    if (typeof setRealtimeVoiceStatus === 'function') {
+        setRealtimeVoiceStatus('listening', '🎙️ กำลังฟังเสียงคุณ... (พูดต่อได้เลยไม่ต้องกดปุ่ม)');
+    }
+    if (typeof startRecognitionSafe === 'function') setTimeout(() => startRecognitionSafe(), 250);
+}
+
+function speakCommandReply(text, lang) {
+    const shouldSpeak = (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) || (typeof autoSpeak !== 'undefined' && autoSpeak);
+    if (!text || !shouldSpeak || typeof playTTS !== 'function') {
+        resumeListeningAfterCommand();
+        return;
+    }
+    if (typeof stopRecognitionSafe === 'function') stopRecognitionSafe();
+    playTTS(text, null, () => resumeListeningAfterCommand(), lang || 'th');
+}
+
+function showVoiceCommandHelp(groups) {
+    if (!groups || !groups.length || typeof showAppToast !== 'function') return;
+    const lines = groups.map(g => `${g.group}: ${g.examples.map(x => `"${x}"`).join(' ')}`);
+    showAppToast('🎙️ ลองพูดว่า<br>' + lines.join('<br>'), 'info', 10000);   // ข้อความคงที่จากเซิร์ฟเวอร์
+}
+
+function closeAllModals() {
+    ['closeQrModal', 'closeTripPlannerModal', 'closeMatcherModal', 'closeContactModal', 'closeExploreModal']
+        .forEach(fn => { try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {} });
+}
+
+function applyVoiceCommand(cmd) {
+    const ui = cmd.ui || {};
+    if (typeof stopAllSpeech === 'function') stopAllSpeech();   // คำสั่งใหม่ตัดเสียงที่พูดค้างอยู่เสมอ
+    isWaitingChatResponse = false;
+
+    if (ui.speech === 'stop') {
+        resumeListeningAfterCommand();
+        return;
+    }
+    if (ui.speech === 'repeat') {
+        if (lastAnswerSpeech) {
+            speakCommandReply(lastAnswerSpeech.text, lastAnswerSpeech.lang);
+        } else {
+            if (typeof showAppToast === 'function') showAppToast('ยังไม่มีคำตอบให้พูดซ้ำค่ะ', 'info');
+            resumeListeningAfterCommand();
+        }
+        return;
+    }
+    if (ui.navigate && typeof navigateTo === 'function') navigateTo(ui.navigate);
+    if (ui.modal === 'qr' && typeof openQrModal === 'function') openQrModal();
+    if (ui.modal === 'close') closeAllModals();
+    if (ui.language && typeof changeLanguage === 'function') changeLanguage(ui.language);
+    let note = '';
+    if (typeof ui.volume === 'number' && typeof setKioskVolume === 'function') {
+        const before = kioskVolume;
+        const after = setKioskVolume(kioskVolume + ui.volume);
+        if (after === before) note = after >= 1.0 ? ' (ดังสุดแล้ว)' : ' (เบาสุดแล้ว)';
+        else note = ` (${Math.round(after * 100)}%)`;
+    }
+    if (ui.help) showVoiceCommandHelp(cmd.help);
+    if (cmd.emotion && typeof setEmotion === 'function') {
+        setEmotion(cmd.emotion);
+        setTimeout(() => { if (!isSpeakingTTS && !isWaitingChatResponse) setEmotion('idle'); }, 4000);
+    }
+    if (cmd.reply) {
+        if (typeof showAppToast === 'function' && !ui.help) showAppToast(cmd.reply + note, 'success');
+        speakCommandReply(cmd.reply, cmd.lang);
+    } else {
+        resumeListeningAfterCommand();
+    }
+}
+
 async function sendChatMessage(forcedLang = null) {
     const chatInput = document.getElementById('chatInput');
     const chatBox = document.getElementById('chatBox');
@@ -44,6 +141,12 @@ async function sendChatMessage(forcedLang = null) {
     if (!chatInput) return;
     const text = chatInput.value.trim();
     if (!text) return;
+
+    // คำสั่งเสียง (เปิดหน้า หยุดพูด ยิ้ม ...) ทำทันที ไม่เข้าแชต ไม่เล่นเสียงคั่นเวลา
+    if (await tryVoiceCommand(text)) {
+        chatInput.value = '';
+        return;
+    }
 
     if (typeof evaluateSpeechQuality === 'function') {
         const quality = evaluateSpeechQuality(text);
@@ -86,21 +189,35 @@ async function sendChatMessage(forcedLang = null) {
         localStorage.setItem('nongphet_session_id', sessionId);
     }
 
-    // Zero-Perceived Latency: เล่นเสียง Filler ทันที (<100ms จาก Cache) คั่นเวลาระหว่างรอ AI สังเคราะห์
+    // ประโยค "กำลังคิด" (อัดไว้แล้ว เล่นทันที) เฉพาะตอนคำตอบช้า:
+    //   - คำตอบจากฐานความรู้มาภายใน THINK_DELAY_MS: ไม่ต้องเล่น พูดคำตอบเลย
+    //   - ช้ากว่านั้น: "ขอน้องเพชรคิดแป๊บนึงนะคะ"
+    //   - ยังรออยู่ถึง LONG_WAIT_MS (เช่น ค้นเว็บ): "ขอเวลาอีกนิดนะคะ น้องเพชรกำลังค้นข้อมูลให้อยู่ค่ะ"
+    const THINK_DELAY_MS = 700;
+    const LONG_WAIT_MS = 5000;
     let pendingMainSpeech = null;
     let fillerAudio = null;
+    const fillerTimers = [];
     const shouldSpeakCheck = (typeof isRealtimeVoiceActive !== 'undefined' && isRealtimeVoiceActive) || (typeof autoSpeak !== 'undefined' && autoSpeak);
+    const onFillerEnded = () => {
+        if (pendingMainSpeech) {
+            const speakFn = pendingMainSpeech;
+            pendingMainSpeech = null;
+            speakFn();
+        } else if (isWaitingChatResponse) {
+            if (typeof setEmotion === 'function') setEmotion('thinking');
+        }
+    };
+    const fillerPlaying = () => fillerAudio && !fillerAudio.paused && !fillerAudio.ended;
     if (shouldSpeakCheck && typeof playInstantFiller === 'function') {
-        fillerAudio = playInstantFiller(() => {
-            if (pendingMainSpeech) {
-                const speakFn = pendingMainSpeech;
-                pendingMainSpeech = null;
-                speakFn();
-            } else if (isWaitingChatResponse) {
-                if (typeof setEmotion === 'function') setEmotion('thinking');
-            }
-        });
+        fillerTimers.push(setTimeout(() => {
+            if (isWaitingChatResponse && !fillerPlaying()) fillerAudio = playInstantFiller(onFillerEnded, 'think');
+        }, THINK_DELAY_MS));
+        fillerTimers.push(setTimeout(() => {
+            if (isWaitingChatResponse && !fillerPlaying()) fillerAudio = playInstantFiller(onFillerEnded, 'long');
+        }, LONG_WAIT_MS));
     }
+    const cancelFillerTimers = () => { while (fillerTimers.length) clearTimeout(fillerTimers.pop()); };
 
     try {
         const response = await fetch('/chat', {
@@ -113,10 +230,12 @@ async function sendChatMessage(forcedLang = null) {
             })
         });
         const data = await response.json();
+        cancelFillerTimers();      // ได้คำตอบแล้ว: ไม่ต้องเล่นประโยคกำลังคิดที่ยังไม่ถึงเวลา
         if (typingIndicator) typingIndicator.classList.add('hidden');
 
         if (data.reply) {
             appendChatBubble('ai', data.reply, data);
+            lastAnswerSpeech = { text: data.speech || data.reply, lang: data.language || forcedLang || currentLang || 'th' };
             
             // ปรับภาษาตามที่ระบบตรวจจับได้
             const replyLang = data.language || forcedLang || currentLang || 'th';
@@ -138,7 +257,7 @@ async function sendChatMessage(forcedLang = null) {
                         stopRecognitionSafe();
                     }
 
-                    playTTS(data.reply, null, () => {
+                    playTTS(data.speech || data.reply, null, () => {
                         // เมื่อเสียงเล่นจบสมบูรณ์ (Audio onended + buffer delay)
                         isWaitingChatResponse = false;
                         if (typeof setEmotion === 'function') {
@@ -208,6 +327,7 @@ async function sendChatMessage(forcedLang = null) {
         }
     } catch (error) {
         pendingMainSpeech = null;
+        cancelFillerTimers();
         if (fillerAudio) {
             try { fillerAudio.pause(); fillerAudio.currentTime = 0; } catch (fe) {}
         }
@@ -267,9 +387,9 @@ function appendChatBubble(sender, text, meta = null) {
             } else if (meta.engine === 'local_slm') {
                 engineLabel = '🦙 Local SLM (Qwen 2.5)';
                 iconClass = 'fa-solid fa-brain text-teal-600';
-            } else if (meta.engine === 'gemini_fallback') {
-                engineLabel = '🛡️ Local Smart Fallback';
-                iconClass = 'fa-solid fa-arrows-rotate text-purple-600';
+            } else if (meta.engine === 'web_search') {
+                engineLabel = '🌐 Web Search (Gemini + Google)';
+                iconClass = 'fa-solid fa-globe text-amber-600';
             }
             
             const badge = document.createElement('div');
@@ -296,6 +416,32 @@ function appendChatBubble(sender, text, meta = null) {
 
             badge.innerHTML = badgesHtml;
             bubble.appendChild(badge);
+        }
+
+        // คำตอบจากเว็บ: แสดงแหล่งที่มา (ข้อความ ไม่เป็นลิงก์ กันผู้ใช้กดออกจากหน้าตู้)
+        if (meta && meta.sources && meta.sources.length > 0) {
+            const src = document.createElement('div');
+            src.className = 'mt-2 text-[11px] text-slate-500 flex flex-wrap items-center gap-1.5';
+            const label = document.createElement('span');
+            label.innerHTML = '<i class="fa-solid fa-link text-amber-600"></i> แหล่งที่มา:';
+            src.appendChild(label);
+            meta.sources.forEach(s => {
+                const chip = document.createElement('span');
+                chip.className = 'px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800';
+                chip.textContent = s.title;
+                src.appendChild(chip);
+            });
+            bubble.appendChild(src);
+        }
+        // Google กำหนดให้แสดง "คำค้นแนะนำ" เมื่อใช้ Grounding with Google Search
+        // วางใน iframe แบบ sandbox: แสดงผลได้ แต่สคริปต์และการเปิดหน้าใหม่ถูกปิดไว้
+        if (meta && meta.search_html) {
+            const frame = document.createElement('iframe');
+            frame.setAttribute('sandbox', '');
+            frame.setAttribute('title', 'Google Search suggestions');
+            frame.className = 'mt-2 w-full h-14 border-0 rounded-lg bg-transparent';
+            frame.srcdoc = meta.search_html;
+            bubble.appendChild(frame);
         }
 
         // แสดง Interactive Suggestion Chips (ปุ่มคำถามต่อยอดที่คลิกได้ทันที)
@@ -327,7 +473,8 @@ function appendChatBubble(sender, text, meta = null) {
         const ttsBtn = document.createElement('button');
         ttsBtn.className = 'hover:text-blue-600 flex items-center gap-1 transition';
         ttsBtn.innerHTML = '<i class="fa-solid fa-volume-high text-blue-500"></i> ฟังเสียง';
-        ttsBtn.onclick = () => playTTS(text, ttsBtn);
+        // คำตอบจากเว็บพูดแค่ประโยคสั้น: ปุ่มนี้เล่นสรุปเต็ม (speech_full)
+        ttsBtn.onclick = () => playTTS((meta && (meta.speech_full || meta.speech)) || text, ttsBtn);
         
         const copyBtn = document.createElement('button');
         copyBtn.className = 'hover:text-blue-600 flex items-center gap-1 transition';
@@ -412,8 +559,8 @@ async function openMobileHandoffQR(content, intent = 'travel') {
             document.getElementById('qrLoadingBox').classList.add('hidden');
             const qrBox = document.getElementById('qrContentBox');
             qrBox.classList.remove('hidden');
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.share_url)}`;
-            document.getElementById('qrImg').src = qrUrl;
+            // สร้าง QR ในเครื่อง (static/vendor/qrcode) ใช้ได้แม้ไม่มีอินเทอร์เน็ต
+            document.getElementById('qrImg').src = makeQrDataUrl(data.share_url);
             document.getElementById('qrDirectLink').href = data.share_url;
         }
     } catch (e) {

@@ -104,7 +104,15 @@ def iot_trigger():
     
     broadcast_iot_event(event_payload)
     logger.info(f"IoT Event Broadcast: {event_payload}")
-    
+
+    # ทักทายด้วยการโบกมือเมื่อมีคนเข้าใกล้ (เฉพาะเหตุการณ์ที่ผ่าน Cooldown มาแล้ว)
+    if event_type == 'user_detected':
+        try:
+            from services import arm_service
+            arm_service.trigger_gesture('wave', source=source)
+        except Exception as e:
+            logger.debug(f"Arm greeting note: {e}")
+
     return jsonify({
         'status': 'received',
         'event': event_payload,
@@ -123,6 +131,14 @@ def iot_set_led():
     state = data.get('state', 'idle')
     iot_state['led_mode'] = state
     broadcast_iot_event({'event': 'led_state_changed', 'state': state})
+
+    # สัญญาณเริ่ม/จบการพูดจากหน้าเว็บ -> ขยับแขนเบาๆ ประกอบการพูด (ส่งเฉพาะตอนเปลี่ยนสถานะ)
+    try:
+        from services import arm_service
+        arm_service.speech_changed(state == 'speaking')
+    except Exception as e:
+        logger.debug(f"Arm speech note: {e}")
+
     return jsonify({'status': 'ok', 'led_mode': state})
 
 @iot_bp.route('/api/iot/events')

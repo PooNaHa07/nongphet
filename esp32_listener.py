@@ -17,6 +17,7 @@ import sys
 import time
 import json
 import argparse
+import queue
 import threading
 import urllib.request
 import urllib.error
@@ -39,29 +40,106 @@ except ImportError:
 
 FLASK_TRIGGER_URL = "http://127.0.0.1:5000/api/iot/trigger"
 FLASK_STATUS_URL = "http://127.0.0.1:5000/api/iot/status"
+FLASK_EVENTS_URL = "http://127.0.0.1:5000/api/iot/events"
+FLASK_ARM_HARDWARE_URL = "http://127.0.0.1:5000/api/arm/hardware"
 BAUD_RATE = 115200
+STATUS_POLL_SEC = 10.0   # ถามสถานะบอร์ดเป็นระยะ (heartbeat) เพื่อให้แดชบอร์ดรู้ว่าบอร์ดยังอยู่
+LED_STATES_ON_BOARD = ("idle", "speaking", "thinking", "off")
 
 
-def find_esp32_port():
-    """ค้นหาพอร์ต Serial ของบอร์ด ESP32 โดยอัตโนมัติจาก Vendor/Description"""
+def event_to_serial_command(event):
+    """
+    แปลง SSE event จาก Flask เป็นคำสั่ง JSON สำหรับ ESP32 (คืน None ถ้าไม่เกี่ยวข้องกับฮาร์ดแวร์)
+    โปรโตคอลต้องตรงกับ esp32_firmware.ino
+    """
+    kind = event.get("event")
+    if kind == "arm_gesture" and event.get("gesture"):
+        return {"cmd": "arm", "gesture": event["gesture"]}
+    if kind == "arm_pose":
+        return {"cmd": "arm", "side": event.get("side", "both"),
+                "angle": event.get("angle"), "speed": event.get("speed", 90)}
+    if kind == "led_state_changed" and event.get("state"):
+        # firmware รู้จักเฉพาะ idle/speaking/thinking/off ส่วนสถานะอื่นของหน้าเว็บ (เช่น listening) ถือเป็น idle
+        state = event["state"]
+        if state in LED_STATES_ON_BOARD:
+            return {"cmd": "set_led", "state": state}
+        if state == "listening":
+            return {"cmd": "set_led", "state": "idle"}
+    return None
+
+
+def report_to_flask(payload):
+    """
+    รายงานสถานะบอร์ด (เชื่อมต่อ/คำตอบจาก ESP32) กลับไปที่ Flask ให้แดชบอร์ดแสดงผล
+    ทำในเธรดแยกเพื่อไม่ให้การรอ Flask ทำให้ลูป Serial สะดุด และไม่ล้มถ้า Flask ยังไม่เปิด
+    """
+    def _post():
+        try:
+            req = urllib.request.Request(
+                FLASK_ARM_HARDWARE_URL,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=2.0).close()
+        except Exception:
+            pass
+    threading.Thread(target=_post, daemon=True).start()
+
+
+def sse_command_listener(cmd_queue, stop_event):
+    """
+    สมัครรับ SSE /api/iot/events จาก Flask แล้วแปลงเป็นคำสั่งฮาร์ดแวร์ใส่คิว
+    (เธรดนี้ไม่แตะพอร์ต Serial เพื่อให้มีเธรดเดียวที่เขียน Serial) เชื่อมต่อใหม่เองเมื่อหลุด
+    """
+    while not stop_event.is_set():
+        try:
+            with urllib.request.urlopen(FLASK_EVENTS_URL, timeout=30) as resp:
+                for raw in resp:
+                    if stop_event.is_set():
+                        return
+                    line = raw.decode("utf-8", errors="ignore").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        event = json.loads(line[5:].strip())
+                    except json.JSONDecodeError:
+                        continue
+                    command = event_to_serial_command(event)
+                    if command:
+                        cmd_queue.put(command)
+        except Exception:
+            # Flask ยังไม่เปิด / ขาดการเชื่อมต่อ ลองใหม่
+            stop_event.wait(3.0)
+
+
+def find_esp32_port(strict=False, quiet=False):
+    """
+    ค้นหาพอร์ต Serial ของบอร์ด ESP32 โดยอัตโนมัติจาก Vendor/Description
+    strict=True: คืนเฉพาะพอร์ตที่ตรงกับชิป USB-Serial ที่รู้จัก (ไม่เดาพอร์ตแรก) ใช้ใน --wait
+                 เพื่อไม่ให้ไปเปิดพอร์ตของอุปกรณ์อื่นโดยไม่ตั้งใจ
+    quiet=True : ไม่พิมพ์รายการพอร์ต (ใช้ตอนสแกนซ้ำเป็นระยะ)
+    """
     if not SERIAL_AVAILABLE:
         return None
-    
+
     ports = serial.tools.list_ports.comports()
     keywords = ["cp210", "ch340", "ch341", "ftdi", "usb-serial", "esp32", "silicon labs", "uart"]
-    
-    print("\n[Hardware Scanner] รายการพอร์ต Serial ที่ตรวจพบบนเครื่อง:")
+
+    if not quiet:
+        print("\n[Hardware Scanner] รายการพอร์ต Serial ที่ตรวจพบบนเครื่อง:")
     for p in ports:
-        print(f"  - {p.device}: {p.description} [{p.hwid}]")
+        if not quiet:
+            print(f"  - {p.device}: {p.description} [{p.hwid}]")
         desc = (p.description or "").lower()
         hwid = (p.hwid or "").lower()
         for kw in keywords:
             if kw in desc or kw in hwid:
-                print(f"  ==> ตรวจพบอุปกรณ์ที่ตรงกัน: {p.device}")
+                if not quiet:
+                    print(f"  ==> ตรวจพบอุปกรณ์ที่ตรงกัน: {p.device}")
                 return p.device
-                
-    # หากมีพอร์ตอย่างน้อย 1 พอร์ต ให้คืนค่าพอร์ตแรก
-    if ports:
+
+    # หากมีพอร์ตอย่างน้อย 1 พอร์ต ให้คืนค่าพอร์ตแรก (ยกเว้นโหมด strict)
+    if ports and not strict:
         return ports[0].device
     return None
 
@@ -87,7 +165,8 @@ def send_command_to_esp32(ser, command_dict):
     """ส่งคำสั่ง JSON ไปยังบอร์ด ESP32 ผ่าน Serial"""
     if ser and ser.is_open:
         try:
-            cmd_str = json.dumps(command_dict) + "\n"
+            # separators แบบกะทัดรัด: ไม่มีช่องว่างหลัง ':' และ ',' (ลดขนาดข้อความและตรงกับ parser ใน firmware)
+            cmd_str = json.dumps(command_dict, separators=(",", ":")) + "\n"
             ser.write(cmd_str.encode('utf-8'))
             ser.flush()
             print(f"  [Tx -> ESP32] สั่งการ GPIO: {cmd_str.strip()}")
@@ -129,6 +208,21 @@ def run_simulation_mode():
     sim_thread.do_run = True
     sim_thread.start()
 
+    # จำลองฝั่งฮาร์ดแวร์: แสดงคำสั่งแขน/ไฟที่ Flask สั่งมา แทนการเขียนลง Serial จริง
+    sim_queue = queue.Queue()
+    sim_stop = threading.Event()
+    threading.Thread(target=sse_command_listener, args=(sim_queue, sim_stop), daemon=True).start()
+
+    def print_commands():
+        while not sim_stop.is_set():
+            try:
+                command = sim_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            print(f"\n  [Sim Tx -> ESP32] {json.dumps(command, ensure_ascii=False, separators=(',', ':'))}")
+
+    threading.Thread(target=print_commands, daemon=True).start()
+
     while True:
         try:
             user_input = input("กด [Enter] เพื่อยิง Event จำลองทันที: ").strip()
@@ -149,23 +243,43 @@ def run_simulation_mode():
             break
 
     sim_thread.do_run = False
+    sim_stop.set()
     print("\nสิ้นสุดโหมดจำลอง")
 
 
 def run_serial_listener(port_name):
     """เปิดพอร์ต Serial และรับข้อมูลจากบอร์ด ESP32 ตลอดเวลา"""
     print(f"\n[Serial Connector] กำลังเชื่อมต่อกับ {port_name} ที่ {BAUD_RATE} bps...")
-    
+
+    # คิวคำสั่งจาก Flask (แขน/ไฟ LED) -> เธรดนี้เป็นเธรดเดียวที่เขียนลง Serial
+    cmd_queue = queue.Queue()
+    stop_event = threading.Event()
+    threading.Thread(target=sse_command_listener, args=(cmd_queue, stop_event), daemon=True).start()
+
     while True:
         try:
             with serial.Serial(port_name, BAUD_RATE, timeout=1.0) as ser:
                 print(f"✅ เชื่อมต่อกับบอร์ด ESP32 สำเร็จบนพอร์ต {port_name}")
                 print(f"   พร้อมรับสัญญาณ Trigger จาก Ultrasonic HC-SR04...")
                 
+                report_to_flask({"connected": True, "port": port_name})
                 # ส่งคำสั่งทดสอบเบื้องต้น
-                send_command_to_esp32(ser, {"command": "get_status"})
+                send_command_to_esp32(ser, {"cmd": "get_status"})
+                next_status_poll = time.time() + STATUS_POLL_SEC
 
                 while True:
+                    # Heartbeat: ถามสถานะบอร์ดเป็นระยะ
+                    if time.time() >= next_status_poll:
+                        send_command_to_esp32(ser, {"cmd": "get_status"})
+                        next_status_poll = time.time() + STATUS_POLL_SEC
+
+                    # ส่งคำสั่งที่ค้างในคิว (ท่าทางแขน, สถานะไฟ LED) ไปยัง ESP32
+                    try:
+                        while True:
+                            send_command_to_esp32(ser, cmd_queue.get_nowait())
+                    except queue.Empty:
+                        pass
+
                     if ser.in_waiting > 0:
                         try:
                             raw_line = ser.readline().decode('utf-8', errors='ignore').strip()
@@ -178,6 +292,9 @@ def run_serial_listener(port_name):
                             if raw_line.startswith('{') and raw_line.endswith('}'):
                                 try:
                                     event = json.loads(raw_line)
+                                    if "response" in event or "device" in event:
+                                        # คำตอบ/ข้อความระบุตัวตนจากบอร์ด -> รายงานให้ Flask (ack, เวอร์ชัน, มุมแขน, error)
+                                        report_to_flask({"response": event})
                                     if event.get("event") == "user_detected":
                                         distance = event.get("distance", 0)
                                         print(f"🚨 [ALERT] ตรวจพบผู้ใช้! ระยะทาง: {distance} ซม. ส่งต่อไปยัง Web App...")
@@ -185,7 +302,7 @@ def run_serial_listener(port_name):
                                         print(f"   [Flask Web Hook Result] {flask_resp}")
                                         
                                         # ส่งคำสั่งให้ ESP32 สลับไฟ LED เป็นสถานะพูด/ต้อนรับ
-                                        send_command_to_esp32(ser, {"command": "set_led", "state": "speaking"})
+                                        send_command_to_esp32(ser, {"cmd": "set_led", "state": "speaking"})
                                         
                                 except json.JSONDecodeError:
                                     pass
@@ -194,6 +311,7 @@ def run_serial_listener(port_name):
                     time.sleep(0.01)
 
         except serial.SerialException as e:
+            report_to_flask({"connected": False})
             print(f"⚠️ การเชื่อมต่อ Serial ขัดข้อง: {e}")
             print("   จะลองเชื่อมต่อใหม่อัตโนมัติในอีก 3 วินาที...")
             time.sleep(3)
@@ -206,6 +324,8 @@ def main():
     parser = argparse.ArgumentParser(description="น้องเพชร AI - ESP32 Serial & IoT Controller")
     parser.add_argument("--port", type=str, help="พอร์ต Serial ของ ESP32 (เช่น COM3, /dev/ttyUSB0)")
     parser.add_argument("--simulate", action="store_true", help="รันในโหมดจำลอง (ไม่ต้องเชื่อมต่อบอร์ดจริง)")
+    parser.add_argument("--wait", action="store_true",
+                        help="โหมดบริการ (systemd): ถ้ายังไม่พบบอร์ดให้รอและสแกนซ้ำทุก 5 วินาทีโดยไม่ถามคำถาม")
     args = parser.parse_args()
 
     print("="*65)
@@ -217,7 +337,29 @@ def main():
         run_simulation_mode()
         return
 
+    if not SERIAL_AVAILABLE:
+        print("\n❌ ยังไม่ได้ติดตั้ง pyserial (pip install pyserial) จึงเปิดพอร์ต Serial ไม่ได้")
+        print("💡 ทดสอบโดยไม่ต้องมีบอร์ดได้ด้วย: python esp32_listener.py --simulate")
+        sys.exit(1)
+
     port = args.port
+
+    if args.wait and not port:
+        # โหมดบริการ: ยังไม่ต่อบอร์ดก็ไม่เป็นไร รอจนกว่าจะเสียบ แล้วค่อยเชื่อมต่อเอง
+        print("⏳ โหมดรอบอร์ด (--wait): สแกนหา ESP32 ทุก 5 วินาที (Ctrl+C เพื่อออก)")
+        announced = False
+        try:
+            while not port:
+                port = find_esp32_port(strict=True, quiet=True)
+                if not port:
+                    if not announced:
+                        print("   ยังไม่พบบอร์ด ESP32 กำลังรอการเสียบสาย USB...")
+                        announced = True
+                    time.sleep(5)
+        except KeyboardInterrupt:
+            return
+        print(f"✅ พบบอร์ดที่พอร์ต {port}")
+
     if not port:
         port = find_esp32_port()
 

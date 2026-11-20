@@ -136,7 +136,10 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
 
     def test_tts_filler_endpoint(self):
-        res = self.client.get('/api/tts/filler')
+        # ไม่ขึ้นกับว่าเครื่องนี้อัดเสียงประโยคคั่นเวลาไว้แล้วหรือยัง
+        from unittest import mock
+        with mock.patch('routes.media.get_cached_tts', return_value=('QUJD', 'mp3')):
+            res = self.client.get('/api/tts/filler')
         self.assertEqual(res.status_code, 200)
         data = res.get_json()
         self.assertEqual(data.get('status'), 'success')

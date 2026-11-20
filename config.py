@@ -17,12 +17,12 @@ if os.path.exists(_env_file):
 
 class Config:
     # อ่านจาก Environment Variable ถ้ามี หรือกำหนดผ่านไฟล์ .env
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'YOUR_GEMINI_API_KEY_HERE')
     SECRET_KEY = os.environ.get('SECRET_KEY', 'nongphet_smart_guide_secure_key_2026_pbvc')
     ADMIN_PIN = os.environ.get('ADMIN_PIN', '9999')
 
-    # โทนเสียงสังเคราะห์ประจำตัวน้องเพชร (Canonical Default Voice)
-    # ค่าเริ่มต้นมาตรฐาน: th-TH-PremwadeeNeural (Pitch +0Hz, Rate +2%)
+    # เสียงประจำตัวน้องเพชร "เสียงเดียวทั้งระบบ" (ทุกหน้าจอ ทุกเส้นทาง ใช้ค่านี้ค่าเดียว)
+    # th-TH-PremwadeeNeural ปรับให้สดใสน่ารักขึ้น: Pitch +15Hz, Rate +5%
+    # ถ้าเปลี่ยนค่านี้ ต้องรัน `python prebake_tts.py` ใหม่ เพื่ออัดเสียงที่เก็บไว้ล่วงหน้าด้วยโทนใหม่
     TTS_DEFAULT_VOICE = os.environ.get('TTS_VOICE', 'th-TH-PremwadeeNeural')
-    TTS_DEFAULT_PITCH = os.environ.get('TTS_PITCH', '+0Hz')
-    TTS_DEFAULT_RATE = os.environ.get('TTS_RATE', '+2%')
+    TTS_DEFAULT_PITCH = os.environ.get('TTS_PITCH', '+15Hz')
+    TTS_DEFAULT_RATE = os.environ.get('TTS_RATE', '+5%')

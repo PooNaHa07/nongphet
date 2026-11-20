@@ -1,24 +1,24 @@
 Model: Calibrated Linear SVM
 Total Dataset Size: 3000 samples (Train: 2400, Test: 600)
-Overall Accuracy : 0.9917
-Weighted Precision: 0.9918
-Weighted Recall   : 0.9917
-Weighted F1-Score : 0.9917
+Overall Accuracy : 0.9800
+Weighted Precision: 0.9802
+Weighted Recall   : 0.9800
+Weighted F1-Score : 0.9800
 
 5-Fold Stratified Cross-Validation & Test Comparison:
-  Logistic Regression              | 5-Fold CV: 0.9879 ± 0.0040 | Test Acc: 0.9850 (98.50%)
-  Calibrated Linear SVM            | 5-Fold CV: 0.9912 ± 0.0040 | Test Acc: 0.9917 (99.17%)
-  Soft Voting Ensemble (LR+SVM)    | 5-Fold CV: 0.9904 ± 0.0049 | Test Acc: 0.9900 (99.00%)
+  Logistic Regression              | 5-Fold CV: 0.9638 ± 0.0052 | Test Acc: 0.9717 (97.17%)
+  Calibrated Linear SVM            | 5-Fold CV: 0.9742 ± 0.0028 | Test Acc: 0.9800 (98.00%)
+  Soft Voting Ensemble (LR+SVM)    | 5-Fold CV: 0.9729 ± 0.0040 | Test Acc: 0.9800 (98.00%)
 
 Detailed Classification Report:
               precision    recall  f1-score   support
 
-   admission     1.0000    0.9750    0.9873       120
-        food     1.0000    1.0000    1.0000       120
- general_faq     1.0000    0.9833    0.9916       120
-    greeting     0.9756    1.0000    0.9877       120
-      travel     0.9836    1.0000    0.9917       120
+   admission     0.9832    0.9750    0.9791       120
+        food     0.9677    1.0000    0.9836       120
+ general_faq     0.9831    0.9667    0.9748       120
+    greeting     0.9754    0.9917    0.9835       120
+      travel     0.9915    0.9667    0.9789       120
 
-    accuracy                         0.9917       600
-   macro avg     0.9918    0.9917    0.9917       600
-weighted avg     0.9918    0.9917    0.9917       600
+    accuracy                         0.9800       600
+   macro avg     0.9802    0.9800    0.9800       600
+weighted avg     0.9802    0.9800    0.9800       600

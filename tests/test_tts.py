@@ -22,11 +22,11 @@ class TestTTSSystem(unittest.TestCase):
         preset_ids = [p['id'] for p in presets]
         self.assertIn('default', preset_ids)
         self.assertIn('cute_girl', preset_ids)
-        self.assertIn('cute_chibi', preset_ids)
         self.assertNotIn('cute_boy', preset_ids)
+        # ค่า default ต้องเป็นเสียงเดียวกับที่ระบบใช้จริง (config)
+        from services.tts_service import voice_profile
         default_preset = next(p for p in presets if p['id'] == 'default')
-        self.assertEqual(default_preset['pitch'], '+2Hz')
-        self.assertEqual(default_preset['rate'], '+5%')
+        self.assertEqual((default_preset['voice'], default_preset['pitch'], default_preset['rate']), voice_profile('th'))
 
     def test_natural_speech_phrasing_and_cadence(self):
         """ทดสอบระบบจัดจังหวะการพูด วรรคตอน การหายใจ และแปลงลิสต์เป็นภาษาพูดธรรมชาติ"""
@@ -67,19 +67,30 @@ class TestTTSSystem(unittest.TestCase):
         self.assertIn('สตูดิโอเสียงน้องเพชร'.encode('utf-8'), res.data)
 
     def test_tts_cache_hit_zero_latency(self):
-        """ทดสอบว่าประโยคที่ Pre-baked ไว้แล้วตอบสนองด้วย Cache ทันที"""
+        """ประโยคที่อัดเสียงเก็บไว้แล้ว ต้องตอบจากแคชทันที (ไม่ต้องใช้เน็ต) และใช้เสียงน้องเพชรเสมอ"""
+        import os, shutil, tempfile
+        from unittest import mock
+        from services import tts_service
+        tmp = tempfile.mkdtemp()
+        fake_edge_mp3 = bytes([0xFF, 0xF3, 0x64, 0xC0]) + b'\x00' * 200   # MPEG2 24kHz 48kbps mono
         test_text = "สวัสดีค่ะ น้องเพชรยินดีต้อนรับสู่วิทยาลัยอาชีวศึกษาเพชรบุรีค่ะ มีอะไรให้น้องเพชรช่วยแนะนำไหมคะ"
-        res = self.app.post('/tts', json={
-            'text': test_text,
-            'lang': 'th',
-            'voice': 'th-TH-PremwadeeNeural',
-            'pitch': '+0Hz',
-            'rate': '+2%'
-        })
+        try:
+            with mock.patch.object(tts_service, 'AUDIO_CACHE_DIR', tmp):
+                tts_service.TTS_CACHE.clear()
+                v, p, r = tts_service.voice_profile('th')
+                clean = tts_service.clean_text_for_speech(tts_service.prepare_speech_input(test_text), 2500, 'female', 'th')
+                tts_service.save_cached_tts(tts_service.speech_cache_key(clean, v, p, r), fake_edge_mp3)
+                tts_service.TTS_CACHE.clear()   # บังคับให้อ่านจากดิสก์
+                # หน้าเว็บส่ง pitch/rate อื่นมา ก็ยังต้องได้เสียงน้องเพชรจากแคชเดิม
+                res = self.app.post('/tts', json={'text': test_text, 'lang': 'th', 'pitch': '+0Hz', 'rate': '+2%'})
+        finally:
+            tts_service.TTS_CACHE.clear()
+            shutil.rmtree(tmp, ignore_errors=True)
         self.assertEqual(res.status_code, 200)
         data = res.get_json()
         self.assertIn('audio_base64', data)
-        self.assertEqual(data.get('status'), 'success')
+        self.assertEqual(data.get('engine'), 'cache-disk-cache')
+        self.assertEqual(data.get('pitch'), p)
 
 if __name__ == '__main__':
     unittest.main()
