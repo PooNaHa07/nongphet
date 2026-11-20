@@ -18,7 +18,9 @@
         minSpeechMs: 200,         // เสียงดังสะสมเท่านี้ถึงนับว่าเริ่มพูด (ช่องว่างระหว่างพยางค์ไม่รีเซ็ต)
         endSilenceMs: 900,        // เงียบต่อเนื่องเท่านี้หลังพูด = พูดจบ
         noSpeechMs: 8000,         // ไม่พูดเลยภายในเวลานี้ = no-speech (เหมือน Web Speech)
-        maxUtteranceMs: 15000,    // พูดยาวสุดต่อครั้ง
+        maxUtteranceMs: 10000,    // พูดยาวสุดต่อครั้ง (คำถามที่ตู้สั้นกว่านี้ ถ้าห้องเสียงดังจนจับเงียบไม่ได้ จะตัดที่นี่)
+        endRelPeak: 0.2,          // หลังเริ่มพูด: เสียงเบากว่า 20% ของเสียงพูดที่ดังสุด นับเป็น "เงียบ" (ห้องที่มีเสียงคนคุย)
+        endRelCap: 0.025,         // ...แต่เกณฑ์นี้ไม่เกินระดับนี้ (เสียงกระแทกครั้งเดียวจะได้ไม่ตัดคำพูดปกติ ~0.03-0.09)
         minLevel: 0.008,          // ความดังขั้นต่ำ (RMS) ที่นับว่าเป็นเสียงพูด
         noiseFactor: 1.8,         // ต้องดังกว่าเสียงรบกวนรอบข้างกี่เท่า (+ noiseMargin)
         noiseMargin: 0.006,
@@ -28,6 +30,16 @@
         initialFloor: 0.015,      // ระดับเสียงรบกวนเริ่มต้น ก่อนเรียนรู้จากห้องจริง
         preRollMs: 300,           // เก็บเสียงก่อนเริ่มพูดไว้ด้วย กันคำแรกขาด
     };
+
+    // แจ้งสถานะเสียงพูดของผู้ใช้ให้จอใบหน้าแสดง (กำลังฟัง / กำลังแปลงเสียง / ข้อความที่พูด)
+    function reportUserSpeech(state, text = '') {
+        try {
+            fetch('/api/user-speech', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state, text }), keepalive: true
+            }).catch(() => {});
+        } catch (e) {}
+    }
 
     let localAvailable = null;     // null = ยังไม่รู้, true/false = ผลจาก /api/stt/status
     let statusPromise = null;
@@ -198,7 +210,7 @@
         // ---------------- ตัวถอดเสียงในบูธ (Whisper) ----------------
         async _startLocal(session) {
             const st = { stopRequested: null, chunks: [], preRoll: [], speaking: false, speechMs: 0, silenceMs: 0,
-                         elapsedMs: 0, peak: 0, done: false, voicedMs: 0 };
+                         elapsedMs: 0, peak: 0, done: false, voicedMs: 0, speechPeak: 0, endReason: '' };
             this._local = st;
             let handler = null;
             const detach = () => { if (Mic.handler === handler) Mic.handler = null; };
@@ -230,22 +242,33 @@
                 this._emit('speechend');
                 this._emit('audioend');
                 if (st.stopRequested === 'abort') return end(null);
-                if (!st.speaking || !st.chunks.length || st.voicedMs < VAD.minVoicedMs) return end('no-speech');
+                if (!st.speaking || !st.chunks.length || st.voicedMs < VAD.minVoicedMs) {
+                    if (st.speaking) reportUserSpeech('clear');
+                    return end('no-speech');
+                }
                 const wav = encodeWav16k(st.chunks, Mic.sampleRate);
+                const audioSec = st.chunks.length * frameMs / 1000;
+                const t0 = performance.now();
+                reportUserSpeech('transcribing');
                 try {
                     const res = await fetch('/api/stt?lang=' + this._langCode(), {
                         method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav
                     });
                     const data = await res.json();
+                    const sttMs = Math.round(performance.now() - t0);
+                    // จับเวลาไว้ดูใน console: พูดจบเพราะเงียบ (silence) หรือยาวจนถูกตัด (max-length = ห้องเสียงดัง)
+                    console.info(`🎧 [STT] จบเพราะ ${st.endReason}, เสียง ${audioSec.toFixed(1)} วิ, ถอดความ ${sttMs} ms: "${(data.text || '').trim()}"`);
                     if (session !== this._session) return;
-                    if (!res.ok) { checkLocalStt(true); return end('network'); }
+                    if (!res.ok) { reportUserSpeech('clear'); checkLocalStt(true); return end('network'); }
                     const text = (data.text || '').trim();
-                    if (!text) return end('no-speech');
+                    if (!text) { reportUserSpeech('clear'); return end('no-speech'); }
+                    reportUserSpeech('final', text);
                     const result = [{ transcript: text, confidence: 0.9 }];
                     result.isFinal = true;
                     this._emit('result', { resultIndex: 0, results: [result] });
                     end(null);
                 } catch (e) {
+                    reportUserSpeech('clear');
                     checkLocalStt(true);
                     end('network');
                 }
@@ -255,7 +278,7 @@
                 if (st.done) return;
                 st.elapsedMs += frameMs;
                 if (st.stopRequested === 'abort') return end(null);
-                if (st.stopRequested === 'stop') return finishUtterance();
+                if (st.stopRequested === 'stop') { st.endReason = 'stop'; return finishUtterance(); }
 
                 const threshold = Math.max(VAD.minLevel, Mic.noiseFloor * VAD.noiseFactor + VAD.noiseMargin);
                 const loud = rms > threshold;
@@ -274,6 +297,7 @@
                         st.chunks = st.preRoll.slice();
                         st.silenceMs = 0;
                         this._emit('speechstart');
+                        reportUserSpeech('listening');
                     } else if (st.elapsedMs >= VAD.noSpeechMs) {
                         return end('no-speech');
                     }
@@ -281,11 +305,15 @@
                 }
                 st.chunks.push(copy);
                 // พูดอยู่แล้ว: ใช้เกณฑ์ "ยังพูดอยู่" ต่ำกว่าเกณฑ์เริ่มพูด (hysteresis) เสียงเบาลงช่วงท้ายคำจะไม่ถูกตัด
-                const sustain = Math.max(VAD.minLevel * 0.75, Mic.noiseFloor * VAD.sustainFactor + VAD.sustainMargin);
+                st.speechPeak = Math.max(st.speechPeak, rms);
+                // ห้องที่มีเสียงคนคุย เสียงรบกวนดังกว่าเกณฑ์ "ยังพูดอยู่" ตลอด จึงเทียบกับเสียงพูดที่ดังสุดด้วย
+                const sustain = Math.max(VAD.minLevel * 0.75, Mic.noiseFloor * VAD.sustainFactor + VAD.sustainMargin,
+                                         Math.min(st.speechPeak * VAD.endRelPeak, VAD.endRelCap));
                 const voiced = rms > sustain;
                 if (voiced) st.voicedMs += frameMs;
                 st.silenceMs = voiced ? 0 : st.silenceMs + frameMs;
-                if (st.silenceMs >= VAD.endSilenceMs || st.chunks.length * frameMs >= VAD.maxUtteranceMs) finishUtterance();
+                if (st.silenceMs >= VAD.endSilenceMs) { st.endReason = 'silence'; finishUtterance(); }
+                else if (st.chunks.length * frameMs >= VAD.maxUtteranceMs) { st.endReason = 'max-length'; finishUtterance(); }
             };
             Mic.handler = handler;
         }

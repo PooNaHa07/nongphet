@@ -104,8 +104,15 @@ VISION_STATE = {
     "auto_greeting_enabled": True,
     "is_looking_at_screen": False,
     "attention_score": 0.0,
-    "head_yaw_deg": 0.0
+    "head_yaw_deg": 0.0,
+    # "connected" = ใช้กล้องจริง, "searching" = ยังไม่พบกล้อง (ลองหาใหม่เรื่อยๆ), "simulate" = โหมดจำลอง (--simulate)
+    "camera": "searching",
 }
+
+# ไม่พบกล้อง / กล้องหลุด: ลองหากล้องใหม่ทุกกี่วินาที (เสียบกล้องทีหลังได้ ไม่ต้องรันระบบใหม่)
+CAMERA_RETRY_SEC = max(1.0, float(os.environ.get('VISION_CAMERA_RETRY_SEC', '3')))
+# อ่านภาพจากกล้องไม่ได้ต่อเนื่องนานเท่านี้ = กล้องหลุด (ถอดสาย) -> กลับไปหากล้องใหม่
+CAMERA_LOST_SEC = 2.0
 
 
 # -----------------------------------------------------------------------------
@@ -611,6 +618,72 @@ class VisionDetector:
         return detections, gaze_target, estimated_distance, is_attentive, attention_score, yaw_deg
 
 
+def _camera_candidates(camera_idx):
+    """รายการ (index, backend) ที่ลองเปิดกล้อง: Windows ใช้ DSHOW (รองรับทั้งแบบ 2 อาร์กิวเมนต์ และแบบ domain ของ OpenCV 5.x)"""
+    if os.name == 'nt' and hasattr(cv2, 'CAP_DSHOW'):
+        return [
+            (camera_idx, cv2.CAP_DSHOW),
+            (cv2.CAP_DSHOW + camera_idx, None),
+            (1, cv2.CAP_DSHOW),
+            (cv2.CAP_DSHOW + 1, None),
+            (camera_idx, None),
+        ]
+    return [(camera_idx, None), (1, None)]
+
+
+def open_camera(camera_idx=0, quiet=False):
+    """
+    ลองเปิดกล้องที่อ่านภาพได้จริง คืน cv2.VideoCapture หรือ None (ไม่พบกล้อง)
+    quiet=True: ปิดคำเตือนของ OpenCV ระหว่างลอง (ใช้ตอนลองหากล้องซ้ำๆ จะได้ไม่ท่วม log)
+    """
+    if not CV2_AVAILABLE:
+        return None
+    old_level = None
+    if quiet:
+        try:
+            old_level = cv2.utils.logging.getLogLevel()
+            cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+        except Exception:
+            old_level = None
+    cap = None
+    try:
+        for test_idx, test_backend in _camera_candidates(camera_idx):
+            try:
+                temp_cap = cv2.VideoCapture(test_idx, test_backend) if test_backend is not None else cv2.VideoCapture(test_idx)
+                if temp_cap.isOpened():
+                    ret, test_frame = temp_cap.read()
+                    if ret and test_frame is not None:
+                        cap = temp_cap
+                        break
+                temp_cap.release()
+            except Exception:
+                pass
+    finally:
+        if old_level is not None:
+            try:
+                cv2.utils.logging.setLogLevel(old_level)
+            except Exception:
+                pass
+    if cap is not None:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, TARGET_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_HEIGHT)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        if hasattr(cv2, 'CAP_PROP_BUFFERSIZE'):
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
+
+
+def no_camera_frame(t=0.0):
+    """ภาพบนสตรีมตอนยังไม่มีกล้อง (แทนภาพผู้มาเยือนจำลอง ซึ่งทำให้หุ่นทักทายคนที่ไม่มีอยู่จริง)"""
+    frame = np.zeros((TARGET_HEIGHT, TARGET_WIDTH, 3), dtype=np.uint8)
+    dots = '.' * (int(t) % 4)
+    cv2.putText(frame, "NO CAMERA", (TARGET_WIDTH // 2 - 110, TARGET_HEIGHT // 2 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.1, (148, 163, 184), 2)
+    cv2.putText(frame, f"plug in the webcam - searching{dots}", (TARGET_WIDTH // 2 - 175, TARGET_HEIGHT // 2 + 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 116, 139), 1)
+    return frame
+
+
 def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_port=5002, headless=True):
     """ลูปการทำงานหลักของระบบประมวลผลภาพบน Raspberry Pi 5"""
     global LATEST_FRAME_JPEG, LATEST_FRAME_TS, VISION_STATE
@@ -621,55 +694,21 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
     VISION_STATE["active"] = True
 
     cap = None
-    if not simulate and CV2_AVAILABLE:
-        try:
-            print(f"📷 [Camera] กำลังเชื่อมต่อกล้อง Webcam (Index: {camera_idx})...")
-            # รายการ Candidate Configurations สำหรับเชื่อมต่อกล้องบน Windows (DSHOW / Native)
-            # รองรับทั้งโหมด 2 อาร์กิวเมนต์ และโหมด DSHOW Domain ของ OpenCV 5.x
-            candidates = []
-            if os.name == 'nt' and hasattr(cv2, 'CAP_DSHOW'):
-                candidates.extend([
-                    (camera_idx, cv2.CAP_DSHOW),
-                    (cv2.CAP_DSHOW + camera_idx, None),
-                    (1, cv2.CAP_DSHOW),
-                    (cv2.CAP_DSHOW + 1, None),
-                    (camera_idx, None)
-                ])
-            else:
-                candidates.extend([
-                    (camera_idx, None),
-                    (1, None)
-                ])
-
-            for test_idx, test_backend in candidates:
-                try:
-                    if test_backend is not None:
-                        temp_cap = cv2.VideoCapture(test_idx, test_backend)
-                    else:
-                        temp_cap = cv2.VideoCapture(test_idx)
-
-                    if temp_cap.isOpened():
-                        ret, test_frame = temp_cap.read()
-                        if ret and test_frame is not None:
-                            cap = temp_cap
-                            break
-                        temp_cap.release()
-                except Exception:
-                    pass
-
-            if cap and cap.isOpened():
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, TARGET_WIDTH)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_HEIGHT)
-                cap.set(cv2.CAP_PROP_FPS, 30)
-                if hasattr(cv2, 'CAP_PROP_BUFFERSIZE'):
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                print("✅ [Camera] เปิดกล้องเว็บแคมจริงสำเร็จพร้อมทำงาน")
-            else:
-                print(f"⚠️ [Camera Warning] ไม่สามารถเปิดกล้อง index {camera_idx} ได้ -> สลับเข้าโหมด Simulate อัตโนมัติ")
-                simulate = True
-        except Exception as e:
-            print(f"⚠️ [Camera Error] {e} -> สลับเข้าโหมด Simulate")
-            simulate = True
+    last_camera_try = 0.0
+    camera_fail_since = 0.0
+    if simulate:
+        VISION_STATE["camera"] = "simulate"
+        print("🧪 [Camera] โหมดจำลอง (--simulate): ใช้ผู้มาเยือนจำลอง ไม่ใช้กล้องจริง")
+    elif CV2_AVAILABLE:
+        print(f"📷 [Camera] กำลังเชื่อมต่อกล้อง Webcam (Index: {camera_idx})...")
+        cap = open_camera(camera_idx)
+        last_camera_try = time.time()
+        if cap is not None:
+            VISION_STATE["camera"] = "connected"
+            print("✅ [Camera] เปิดกล้องเว็บแคมจริงสำเร็จพร้อมทำงาน")
+        else:
+            VISION_STATE["camera"] = "searching"
+            print(f"⚠️ [Camera] ไม่พบกล้อง -> รอเสียบกล้อง (ลองหาใหม่ทุก {CAMERA_RETRY_SEC:g} วินาที ไม่ทักทายจนกว่าจะเจอกล้อง)")
 
     consecutive_person_count = 0
     consecutive_attention_count = 0
@@ -701,8 +740,23 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
         while True:
             t0 = time.time()
 
-            if simulate or not cap or not cap.isOpened():
-                # สร้างเฟรมภาพจำลองแบบ Cyberpunk สำหรับโหมด Test/Simulate
+            if not simulate and (cap is None or not cap.isOpened()):
+                # ยังไม่มีกล้อง: ลองหากล้องใหม่เป็นระยะ ระหว่างนี้ไม่มีคน (ไม่ทักทาย ไม่หันตาม)
+                if CV2_AVAILABLE and t0 - last_camera_try >= CAMERA_RETRY_SEC:
+                    last_camera_try = t0
+                    cap = open_camera(camera_idx, quiet=True)
+                    if cap is not None:
+                        VISION_STATE["camera"] = "connected"
+                        camera_fail_since = 0.0
+                        print("✅ [Camera] พบกล้องแล้ว -> เริ่มตรวจจับใบหน้า")
+                        continue
+                VISION_STATE["camera"] = "searching"
+                detections, gaze_target, estimated_distance = [], None, None
+                is_attentive, attention_score, yaw_deg = False, 0.0, 0.0
+                frame = no_camera_frame(t0) if CV2_AVAILABLE else None
+                time.sleep(detect_interval)
+            elif simulate:
+                # สร้างเฟรมภาพจำลองแบบ Cyberpunk สำหรับโหมด Test/Simulate (--simulate เท่านั้น)
                 if CV2_AVAILABLE:
                     frame = np.zeros((TARGET_HEIGHT, TARGET_WIDTH, 3), dtype=np.uint8)
                     # พื้นหลังตาราง Grid
@@ -745,8 +799,21 @@ def run_vision_loop(camera_idx=0, backend_choice="auto", simulate=False, stream_
                 # grab() ดึงเฟรมออกจากบัฟเฟอร์กล้องโดยยังไม่ถอดรหัส (ถูกมาก) เพื่อให้ภาพล่าสุดไม่ค้างในบัฟเฟอร์
                 # ถอดรหัส + ตรวจจับเฉพาะรอบที่ถึงเวลาตาม DETECT_FPS เท่านั้น
                 if not cap.grab():
+                    # อ่านภาพไม่ได้ต่อเนื่อง = กล้องหลุด (ถอดสาย): ปล่อยกล้องแล้วกลับไปหากล้องใหม่
+                    camera_fail_since = camera_fail_since or t0
+                    if t0 - camera_fail_since >= CAMERA_LOST_SEC:
+                        print("⚠️ [Camera] กล้องหลุด -> รอเสียบกล้องใหม่")
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
+                        cap = None
+                        camera_fail_since = 0.0
+                        last_camera_try = t0
+                        VISION_STATE["camera"] = "searching"
                     time.sleep(0.01)
                     continue
+                camera_fail_since = 0.0
                 if (t0 - last_detect_time) < detect_interval:
                     time.sleep(0.001)
                     continue

@@ -35,6 +35,27 @@ def api_emotion_state():
         'timestamp': emotion_state['timestamp']
     })
 
+USER_SPEECH_STATES = ('listening', 'transcribing', 'final', 'clear')
+
+
+@display_bp.route('/api/user-speech', methods=['POST'])
+def api_user_speech():
+    """
+    สถานะเสียงพูดของผู้ใช้ (กำลังฟัง -> กำลังแปลงเสียง -> ข้อความที่พูด) ส่งต่อให้จอใบหน้า (/emotion)
+    ผ่าน SSE เพราะจอ kiosk กับจอใบหน้าเปิดคนละโปรไฟล์เบราว์เซอร์ (BroadcastChannel ส่งข้ามไม่ได้)
+    """
+    data = request.json or {}
+    state = data.get('state')
+    if state not in USER_SPEECH_STATES:
+        return jsonify({'status': 'error', 'message': 'invalid state'}), 400
+    broadcast_iot_event({
+        'event': 'user_speech',
+        'state': state,
+        'text': str(data.get('text') or '')[:200] if state == 'final' else '',
+    })
+    return jsonify({'status': 'ok'})
+
+
 @display_bp.route('/api/emotion/gaze', methods=['POST'])
 def api_emotion_gaze():
     data = request.json or {}
